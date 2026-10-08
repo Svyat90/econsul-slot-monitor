@@ -403,10 +403,15 @@
             <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                 <input type="text" id="apiToken" placeholder="JWT Token" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
             </div>
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <input type="text" id="institutionCode" value="1000000522" placeholder="Institution Code" style="width: 150px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <input type="text" id="consulIpnHash" value="556940f34c39d4010255c227e32920f66a291d10542bc54c8724b85a3aa9cd6c" placeholder="Consul IPN Hash" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+            <!-- Location and service come from locations.json; the calendar parameters are derived from them -->
+            <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                <select id="countrySelect" style="width: 200px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></select>
+                <select id="institutionSelect" style="flex: 1; min-width: 250px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></select>
             </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <select id="serviceSelect" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></select>
+            </div>
+            <div id="locationParams" style="margin-bottom: 10px; font-size: 12px; color: #666;"></div>
             <div style="display: flex; gap: 10px; align-items: center;">
                 <button id="fetchScheduleBtn" onclick="fetchSchedule()" style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
                     📅 Fetch Schedule (load first!)
@@ -419,6 +424,44 @@
                 </button>
             </div>
             <div id="fetchStatus" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+        </div>
+    </div>
+
+    <!-- Monitoring: periodic checks of the selected location with sound + browser notifications -->
+    <div class="upload-section" style="grid-template-columns: 1fr;">
+        <div class="upload-box" style="border-color: #6f42c1;">
+            <h3>Monitoring</h3>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; font-size: 13px;">
+                <label>Check every
+                    <input type="number" id="intervalMin" value="60" min="10" style="width: 70px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                </label>
+                <label>to
+                    <input type="number" id="intervalMax" value="180" min="10" style="width: 70px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                    seconds (random)
+                </label>
+                <span style="color: #666;">· schedule refresh every 30 min</span>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <button id="monitorStartBtn" onclick="startMonitoring()" style="background: #6f42c1; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    ▶ Start monitoring
+                </button>
+                <button id="monitorStopBtn" onclick="stopMonitoring('Stopped by user')" disabled style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    ■ Stop
+                </button>
+                <button onclick="testAlert('slots')" style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🔔 Test slot alert</button>
+                <button onclick="testAlert('session')" style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🔕 Test session alert</button>
+            </div>
+            <div id="monitorStatus" style="margin-top: 10px; font-size: 13px; color: #333;">Not running</div>
+            <div id="notificationHint" style="margin-top: 6px; font-size: 12px; color: #dc3545;"></div>
+            <details style="margin-top: 10px; font-size: 12px;">
+                <summary style="cursor: pointer;">Monitoring log</summary>
+                <ol id="monitorLog" reversed style="margin: 6px 0 0; padding-left: 20px; max-height: 200px; overflow-y: auto;"></ol>
+            </details>
+            <details style="margin-top: 6px; font-size: 12px;">
+                <summary style="cursor: pointer;">Schedule changes</summary>
+                <div id="scheduleLog" style="margin-top: 6px; max-height: 250px; overflow-y: auto;"></div>
+                <button onclick="downloadScheduleLog()" style="margin-top: 6px; background: white; border: 1px solid #ddd; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">⬇ Download log (JSONL)</button>
+            </details>
         </div>
     </div>
 
@@ -458,6 +501,7 @@
         let nonWorkingByDate = {};
         let bookableWindowsByDate = {};
         let institutionData = null;
+        let scheduleRows = []; // All entries of the schedule response (every consul, every schedule period)
         let workingHoursSchedule = null; // Working hours by day of week from receptionCitizensTime
         let currentMonth = new Date().getMonth();
         let currentYear = new Date().getFullYear();
@@ -465,7 +509,6 @@
         // Default bookable time range (fallback if no schedule loaded)
         const DEFAULT_START_HOUR = 9;
         const DEFAULT_END_HOUR = 12;
-        const SLOT_DURATION_MINUTES = 5; // 5-minute slots
 
         // Map Ukrainian day names to JS day numbers (0=Sunday, 1=Monday, etc.)
         const ukrainianDayMap = {
@@ -483,54 +526,203 @@
         document.getElementById('modalOverlay').addEventListener('click', (e) => {
             if (e.target === e.currentTarget) closeModal();
         });
+        // ---- Locations (locations.json) ----
+        let locations = null;
+        const DEFAULT_INSTITUTION = '1000000510'; // Г'юстон
+        const DEFAULT_SERVICE = '1';              // Оформлення закордонного паспорта
+
+        function getSelectedInstitution() {
+            const code = document.getElementById('institutionSelect').value;
+            return locations && locations.institutions.find(i => i.code === code) || null;
+        }
+
+        function getSelectedServiceCode() {
+            return document.getElementById('serviceSelect').value || DEFAULT_SERVICE;
+        }
+
+        // serviceTime of the service at this institution (slotInterval on the site)
+        function getSlotMinutes() {
+            const inst = getSelectedInstitution();
+            return (inst && inst.serviceMinutes[getSelectedServiceCode()]) || 10;
+        }
+
+        function getNumberWeeks() {
+            const inst = getSelectedInstitution();
+            return (inst && inst.numberWeeks) || 25;
+        }
+
+        // "2026-12-25", "2026-11-21..2026-11-27" from locations.json -> Set of YYYY-MM-DD
+        function getHolidaySet() {
+            const result = new Set();
+            if (!locations) return result;
+            const specs = [...locations.holidays.all, ...(locations.holidays.byService[getSelectedServiceCode()] || [])];
+            specs.forEach(spec => {
+                const [from, to] = spec.split('..');
+                for (let d = from; d <= (to || from); d = addDays(d, 1)) result.add(d);
+            });
+            return result;
+        }
+
+        function saveSelection() {
+            try {
+                localStorage.setItem('slots.selection', JSON.stringify({
+                    institution: document.getElementById('institutionSelect').value,
+                    service: getSelectedServiceCode()
+                }));
+            } catch (e) { /* storage unavailable */ }
+        }
+
+        function loadSelection() {
+            try { return JSON.parse(localStorage.getItem('slots.selection')) || {}; } catch (e) { return {}; }
+        }
+
+        function fillCountries(selectedCountry) {
+            const countries = [...new Map(locations.institutions.map(i => [i.countryCode, i.country])).entries()]
+                .sort((a, b) => a[1].localeCompare(b[1], 'uk'));
+            document.getElementById('countrySelect').innerHTML = countries
+                .map(([code, name]) => `<option value="${code}"${code === selectedCountry ? ' selected' : ''}>${name}</option>`).join('');
+        }
+
+        function fillInstitutions(selectedInstitution) {
+            const country = document.getElementById('countrySelect').value;
+            document.getElementById('institutionSelect').innerHTML = locations.institutions
+                .filter(i => i.countryCode === country)
+                .sort((a, b) => a.name.localeCompare(b.name, 'uk'))
+                .map(i => `<option value="${i.code}"${i.code === selectedInstitution ? ' selected' : ''}>${i.name}</option>`).join('');
+        }
+
+        function fillServices(selectedService) {
+            const inst = getSelectedInstitution();
+            const codes = Object.keys(inst ? inst.serviceMinutes : {}).sort((a, b) => a - b);
+            document.getElementById('serviceSelect').innerHTML = codes
+                .map(code => `<option value="${code}"${code === selectedService ? ' selected' : ''}>${locations.services[code] || code} (${inst.serviceMinutes[code]} хв)</option>`).join('');
+        }
+
+        function renderLocationParams() {
+            const inst = getSelectedInstitution();
+            if (!inst) return;
+            const holidays = [...locations.holidays.all, ...(locations.holidays.byService[getSelectedServiceCode()] || [])];
+            document.getElementById('locationParams').textContent =
+                `Institution code: ${inst.code} · Time zone: ${inst.timeZone} · Slot: ${getSlotMinutes()} min · ` +
+                `Weeks ahead: ${getNumberWeeks()} · Holidays: ${holidays.join(', ')}`;
+        }
+
+        // A different location means different data: drop what was loaded for the previous one
+        function onLocationChange() {
+            scheduleRows = []; nonWorkingSlots = []; availableSlots = []; institutionData = null; workingHoursSchedule = null;
+            slotsByDate = {}; nonWorkingByDate = {}; bookableWindowsByDate = {};
+            document.getElementById('institutionInfo').style.display = 'none';
+            document.getElementById('summary').style.display = 'none';
+            document.getElementById('status').className = 'status';
+            document.getElementById('fetchStatus').textContent = '';
+            renderLocationParams();
+            renderCalendar();
+            renderBookableAlert();
+            saveSelection();
+            resetMonitorState(); // a running monitor switches to the new location on its next check
+        }
+
+        // Same location, another service: the loaded schedule is still valid, recalculate only
+        function onServiceChange() {
+            if (scheduleRows.length) {
+                nonWorkingSlots = collectNonWorkingSlots();
+                organizeNonWorkingByDate();
+                calculateBookableWindows();
+                updateSummary();
+                renderCalendar();
+                renderBookableAlert();
+            }
+            renderLocationParams();
+            saveSelection();
+            resetMonitorState();
+        }
+
+        document.getElementById('countrySelect').addEventListener('change', () => {
+            fillInstitutions();
+            fillServices(getSelectedServiceCode());
+            onLocationChange();
+        });
+        document.getElementById('institutionSelect').addEventListener('change', () => {
+            fillServices(getSelectedServiceCode());
+            onLocationChange();
+        });
+        document.getElementById('serviceSelect').addEventListener('change', onServiceChange);
+
+        fetch('locations.json')
+            .then(r => r.json())
+            .then(data => {
+                locations = data;
+                const saved = loadSelection();
+                const inst = data.institutions.find(i => i.code === saved.institution)
+                    || data.institutions.find(i => i.code === DEFAULT_INSTITUTION);
+                fillCountries(inst.countryCode);
+                fillInstitutions(inst.code);
+                fillServices(saved.service || DEFAULT_SERVICE);
+                renderLocationParams();
+            })
+            .catch(error => {
+                document.getElementById('fetchStatus').innerHTML =
+                    `<span style="color: #dc3545;">Cannot load locations.json (${error.message}). Open the page through the server: go run main.go</span>`;
+            });
+
+        // POST to e-consul's external_reader. Throws an Error with .status on HTTP errors
+        // (401/403 mean the token no longer works).
+        async function callExternalReader(method, filters) {
+            const token = document.getElementById('apiToken').value.trim();
+            const response = await fetch('https://my.e-consul.gov.ua/external_reader', {
+                method: 'POST',
+                headers: {
+                    'accept': '*/*',
+                    'content-type': 'application/json',
+                    'token': token
+                },
+                body: JSON.stringify({ service: 'e-queue-register', method, filters })
+            });
+            if (!response.ok) {
+                const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+                error.status = response.status;
+                throw error;
+            }
+            return response.json();
+        }
 
         // Fetch reserved slots from API
         async function fetchReservedSlots() {
             const token = document.getElementById('apiToken').value.trim();
-            const institutionCode = document.getElementById('institutionCode').value.trim();
-            const consulIpnHash = document.getElementById('consulIpnHash').value.trim();
+            const institutionCode = document.getElementById('institutionSelect').value;
             const fetchStatus = document.getElementById('fetchStatus');
             const fetchBtn = document.getElementById('fetchSlotsBtn');
 
             if (!token) {
                 fetchStatus.innerHTML = '<span style="color: #dc3545;">Please enter JWT token</span>';
-                return;
+                return false;
+            }
+            // Reserved slots are requested per consul, and the consuls are known only from the schedule
+            const consulHashes = getServiceConsulHashes();
+            if (consulHashes.length === 0) {
+                fetchStatus.innerHTML = scheduleRows.length
+                    ? '<span style="color: #dc3545;">No consul at this institution provides the selected service</span>'
+                    : '<span style="color: #dc3545;">Fetch the schedule first</span>';
+                return false;
             }
 
             fetchBtn.disabled = true;
             fetchStatus.innerHTML = '<span style="color: #007bff;">Fetching reserved slots...</span>';
 
             try {
-                const response = await fetch('https://my.e-consul.gov.ua/external_reader', {
-                    method: 'POST',
-                    headers: {
-                        'accept': '*/*',
-                        'content-type': 'application/json',
-                        'origin': 'https://e-consul.gov.ua',
-                        'referer': 'https://e-consul.gov.ua/',
-                        'token': token
-                    },
-                    body: JSON.stringify({
-                        service: 'e-queue-register',
-                        method: 'public-get-consuls-reserved-slots',
-                        filters: {
-                            institutionCode: institutionCode,
-                            status: [1, 2, 4, 5],
-                            consulIpnHash: [consulIpnHash]
-                        }
-                    })
+                const json = await callExternalReader('public-get-consuls-reserved-slots', {
+                    institutionCode: institutionCode,
+                    status: [1, 2, 4, 5],
+                    // Like the site: reserved slots of every consul that provides the service
+                    consulIpnHash: consulHashes
                 });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const json = await response.json();
                 processSlotsData(json);
                 fetchStatus.innerHTML = '<span style="color: #28a745;">Reserved slots fetched!</span>';
+                return true;
             } catch (error) {
                 console.error('Fetch error:', error);
                 fetchStatus.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
+                return false;
             } finally {
                 fetchBtn.disabled = false;
             }
@@ -539,47 +731,29 @@
         // Fetch schedule (non-working hours) from API
         async function fetchSchedule() {
             const token = document.getElementById('apiToken').value.trim();
-            const institutionCode = document.getElementById('institutionCode').value.trim();
+            const institutionCode = document.getElementById('institutionSelect').value;
             const fetchStatus = document.getElementById('fetchStatus');
             const fetchBtn = document.getElementById('fetchScheduleBtn');
 
             if (!token) {
                 fetchStatus.innerHTML = '<span style="color: #dc3545;">Please enter JWT token</span>';
-                return;
+                return false;
             }
 
             fetchBtn.disabled = true;
             fetchStatus.innerHTML = '<span style="color: #007bff;">Fetching schedule...</span>';
 
             try {
-                const response = await fetch('https://my.e-consul.gov.ua/external_reader', {
-                    method: 'POST',
-                    headers: {
-                        'accept': '*/*',
-                        'content-type': 'application/json',
-                        'origin': 'https://e-consul.gov.ua',
-                        'referer': 'https://e-consul.gov.ua/',
-                        'token': token
-                    },
-                    body: JSON.stringify({
-                        service: 'e-queue-register',
-                        method: 'public-calendar-get-actual-consuls-schedule',
-                        filters: {
-                            institutionCode: institutionCode
-                        }
-                    })
+                const json = await callExternalReader('public-calendar-get-actual-consuls-schedule', {
+                    institutionCode: institutionCode
                 });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const json = await response.json();
                 processNonworkingData(json);
                 fetchStatus.innerHTML = '<span style="color: #28a745;">Schedule fetched!</span>';
+                return true;
             } catch (error) {
                 console.error('Fetch error:', error);
                 fetchStatus.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
+                return false;
             } finally {
                 fetchBtn.disabled = false;
             }
@@ -602,12 +776,12 @@
             try {
                 // First fetch schedule (needed for correct working hours)
                 fetchStatus.innerHTML = '<span style="color: #007bff;">Step 1/2: Fetching schedule...</span>';
-                await fetchSchedule();
-                
+                if (!await fetchSchedule()) return; // the error is already shown
+
                 // Then fetch reserved slots
                 fetchStatus.innerHTML = '<span style="color: #007bff;">Step 2/2: Fetching reserved slots...</span>';
-                await fetchReservedSlots();
-                
+                if (!await fetchReservedSlots()) return;
+
                 fetchStatus.innerHTML = '<span style="color: #28a745;">All data fetched successfully!</span>';
             } catch (error) {
                 fetchStatus.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
@@ -650,7 +824,8 @@
             reader.readAsText(file);
         }
 
-        function processSlotsData(json) {
+        // options.keepView: don't jump the calendar to the earliest reserved slot (used by monitoring)
+        function processSlotsData(json, options = {}) {
             if (!json.data || !json.data.reservedSlots) {
                 showStatus('Invalid slots JSON format: missing data.reservedSlots', 'error');
                 return;
@@ -661,7 +836,7 @@
             showStatus(`Loaded ${availableSlots.length} reserved slots` + 
                 (workingHoursSchedule ? '' : ' (load non-working JSON for accurate bookable calculation)'), 'found');
             
-            if (availableSlots.length > 0) {
+            if (availableSlots.length > 0 && !options.keepView) {
                 const dates = availableSlots.map(s => new Date(s.receptionDateAndTimeFrom));
                 const earliest = new Date(Math.min(...dates));
                 currentMonth = earliest.getMonth();
@@ -680,28 +855,16 @@
                 return;
             }
 
-            // Get the consulIpnHash we're looking for
-            const targetConsulIpnHash = document.getElementById('consulIpnHash')?.value.trim() || 
-                '556940f34c39d4010255c227e32920f66a291d10542bc54c8724b85a3aa9cd6c';
+            scheduleRows = json.data.map(entry => entry.data).filter(Boolean);
+            // Show the schedule of a consul that provides the selected service (or any, if none does)
+            const data = getServiceScheduleRows()[0] || scheduleRows[0];
 
-            // Find the entry matching the consulIpnHash
-            let matchingEntry = json.data.find(entry => 
-                entry.data?.consulIpnHash === targetConsulIpnHash
-            );
-
-            // Fallback to first entry if no match found
-            if (!matchingEntry) {
-                console.log('No matching consulIpnHash found, using first entry');
-                matchingEntry = json.data[0];
-            }
-
-            if (!matchingEntry?.data?.nonWorkingTime) {
-                showStatus('No non-working time data found for this consul', 'error');
+            if (!data || !data.receptionCitizensTime) {
+                showStatus('No schedule data found for this institution', 'error');
                 return;
             }
 
-            const data = matchingEntry.data;
-            nonWorkingSlots = data.nonWorkingTime;
+            nonWorkingSlots = collectNonWorkingSlots();
             institutionData = data;
             
             // Extract working hours schedule from receptionCitizensTime
@@ -744,8 +907,7 @@
         function organizeSlotsByDate() {
             slotsByDate = {};
             availableSlots.forEach(slot => {
-                const date = new Date(slot.receptionDateAndTimeFrom);
-                const key = getDateKey(date);
+                const key = parseDateFromISO(slot.receptionDateAndTimeFrom); // consulate date, not browser timezone
                 if (!slotsByDate[key]) {
                     slotsByDate[key] = [];
                 }
@@ -762,8 +924,7 @@
         function organizeNonWorkingByDate() {
             nonWorkingByDate = {};
             nonWorkingSlots.forEach(slot => {
-                const date = new Date(slot.notWorkingDateAndHoursFrom);
-                const key = getDateKey(date);
+                const key = parseDateFromISO(slot.notWorkingDateAndHoursFrom); // consulate date, not browser timezone
                 if (!nonWorkingByDate[key]) {
                     nonWorkingByDate[key] = [];
                 }
@@ -781,106 +942,150 @@
             return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         }
 
+        // Rows of the schedule response whose consul provides the selected service
+        // (the site filters by consularInstitutionService[].code === serviceNumber)
+        function getServiceScheduleRows() {
+            const serviceCode = getSelectedServiceCode();
+            return scheduleRows.filter(row =>
+                (row.consularInstitutionService || []).some(s => String(s.code) === serviceCode)
+            );
+        }
+
+        function getServiceConsulHashes() {
+            return [...new Set(getServiceScheduleRows().map(row => row.consulIpnHash))];
+        }
+
+        // The site blocks nonWorkingTime from ALL schedule entries of a consul, not only the first one
+        function collectNonWorkingSlots() {
+            return getServiceScheduleRows().flatMap(row =>
+                (row.nonWorkingTime || []).map(slot => ({ ...slot, consulIpnHash: row.consulIpnHash }))
+            );
+        }
+
+        function addDays(dateKey, days) {
+            const d = new Date(dateKey + 'T00:00:00Z');
+            d.setUTCDate(d.getUTCDate() + days);
+            return d.toISOString().slice(0, 10);
+        }
+
+        // Every working day of every consul, built the same way as the e-consul calendar:
+        // a schedule entry with admissionSchedulePeriodDate is valid up to that date,
+        // an entry without it is valid after the last period ends and up to numberWeeks ahead.
+        // UTC offset of the consulate ("-05:00"): the institution's timeZone (as the site uses it),
+        // otherwise the offset written in the ISO strings the API returns
+        function getConsulateOffset() {
+            const inst = getSelectedInstitution();
+            if (inst && /^GMT[+-]\d\d:\d\d$/.test(inst.timeZone)) return inst.timeZone.slice(3);
+            const iso = (nonWorkingSlots[0] && nonWorkingSlots[0].notWorkingDateAndHoursFrom)
+                || (availableSlots[0] && availableSlots[0].receptionDateAndTimeFrom);
+            const match = iso && iso.match(/([+-]\d\d:\d\d)$/);
+            if (match) return match[1];
+            const minutes = -new Date().getTimezoneOffset();
+            return (minutes < 0 ? '-' : '+') + minutesToTime(Math.abs(minutes));
+        }
+
+        function buildScheduleDays() {
+            const today = getDateKey(new Date());
+            const firstDay = addDays(today, 1); // startDayMove = 1: booking starts tomorrow
+            // Verified against the site (Chicago and Houston): a day is offered while its opening time,
+            // in consulate time, is earlier than now + numberWeeks - 1 day. So the last day depends on
+            // the current time of day.
+            const offset = getConsulateOffset();
+            const horizonEnd = Date.now() + (getNumberWeeks() * 7 - 1) * 86400000;
+            const lastDay = addDays(today, getNumberWeeks() * 7);
+            const holidays = getHolidaySet();
+            const rowsByConsul = {};
+            getServiceScheduleRows().forEach(row => {
+                (rowsByConsul[row.consulIpnHash] = rowsByConsul[row.consulIpnHash] || []).push(row);
+            });
+
+            const days = [];
+            Object.entries(rowsByConsul).forEach(([consulIpnHash, rows]) => {
+                const periodRows = rows.filter(r => r.admissionSchedulePeriodDate)
+                    .sort((a, b) => a.admissionSchedulePeriodDate.localeCompare(b.admissionSchedulePeriodDate));
+                const ranges = [];
+                let from = firstDay;
+                periodRows.forEach(row => {
+                    const to = parseDateFromISO(row.admissionSchedulePeriodDate);
+                    ranges.push({ row, from, to });
+                    from = addDays(to, 1);
+                });
+                rows.filter(r => !r.admissionSchedulePeriodDate).forEach(row => ranges.push({ row, from, to: lastDay }));
+
+                ranges.forEach(({ row, from, to }) => {
+                    for (let dateKey = from; dateKey <= to && dateKey <= lastDay; dateKey = addDays(dateKey, 1)) {
+                        if (holidays.has(dateKey)) continue;
+                        const dayOfWeek = new Date(dateKey + 'T12:00:00Z').getUTCDay();
+                        // A weekday can have several reception intervals (New York: Mon 09:00-12:00 and 14:00-17:00)
+                        (row.receptionCitizensTime || [])
+                            .filter(h => ukrainianDayMap[h.workingDays.toLowerCase()] === dayOfWeek)
+                            .forEach(hours => {
+                                if (Date.parse(`${dateKey}T${hours.workingHoursFrom}:00${offset}`) >= horizonEnd) return;
+                                days.push({
+                                    dateKey,
+                                    consulIpnHash,
+                                    startMinutes: parseTimeFromISO('0000-00-00T' + hours.workingHoursFrom).totalMinutes,
+                                    endMinutes: parseTimeFromISO('0000-00-00T' + hours.workingHoursTo).totalMinutes,
+                                    display: `${hours.workingHoursFrom}-${hours.workingHoursTo}`
+                                });
+                            });
+                    }
+                });
+            });
+            return days;
+        }
+
+        // Same check the e-consul web worker runs: the day is cut into slots of serviceTime minutes
+        // starting at the opening time; a slot is free when it fits before closing time and does not
+        // overlap any nonWorkingTime / reserved slot of that consul. Times are compared as the
+        // consulate wall-clock time written in the ISO strings.
         function calculateBookableWindows() {
             bookableWindowsByDate = {};
-            
-            // Skip calculation if working hours schedule is not loaded yet
-            if (!workingHoursSchedule) {
-                console.log('Working hours schedule not loaded - skipping bookable calculation');
+
+            if (scheduleRows.length === 0) {
+                console.log('Schedule not loaded - skipping bookable calculation');
                 return;
             }
-            
-            // Get all unique dates from both non-working slots AND reserved slots
-            const allDates = new Set();
-            nonWorkingSlots.forEach(slot => {
-                const date = new Date(slot.notWorkingDateAndHoursFrom);
-                allDates.add(getDateKey(date));
-            });
-            availableSlots.forEach(slot => {
-                const date = new Date(slot.receptionDateAndTimeFrom);
-                allDates.add(getDateKey(date));
-            });
 
-            allDates.forEach(dateKey => {
-                const dayNonWorking = nonWorkingByDate[dateKey] || [];
-                const dayReserved = slotsByDate[dateKey] || [];
-                
-                // Get working hours for this specific day of the week
-                const workingHours = getWorkingHoursForDate(dateKey);
-                const bookableStart = workingHours.startMinutes;
-                const bookableEnd = workingHours.endMinutes;
-                
-                // Create blocked time ranges for this day (in minutes from midnight)
-                const blockedRanges = [];
-                
-                // Add non-working hours as blocked (parse directly from ISO string to avoid DST issues)
-                dayNonWorking.forEach(slot => {
-                    const from = parseTimeFromISO(slot.notWorkingDateAndHoursFrom);
-                    const to = parseTimeFromISO(slot.notWorkingDateAndHoursTo);
-                    blockedRanges.push({
-                        start: from.totalMinutes,
-                        end: to.totalMinutes
-                    });
+            const slotMinutes = getSlotMinutes();
+            const blockedByConsulDate = {};
+            const addBlock = (consulIpnHash, fromIso, toIso) => {
+                const key = consulIpnHash + '|' + parseDateFromISO(fromIso);
+                (blockedByConsulDate[key] = blockedByConsulDate[key] || []).push({
+                    start: parseTimeFromISO(fromIso).totalMinutes,
+                    end: parseTimeFromISO(toIso).totalMinutes
                 });
-                
-                // Add reserved slots as blocked (parse directly from ISO string to avoid DST issues)
-                dayReserved.forEach(slot => {
-                    const from = parseTimeFromISO(slot.receptionDateAndTimeFrom);
-                    const to = parseTimeFromISO(slot.receptionDateAndTimeTo);
-                    blockedRanges.push({
-                        start: from.totalMinutes,
-                        end: to.totalMinutes
-                    });
+            };
+            nonWorkingSlots.forEach(s => addBlock(s.consulIpnHash, s.notWorkingDateAndHoursFrom, s.notWorkingDateAndHoursTo));
+            availableSlots.forEach(s => addBlock(s.consulIpnHash, s.receptionDateAndTimeFrom, s.receptionDateAndTimeTo));
+
+            const freeByDate = {};
+            buildScheduleDays().forEach(day => {
+                const blocks = blockedByConsulDate[day.consulIpnHash + '|' + day.dateKey] || [];
+                for (let t = day.startMinutes; t + slotMinutes <= day.endMinutes; t += slotMinutes) {
+                    if (blocks.some(b => t + slotMinutes > b.start && t < b.end)) continue;
+                    const entry = freeByDate[day.dateKey] = freeByDate[day.dateKey] || { workingHours: new Set(), starts: new Set() };
+                    entry.workingHours.add(day.display);
+                    entry.starts.add(t);
+                }
+            });
+
+            // Merge consecutive free slots into windows for display
+            Object.entries(freeByDate).forEach(([dateKey, { workingHours, starts }]) => {
+                const windows = [];
+                [...starts].sort((a, b) => a - b).forEach(t => {
+                    const last = windows[windows.length - 1];
+                    if (last && last.end === t) last.end = t + slotMinutes;
+                    else windows.push({ start: t, end: t + slotMinutes });
                 });
-
-                // Sort blocked ranges
-                blockedRanges.sort((a, b) => a.start - b.start);
-
-                // Filter to only blocks that overlap with our bookable range
-                const overlappingBlocks = blockedRanges.filter(blocked => 
-                    blocked.start < bookableEnd && blocked.end > bookableStart
-                );
-
-                // Only calculate bookable windows if there are blocks within the working hours range
-                // If nothing blocks this time range, don't show any bookable windows
-                if (overlappingBlocks.length === 0) {
-                    return; // Skip this day - no data in the bookable time range
-                }
-
-                const availableWindows = [];
-                let currentTime = bookableStart;
-
-                for (const blocked of overlappingBlocks) {
-                    const blockStart = Math.max(blocked.start, bookableStart);
-                    const blockEnd = Math.min(blocked.end, bookableEnd);
-
-                    if (currentTime < blockStart) {
-                        availableWindows.push({
-                            start: currentTime,
-                            end: blockStart
-                        });
-                    }
-                    currentTime = Math.max(currentTime, blockEnd);
-                }
-
-                // Add remaining time after last block
-                if (currentTime < bookableEnd) {
-                    availableWindows.push({
-                        start: currentTime,
-                        end: bookableEnd
-                    });
-                }
-
-                if (availableWindows.length > 0) {
-                    bookableWindowsByDate[dateKey] = {
-                        workingHours: workingHours.display,
-                        windows: availableWindows.map(w => ({
-                            from: minutesToTime(w.start),
-                            to: minutesToTime(w.end),
-                            durationMinutes: w.end - w.start
-                        }))
-                    };
-                }
+                bookableWindowsByDate[dateKey] = {
+                    workingHours: [...workingHours].sort().join(', '),
+                    windows: windows.map(w => ({
+                        from: minutesToTime(w.start),
+                        to: minutesToTime(w.end),
+                        durationMinutes: w.end - w.start
+                    }))
+                };
             });
         }
 
@@ -1032,7 +1237,7 @@
                     </div>
                     <div class="legend-item">
                         <div class="legend-color bookable"></div>
-                        <span>Bookable (05-08)</span>
+                        <span>Free slots</span>
                     </div>
                     <div class="legend-item">
                         <div class="legend-color today"></div>
@@ -1227,6 +1432,413 @@
         function formatTimeShort(date) {
             return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
         }
+
+        // ---- Monitoring ----
+        // Every check requests the reserved slots; the schedule (which changes rarely) is refreshed
+        // every 30 minutes to keep the number of requests low.
+        const SCHEDULE_REFRESH_MS = 30 * 60 * 1000;
+        const MIN_INTERVAL_SECONDS = 10;
+        const monitor = {
+            running: false,
+            timer: null,
+            ticker: null,
+            nextAt: 0,
+            checks: 0,
+            lastResult: '',
+            scheduleFetchedAt: 0,
+            knownFree: null, // free slots seen by the previous check; only slots not in it trigger an alert
+            audio: null
+        };
+
+        function readIntervalBounds() {
+            const min = Math.max(MIN_INTERVAL_SECONDS, Number(document.getElementById('intervalMin').value) || 60);
+            const max = Math.max(min, Number(document.getElementById('intervalMax').value) || 180);
+            return { min, max };
+        }
+
+        function saveIntervalBounds() {
+            try { localStorage.setItem('slots.interval', JSON.stringify(readIntervalBounds())); } catch (e) { /* storage unavailable */ }
+        }
+
+        (function loadIntervalBounds() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('slots.interval'));
+                if (saved) {
+                    document.getElementById('intervalMin').value = saved.min;
+                    document.getElementById('intervalMax').value = saved.max;
+                }
+            } catch (e) { /* storage unavailable */ }
+        })();
+        ['intervalMin', 'intervalMax'].forEach(id => document.getElementById(id).addEventListener('change', saveIntervalBounds));
+
+        // Called when the location or service changes: the next check starts from scratch
+        function resetMonitorState() {
+            monitor.knownFree = null;
+            monitor.scheduleFetchedAt = 0;
+        }
+
+        function monitorLog(message, kind = 'info') {
+            const colors = { info: '#333', found: '#28a745', warn: '#b8860b', error: '#dc3545' };
+            const item = document.createElement('li');
+            item.style.color = colors[kind] || colors.info;
+            item.textContent = `${new Date().toLocaleTimeString()} ${message}`;
+            const log = document.getElementById('monitorLog');
+            log.prepend(item);
+            while (log.children.length > 100) log.lastChild.remove();
+        }
+
+        function renderMonitorStatus() {
+            const status = document.getElementById('monitorStatus');
+            if (!monitor.running) {
+                status.textContent = monitor.lastResult ? `Not running · last: ${monitor.lastResult}` : 'Not running';
+                return;
+            }
+            const inst = getSelectedInstitution();
+            const seconds = Math.max(0, Math.round((monitor.nextAt - Date.now()) / 1000));
+            status.textContent = `Running for ${inst ? inst.name : '—'} · checks: ${monitor.checks} · ` +
+                (monitor.nextAt ? `next check in ${seconds}s` : 'checking…') +
+                (monitor.lastResult ? ` · last: ${monitor.lastResult}` : '');
+        }
+
+        function renderNotificationHint() {
+            const hint = document.getElementById('notificationHint');
+            if (!('Notification' in window)) hint.textContent = 'This browser does not support notifications: only the sound will play.';
+            else if (Notification.permission === 'denied') hint.textContent = 'Notifications are blocked for this page: allow them in the browser site settings. Only the sound will play.';
+            else if (Notification.permission === 'default') hint.textContent = 'Notifications are not allowed yet: the browser will ask when monitoring starts.';
+            else hint.textContent = '';
+        }
+
+        // All slot start times "YYYY-MM-DD HH:MM" from the current calculation
+        function getFreeSlotKeys() {
+            const step = getSlotMinutes();
+            return Object.entries(bookableWindowsByDate).flatMap(([dateKey, data]) => data.windows.flatMap(w => {
+                const start = parseTimeFromISO('0000-00-00T' + w.from).totalMinutes;
+                const keys = [];
+                for (let t = start; t < start + w.durationMinutes; t += step) keys.push(`${dateKey} ${minutesToTime(t)}`);
+                return keys;
+            }));
+        }
+
+        // ---- Sounds (Web Audio, no files). The two alerts must be easy to tell apart. ----
+        function getAudio() {
+            if (!monitor.audio) monitor.audio = new (window.AudioContext || window.webkitAudioContext)();
+            if (monitor.audio.state === 'suspended') monitor.audio.resume();
+            return monitor.audio;
+        }
+
+        function playTones(notes, waveType) {
+            const ctx = getAudio();
+            let at = ctx.currentTime + 0.05;
+            notes.forEach(([frequency, duration]) => {
+                if (frequency) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = waveType;
+                    osc.frequency.value = frequency;
+                    gain.gain.setValueAtTime(0.0001, at);
+                    gain.gain.exponentialRampToValueAtTime(0.3, at + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+                    osc.connect(gain).connect(ctx.destination);
+                    osc.start(at);
+                    osc.stop(at + duration + 0.02);
+                }
+                at += duration;
+            });
+        }
+
+        // Free slots: bright rising chime (A5–C#6–E6), three times
+        function playSlotSound() {
+            const chime = [[880, 0.15], [1109, 0.15], [1319, 0.3], [0, 0.25]];
+            playTones([...chime, ...chime, ...chime], 'sine');
+        }
+
+        // Session lost: low two-tone alarm, harsh square wave
+        function playSessionSound() {
+            const alarm = [[330, 0.35], [220, 0.35]];
+            playTones([...alarm, ...alarm, ...alarm], 'square');
+        }
+
+        // requireInteraction keeps the notification on screen until the user closes it
+        function showNotification(title, body, tag) {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+            const notification = new Notification(title, { body, tag, renotify: true, requireInteraction: true });
+            notification.onclick = () => { window.focus(); notification.close(); };
+            return true;
+        }
+
+        function alertSlots(inst, freshKeys, totalFree) {
+            playSlotSound();
+            const byDate = {};
+            freshKeys.forEach(key => {
+                const [dateKey, time] = key.split(' ');
+                (byDate[dateKey] = byDate[dateKey] || []).push(time);
+            });
+            const lines = Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b))
+                .map(([dateKey, times]) => `${dateKey.split('-').reverse().join('.')}: ${times.join(', ')}`);
+            const body = lines.slice(0, 4).join('\n') + (lines.length > 4 ? `\n…and ${lines.length - 4} more day(s)` : '') +
+                `\nTotal free: ${totalFree}`;
+            showNotification(`New free slots: ${inst.name}`, body, 'slots-found');
+            document.title = `🟢 ${freshKeys.length} new slot(s) — Reserved Slots Calendar`;
+        }
+
+        function alertSession(error) {
+            playSessionSound();
+            showNotification('e-consul session expired',
+                `The token no longer works (${error.message}). Log in to e-consul.gov.ua, paste the new token and start monitoring again.`,
+                'session-expired');
+            document.title = '🔴 Session expired — Reserved Slots Calendar';
+        }
+
+        function testAlert(kind) {
+            getAudio(); // unlock audio inside the click
+            const ask = ('Notification' in window && Notification.permission === 'default')
+                ? Notification.requestPermission() : Promise.resolve();
+            ask.then(() => {
+                renderNotificationHint();
+                if (kind === 'slots') {
+                    alertSlots(getSelectedInstitution() || { name: 'Test location' }, ['2027-03-31 09:50', '2027-03-31 10:10'], 2);
+                } else {
+                    alertSession(new Error('HTTP 401: test'));
+                }
+                setTimeout(() => { document.title = 'Reserved Slots Calendar'; }, 5000);
+            });
+        }
+
+        async function runCheck() {
+            const inst = getSelectedInstitution();
+            const checkNumber = ++monitor.checks;
+            monitor.nextAt = 0;
+            renderMonitorStatus();
+            try {
+                if (!scheduleRows.length || Date.now() - monitor.scheduleFetchedAt > SCHEDULE_REFRESH_MS) {
+                    const schedule = await callExternalReader('public-calendar-get-actual-consuls-schedule', { institutionCode: inst.code });
+                    monitor.scheduleFetchedAt = Date.now();
+                    processNonworkingData(schedule);
+                    recordScheduleSnapshot(inst, schedule);
+                }
+                const consulHashes = getServiceConsulHashes();
+                if (consulHashes.length === 0) {
+                    monitor.lastResult = 'no consul provides this service';
+                    monitorLog(`Check #${checkNumber}: no consul at this institution provides the selected service`, 'warn');
+                    return;
+                }
+                const reserved = await callExternalReader('public-get-consuls-reserved-slots', {
+                    institutionCode: inst.code,
+                    status: [1, 2, 4, 5],
+                    consulIpnHash: consulHashes
+                });
+                processSlotsData(reserved, { keepView: true });
+
+                const free = getFreeSlotKeys();
+                const fresh = monitor.knownFree ? free.filter(key => !monitor.knownFree.has(key)) : free;
+                monitor.knownFree = new Set(free);
+                monitor.lastResult = `${free.length} free` + (fresh.length ? `, ${fresh.length} new` : '') + ` at ${new Date().toLocaleTimeString()}`;
+                monitorLog(`Check #${checkNumber}: ${free.length} free slot(s)` + (fresh.length ? `, ${fresh.length} new` : ''), fresh.length ? 'found' : 'info');
+                if (fresh.length) alertSlots(inst, fresh, free.length);
+            } catch (error) {
+                if (error.status === 401 || error.status === 403) {
+                    monitor.lastResult = `session expired (${error.message})`;
+                    stopMonitoring(`Session expired (${error.message})`);
+                    alertSession(error);
+                    return;
+                }
+                monitor.lastResult = `error: ${error.message}`;
+                monitorLog(`Check #${checkNumber} failed: ${error.message}`, 'error');
+            }
+        }
+
+        function scheduleNextCheck() {
+            const { min, max } = readIntervalBounds();
+            const delaySeconds = Math.round(min + Math.random() * (max - min));
+            monitor.nextAt = Date.now() + delaySeconds * 1000;
+            monitor.timer = setTimeout(async () => {
+                await runCheck();
+                if (monitor.running) scheduleNextCheck();
+            }, delaySeconds * 1000);
+            renderMonitorStatus();
+        }
+
+        async function startMonitoring() {
+            const fetchStatus = document.getElementById('fetchStatus');
+            if (!document.getElementById('apiToken').value.trim()) {
+                fetchStatus.innerHTML = '<span style="color: #dc3545;">Please enter JWT token</span>';
+                return;
+            }
+            const inst = getSelectedInstitution();
+            if (!inst) {
+                fetchStatus.innerHTML = '<span style="color: #dc3545;">Select a location first</span>';
+                return;
+            }
+            if (monitor.running) return;
+
+            getAudio(); // must be created inside the click so the sound can play later
+            if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
+            renderNotificationHint();
+
+            monitor.running = true;
+            monitor.checks = 0;
+            resetMonitorState();
+            document.title = 'Reserved Slots Calendar';
+            document.getElementById('monitorStartBtn').disabled = true;
+            document.getElementById('monitorStopBtn').disabled = false;
+            const { min, max } = readIntervalBounds();
+            monitorLog(`Started: ${inst.name}, ${locations.services[getSelectedServiceCode()] || getSelectedServiceCode()}, every ${min}–${max}s`);
+            monitor.ticker = setInterval(renderMonitorStatus, 1000);
+
+            await runCheck();
+            if (monitor.running) scheduleNextCheck();
+        }
+
+        function stopMonitoring(reason) {
+            if (!monitor.running) return;
+            monitor.running = false;
+            clearTimeout(monitor.timer);
+            clearInterval(monitor.ticker);
+            monitor.nextAt = 0;
+            document.getElementById('monitorStartBtn').disabled = false;
+            document.getElementById('monitorStopBtn').disabled = true;
+            monitorLog(`Stopped: ${reason}`, reason.startsWith('Session') ? 'error' : 'info');
+            renderMonitorStatus();
+        }
+
+        // ---- Schedule change log ----
+        // Each schedule refresh is compared with the previous snapshot of the same institution.
+        // The first snapshot and every real change are written to logs/schedule-changes.jsonl
+        // through main.go (POST /schedule-log); without that server they stay in the browser.
+        const SCHEDULE_LOG_KEY = 'slots.scheduleLog';
+
+        function scheduleSnapshot(json) {
+            return json.data.map(entry => entry.data).filter(Boolean).map(row => ({
+                consul: row.consulIpnHash,
+                period: row.admissionSchedulePeriodDate ? parseDateFromISO(row.admissionSchedulePeriodDate) : null,
+                services: (row.consularInstitutionService || []).map(s => String(s.code)).sort((a, b) => a - b),
+                hours: (row.receptionCitizensTime || []).map(h => `${h.workingDays} ${h.workingHoursFrom}-${h.workingHoursTo}`).sort(),
+                nonWorking: (row.nonWorkingTime || []).map(z => `${z.notWorkingDateAndHoursFrom}|${z.notWorkingDateAndHoursTo}`).sort()
+            }));
+        }
+
+        function snapshotKey(row) {
+            return `${row.consul.slice(0, 8)} ${row.period ? 'until ' + row.period : 'open-ended'}`;
+        }
+
+        function describeNonWorking(items) {
+            const shown = items.slice(0, 3).map(item => {
+                const [from, to] = item.split('|');
+                return `${parseDateFromISO(from)} ${from.substring(11, 16)}-${to.substring(11, 16)}`;
+            });
+            return shown.join(', ') + (items.length > 3 ? `, …(+${items.length - 3})` : '');
+        }
+
+        // Human-readable differences; non-working periods that are already in the past are ignored
+        function diffSnapshots(prevRows, nextRows) {
+            const today = getDateKey(new Date());
+            const index = rows => Object.fromEntries(rows.map(row => [snapshotKey(row), row]));
+            const prev = index(prevRows), next = index(nextRows);
+            const changes = [];
+            Object.keys(prev).filter(key => !next[key]).forEach(key =>
+                changes.push(`removed schedule ${key} (${prev[key].hours.join('; ')})`));
+            Object.keys(next).filter(key => !prev[key]).forEach(key =>
+                changes.push(`added schedule ${key} (${next[key].hours.join('; ')}; services ${next[key].services.join(', ')})`));
+            Object.keys(next).filter(key => prev[key]).forEach(key => {
+                const a = prev[key], b = next[key];
+                const added = (x, y) => y.filter(item => !x.includes(item));
+                if (a.hours.join() !== b.hours.join()) {
+                    changes.push(`${key}: hours ${a.hours.join('; ')} → ${b.hours.join('; ')}`);
+                }
+                const svcAdded = added(a.services, b.services), svcRemoved = added(b.services, a.services);
+                if (svcAdded.length || svcRemoved.length) {
+                    changes.push(`${key}: services` + (svcAdded.length ? ` +${svcAdded.join(', +')}` : '') + (svcRemoved.length ? ` -${svcRemoved.join(', -')}` : ''));
+                }
+                const nwAdded = added(a.nonWorking, b.nonWorking);
+                const nwRemoved = added(b.nonWorking, a.nonWorking).filter(item => parseDateFromISO(item) >= today);
+                if (nwAdded.length) changes.push(`${key}: +${nwAdded.length} non-working period(s): ${describeNonWorking(nwAdded)}`);
+                if (nwRemoved.length) changes.push(`${key}: -${nwRemoved.length} non-working period(s): ${describeNonWorking(nwRemoved)}`);
+            });
+            return changes;
+        }
+
+        function recordScheduleSnapshot(inst, json) {
+            if (!json || !Array.isArray(json.data)) return;
+            const storageKey = 'slots.schedule.' + inst.code;
+            const rows = scheduleSnapshot(json);
+            let prev = null;
+            try { prev = JSON.parse(localStorage.getItem(storageKey)); } catch (e) { /* storage unavailable */ }
+
+            let entry = null;
+            if (!prev) {
+                const consuls = new Set(rows.map(row => row.consul)).size;
+                entry = { type: 'baseline', changes: [`first snapshot: ${rows.length} schedule entries, ${consuls} consul(s)`] };
+            } else {
+                const changes = diffSnapshots(prev.rows, rows);
+                if (changes.length) entry = { type: 'changed', previousCheckAt: prev.checkedAt, changes };
+            }
+            const checkedAt = new Date().toISOString();
+            try { localStorage.setItem(storageKey, JSON.stringify({ checkedAt, rows })); } catch (e) { /* storage unavailable */ }
+
+            if (entry) {
+                saveScheduleLogEntry({ time: checkedAt, institutionCode: inst.code, institution: inst.name, ...entry });
+                monitorLog(entry.type === 'baseline' ? 'Schedule: first snapshot saved' : `Schedule changed: ${entry.changes.length} change(s)`,
+                    entry.type === 'baseline' ? 'info' : 'warn');
+            }
+        }
+
+        function loadScheduleLog() {
+            try { return JSON.parse(localStorage.getItem(SCHEDULE_LOG_KEY)) || []; } catch (e) { return []; }
+        }
+
+        async function saveScheduleLogEntry(entry) {
+            try {
+                const response = await fetch('schedule-log', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify(entry)
+                });
+                entry.savedToFile = response.ok;
+            } catch (e) {
+                entry.savedToFile = false;
+            }
+            const log = loadScheduleLog();
+            log.push(entry);
+            try { localStorage.setItem(SCHEDULE_LOG_KEY, JSON.stringify(log.slice(-500))); } catch (e) { /* storage unavailable */ }
+            renderScheduleLog();
+        }
+
+        function renderScheduleLog() {
+            const container = document.getElementById('scheduleLog');
+            const log = loadScheduleLog().slice(-30).reverse();
+            if (!log.length) {
+                container.textContent = 'No entries yet. The first schedule refresh during monitoring saves a snapshot.';
+                return;
+            }
+            container.innerHTML = '';
+            log.forEach(entry => {
+                const block = document.createElement('div');
+                block.style.cssText = 'border-bottom: 1px solid #eee; padding: 4px 0;';
+                const head = document.createElement('div');
+                head.style.fontWeight = 'bold';
+                head.textContent = `${new Date(entry.time).toLocaleString()} · ${entry.institution} · ${entry.type}` +
+                    (entry.savedToFile ? ' · saved to logs/schedule-changes.jsonl' : ' · browser only');
+                block.appendChild(head);
+                entry.changes.forEach(change => {
+                    const line = document.createElement('div');
+                    line.textContent = '• ' + change;
+                    block.appendChild(line);
+                });
+                container.appendChild(block);
+            });
+        }
+
+        function downloadScheduleLog() {
+            const lines = loadScheduleLog().map(entry => JSON.stringify(entry)).join('\n') + '\n';
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(new Blob([lines], { type: 'application/x-ndjson' }));
+            link.download = 'schedule-changes.jsonl';
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+
+        renderNotificationHint();
+        renderScheduleLog();
     </script>
 </body>
 </html>
