@@ -1,0 +1,1205 @@
+{
+    "data": [
+        {
+            "data": {
+                "consulIpnHash": "556940f34c39d4010255c227e32920f66a291d10542bc54c8724b85a3aa9cd6c",
+                "nonWorkingTime": [
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T09:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T09:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T09:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T09:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T09:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T09:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T09:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T09:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T09:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T09:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T09:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T09:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T10:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T10:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T11:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T11:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T12:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-02-16T13:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-02-16T12:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T09:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T09:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T09:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T09:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T09:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T09:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T09:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T09:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T09:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T09:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T09:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T09:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T10:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T10:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T11:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-09-07T12:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-09-07T11:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T09:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T09:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T09:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T09:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T09:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T09:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T09:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T09:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T09:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T09:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T09:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T09:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T10:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T10:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T11:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-10-12T12:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-10-12T11:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T09:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T09:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T09:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T09:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T09:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T09:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T09:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T09:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T09:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T09:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T09:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T09:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T10:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T10:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T11:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-11T12:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-11T11:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T09:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T09:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T09:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T09:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T09:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T09:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T09:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T09:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T09:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T09:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T09:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T09:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T10:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-11-26T11:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-11-26T10:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T09:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T09:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T09:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T09:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T09:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T09:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T09:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T09:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T09:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T09:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T09:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T09:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T10:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T10:55:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:05:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:00:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:10:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:05:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:15:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:10:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:20:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:15:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:25:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:20:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:30:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:25:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:35:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:30:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:40:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:35:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:45:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:40:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:50:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:45:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T11:55:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:50:00.00-06:00"
+                    },
+                    {
+                        "notWorkingDateAndHoursTo": "2026-12-25T12:00:00.00-06:00",
+                        "notWorkingDateAndHoursFrom": "2026-12-25T11:55:00.00-06:00"
+                    }
+                ],
+                "institutionCode": "1000000522",
+                "institutionName": "Генеральне консульство України в Чикаго",
+                "receptionCitizensTime": [
+                    {
+                        "workingDays": "понеділок",
+                        "workingHoursTo": "12:00",
+                        "workingHoursFrom": "09:00"
+                    },
+                    {
+                        "workingDays": "вівторок",
+                        "workingHoursTo": "12:00",
+                        "workingHoursFrom": "09:00"
+                    },
+                    {
+                        "workingDays": "середа",
+                        "workingHoursTo": "12:00",
+                        "workingHoursFrom": "09:00"
+                    },
+                    {
+                        "workingDays": "четвер",
+                        "workingHoursTo": "11:00",
+                        "workingHoursFrom": "09:00"
+                    },
+                    {
+                        "workingDays": "п'ятниця",
+                        "workingHoursTo": "12:00",
+                        "workingHoursFrom": "09:00"
+                    }
+                ],
+                "consularInstitutionService": [
+                    {
+                        "id": "28afb3e0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "58",
+                        "name": "Видача виготовленого паспорта громадянина України для виїзду за кордон"
+                    },
+                    {
+                        "id": "28623020-9058-11ef-ba53-9795a0a90f10",
+                        "code": "7",
+                        "name": "Зняття з консульського обліку"
+                    },
+                    {
+                        "id": "2852c6d0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "1",
+                        "name": "Оформлення закордонного паспорта"
+                    },
+                    {
+                        "id": "a8d35ef0-a02a-11ef-b311-b5349adcc468",
+                        "code": "60",
+                        "name": "Оформлення закордонного паспорта дітям 12 – 16 років"
+                    },
+                    {
+                        "id": "a8d5f700-a02a-11ef-b311-b5349adcc468",
+                        "code": "62",
+                        "name": "Оформлення закордонного паспорта дітям до 12 років"
+                    },
+                    {
+                        "id": "284bc1f0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "4",
+                        "name": "Оформлення посвідчення на повернення в Україну"
+                    },
+                    {
+                        "id": "286627c0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "6",
+                        "name": "Прийняття на консульський облік"
+                    },
+                    {
+                        "id": "284fe0a0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "2",
+                        "name": "Продовження строку дії закордонного паспорта"
+                    }
+                ]
+            },
+            "id": "81bd1d20-7c83-11f0-9c8e-e5064f656b6e",
+            "registerId": 8,
+            "keyId": 17,
+            "meta": "****",
+            "allowTokens": [],
+            "createdBy": "bpmn-event",
+            "updatedBy": "bpmn-event",
+            "createdAt": "2025-08-18T22:34:30.770Z",
+            "updatedAt": "2026-02-13T18:31:06.076Z",
+            "signature": null,
+            "isEncrypted": false
+        },
+        {
+            "data": {
+                "consulIpnHash": "1df0fd873408ecdc092db78112373d0fed3e59b367c4c5b4cda48c3840d0ff99",
+                "nonWorkingTime": [],
+                "institutionCode": "1000000522",
+                "institutionName": "Генеральне консульство України в Чикаго",
+                "receptionCitizensTime": [
+                    {
+                        "workingDays": "понеділок",
+                        "workingHoursTo": "13:00",
+                        "workingHoursFrom": "09:00"
+                    },
+                    {
+                        "workingDays": "вівторок",
+                        "workingHoursTo": "13:00",
+                        "workingHoursFrom": "09:00"
+                    },
+                    {
+                        "workingDays": "середа",
+                        "workingHoursTo": "13:00",
+                        "workingHoursFrom": "09:00"
+                    },
+                    {
+                        "workingDays": "четвер",
+                        "workingHoursTo": "13:00",
+                        "workingHoursFrom": "09:00"
+                    },
+                    {
+                        "workingDays": "п'ятниця",
+                        "workingHoursTo": "13:00",
+                        "workingHoursFrom": "09:00"
+                    }
+                ],
+                "consularInstitutionService": [
+                    {
+                        "id": "28d03430-9058-11ef-ba53-9795a0a90f10",
+                        "code": "37",
+                        "name": "Видача витягу з Державного реєстру актів цивільного стану"
+                    },
+                    {
+                        "id": "28b7a320-9058-11ef-ba53-9795a0a90f10",
+                        "code": "54",
+                        "name": "Видача дубліката посвідченого ЗДУ нотаріального документа"
+                    },
+                    {
+                        "id": "28de8c10-9058-11ef-ba53-9795a0a90f10",
+                        "code": "23",
+                        "name": "Витребування документа"
+                    },
+                    {
+                        "id": "2882fe90-9058-11ef-ba53-9795a0a90f10",
+                        "code": "24",
+                        "name": "Витребування документа, засвідченого в Україні уповноваженим органом"
+                    },
+                    {
+                        "id": "28803f70-9058-11ef-ba53-9795a0a90f10",
+                        "code": "25",
+                        "name": "Витребування інформації від компетентних органів України та оформлення відповідної довідки"
+                    },
+                    {
+                        "id": "288b6300-9058-11ef-ba53-9795a0a90f10",
+                        "code": "34",
+                        "name": "Внесення змін до актових записів цивільного стану, їх поновлення та анулювання"
+                    },
+                    {
+                        "id": "28915670-9058-11ef-ba53-9795a0a90f10",
+                        "code": "32",
+                        "name": "Державна реєстрація зміни імені"
+                    },
+                    {
+                        "id": "288e7040-9058-11ef-ba53-9795a0a90f10",
+                        "code": "33",
+                        "name": "Державна реєстрація повторної зміни імені"
+                    },
+                    {
+                        "id": "28d627a0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "31",
+                        "name": "Державна реєстрація розірвання шлюбу з безвісно відсутніми або недієздатними особами"
+                    },
+                    {
+                        "id": "28d90dd0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "29",
+                        "name": "Державна реєстрація розірвання шлюбу між громадянами України за взаємною згодою подружжя, яке не має неповнолітніх дітей"
+                    },
+                    {
+                        "id": "28941590-9058-11ef-ba53-9795a0a90f10",
+                        "code": "30",
+                        "name": "Державна реєстрація розірвання шлюбу на підставі рішення суду України"
+                    },
+                    {
+                        "id": "2879d6d0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "28",
+                        "name": "Державна реєстрація шлюбу між громадянами України"
+                    },
+                    {
+                        "id": "286e8c30-9058-11ef-ba53-9795a0a90f10",
+                        "code": "18",
+                        "name": "Довідка про належність до громадянства України"
+                    },
+                    {
+                        "id": "286ba600-9058-11ef-ba53-9795a0a90f10",
+                        "code": "19",
+                        "name": "Довідка про неналежність до громадянства України"
+                    },
+                    {
+                        "id": "28c7a8b0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "44",
+                        "name": "Засвідчення вірності копій документів і виписок з них"
+                    },
+                    {
+                        "id": "28acf4c0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "45",
+                        "name": "Засвідчення вірності підпису на документах"
+                    },
+                    {
+                        "id": "28aaaad0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "46",
+                        "name": "Засвідчення заяви"
+                    },
+                    {
+                        "id": "28ca67d0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "40",
+                        "name": "Майнова довіреність"
+                    },
+                    {
+                        "id": "289b8fa0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "42",
+                        "name": "Немайнова довіреність"
+                    },
+                    {
+                        "id": "2871e790-9058-11ef-ba53-9795a0a90f10",
+                        "code": "16",
+                        "name": "Оформлення виходу з громадянства України"
+                    },
+                    {
+                        "id": "28747fa0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "15",
+                        "name": "Оформлення встановлення належності до громадянства України"
+                    },
+                    {
+                        "id": "28e12420-9058-11ef-ba53-9795a0a90f10",
+                        "code": "21",
+                        "name": "Оформлення документів для залишення на постійне проживання за кордоном"
+                    },
+                    {
+                        "id": "2885e4c0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "22",
+                        "name": "Оформлення документів про надання дозволу на імміграцію"
+                    },
+                    {
+                        "id": "28773ec0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "14",
+                        "name": "Оформлення набуття громадянства України внаслідок встановлення батьківства"
+                    },
+                    {
+                        "id": "2858ba40-9058-11ef-ba53-9795a0a90f10",
+                        "code": "11",
+                        "name": "Оформлення набуття громадянства України внаслідок встановлення над дитиною опіки чи піклування"
+                    },
+                    {
+                        "id": "285bc780-9058-11ef-ba53-9795a0a90f10",
+                        "code": "10",
+                        "name": "Оформлення набуття громадянства України внаслідок усиновлення"
+                    },
+                    {
+                        "id": "285e86a0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "8",
+                        "name": "Оформлення набуття громадянства України за територіальним походженням"
+                    },
+                    {
+                        "id": "28e65440-9058-11ef-ba53-9795a0a90f10",
+                        "code": "13",
+                        "name": "Оформлення набуття громадянства України у зв’язку з перебуванням у громадянстві України одного чи обох батьків дитини"
+                    },
+                    {
+                        "id": "2855ad00-9058-11ef-ba53-9795a0a90f10",
+                        "code": "12",
+                        "name": "Оформлення набуття громадянства України через встановлену судом опіку над недієздатним"
+                    },
+                    {
+                        "id": "28ea9a00-9058-11ef-ba53-9795a0a90f10",
+                        "code": "9",
+                        "name": "Оформлення поновлення у громадянстві України"
+                    },
+                    {
+                        "id": "28e3e340-9058-11ef-ba53-9795a0a90f10",
+                        "code": "17",
+                        "name": "Перевірка належності до громадянства України"
+                    },
+                    {
+                        "id": "2888a3e0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "36",
+                        "name": "Повторна видача свідоцтва про реєстрацію акту цивільного стану"
+                    },
+                    {
+                        "id": "28d36880-9058-11ef-ba53-9795a0a90f10",
+                        "code": "35",
+                        "name": "Повторна видача свідоцтва у разі внесення змін до актового запису цивільного стану чи його поновлення"
+                    },
+                    {
+                        "id": "28980d30-9058-11ef-ba53-9795a0a90f10",
+                        "code": "43",
+                        "name": "Посвідчення заповітів"
+                    },
+                    {
+                        "id": "28c22a70-9058-11ef-ba53-9795a0a90f10",
+                        "code": "51",
+                        "name": "Посвідчення тотожності громадянина з особою, зображеною на фотокартці"
+                    },
+                    {
+                        "id": "28a309b0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "50",
+                        "name": "Посвідчення факту, що фізична особа є живою"
+                    },
+                    {
+                        "id": "2868bfd0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "20",
+                        "name": "Реєстрація набуття громадянства України за народженням"
+                    },
+                    {
+                        "id": "28cd26f0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "38",
+                        "name": "Реєстрація народження"
+                    },
+                    {
+                        "id": "289e00a0-9058-11ef-ba53-9795a0a90f10",
+                        "code": "39",
+                        "name": "Реєстрація смерті"
+                    }
+                ]
+            },
+            "id": "0ceb67e0-1969-11f0-b2b0-a1f9b9c74342",
+            "registerId": 8,
+            "keyId": 17,
+            "meta": "****",
+            "allowTokens": [],
+            "createdBy": "bpmn-event",
+            "updatedBy": "bpmn-event",
+            "createdAt": "2025-04-14T19:45:42.751Z",
+            "updatedAt": "2026-02-13T15:03:14.845Z",
+            "signature": null,
+            "isEncrypted": false
+        }
+    ],
+    "meta": {
+        "count": 2,
+        "offset": 0,
+        "limit": 10000
+    }
+}

@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reserved Slots Calendar</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .upload-section {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .upload-box {
+            padding: 15px;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+        }
+        .upload-box h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #333;
+        }
+        .upload-box.slots { border-color: #28a745; }
+        .upload-box.nonworking { border-color: #dc3545; }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .status.found {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+        
+        /* Bookable Alert */
+        .bookable-alert {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            display: none;
+        }
+        .bookable-alert h2 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+        }
+        .bookable-alert .slots-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .bookable-slot {
+            background: rgba(255,255,255,0.2);
+            padding: 10px 15px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .bookable-slot .date {
+            font-weight: 600;
+        }
+        .bookable-slot .time {
+            background: rgba(255,255,255,0.3);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        /* Institution Info */
+        .institution-info {
+            background: #fff;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .institution-info h2 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .working-hours {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .working-day {
+            background: #e9ecef;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        
+        /* Calendar Navigation */
+        .calendar-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .calendar-nav button {
+            padding: 10px 20px;
+            border: none;
+            background: #007bff;
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .calendar-nav button:hover {
+            background: #0056b3;
+        }
+        .calendar-nav button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .calendar-nav .month-year {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        /* Calendar Grid */
+        .calendar {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .calendar-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            background: #007bff;
+            color: #fff;
+        }
+        .calendar-header div {
+            padding: 12px;
+            text-align: center;
+            font-weight: 600;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+        }
+        .calendar-day {
+            min-height: 110px;
+            border: 1px solid #e9ecef;
+            padding: 8px;
+            vertical-align: top;
+        }
+        .calendar-day.other-month {
+            background: #f8f9fa;
+            color: #adb5bd;
+        }
+        .calendar-day.today {
+            background: #fff3cd;
+        }
+        .calendar-day.has-slots {
+            background: #e8f5e9;
+        }
+        .calendar-day.has-nonworking {
+            background: #ffebee;
+        }
+        .calendar-day.has-both {
+            background: linear-gradient(135deg, #e8f5e9 50%, #ffebee 50%);
+        }
+        .calendar-day.has-bookable {
+            border: 3px solid #667eea;
+        }
+        .day-number {
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .bookable-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            font-size: 9px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+        .day-slots {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .slot-pill {
+            color: #fff;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .slot-pill.available {
+            background: #28a745;
+        }
+        .slot-pill.nonworking {
+            background: #dc3545;
+        }
+        .slot-pill.bookable {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .slot-pill:hover {
+            opacity: 0.8;
+        }
+        .more-slots {
+            font-size: 11px;
+            color: #007bff;
+            cursor: pointer;
+            padding: 2px;
+        }
+        .more-slots:hover {
+            text-decoration: underline;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal {
+            background: #fff;
+            padding: 25px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal h2 {
+            margin: 0 0 20px 0;
+            color: #333;
+        }
+        .modal h3 {
+            margin: 15px 0 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        .modal-slot {
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 4px solid;
+        }
+        .modal-slot.available {
+            background: #e8f5e9;
+            border-color: #28a745;
+        }
+        .modal-slot.nonworking {
+            background: #ffebee;
+            border-color: #dc3545;
+        }
+        .modal-slot.bookable {
+            background: #ede7f6;
+            border-color: #667eea;
+        }
+        .modal-slot .time {
+            font-weight: 600;
+            font-size: 15px;
+            color: #333;
+        }
+        .modal-slot .duration {
+            color: #666;
+            font-size: 13px;
+        }
+        .modal-close {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            border: none;
+            background: #007bff;
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 15px;
+        }
+        .modal-close:hover {
+            background: #0056b3;
+        }
+
+        /* Summary */
+        .summary {
+            background: #fff;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .summary span {
+            font-weight: 600;
+        }
+        .summary .green { color: #28a745; }
+        .summary .red { color: #dc3545; }
+        .summary .purple { color: #667eea; }
+
+        .no-slots {
+            text-align: center;
+            color: #666;
+            padding: 40px;
+            background: #fff;
+            border-radius: 8px;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+        .legend-color.has-slots { background: #e8f5e9; border: 1px solid #c8e6c9; }
+        .legend-color.has-nonworking { background: #ffebee; border: 1px solid #ffcdd2; }
+        .legend-color.today { background: #fff3cd; border: 1px solid #ffeeba; }
+        .legend-color.bookable { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    </style>
+</head>
+<body>
+    <h1>Reserved Slots Calendar</h1>
+    
+    <div class="upload-section">
+        <div class="upload-box slots">
+            <h3>Reserved Slots (green)</h3>
+            <input type="file" id="slotsFile" accept=".json">
+        </div>
+        <div class="upload-box nonworking">
+            <h3>Non-Working Hours (red)</h3>
+            <input type="file" id="nonworkingFile" accept=".json">
+        </div>
+    </div>
+
+    <!-- API Fetch Section -->
+    <div class="upload-section" style="grid-template-columns: 1fr;">
+        <div class="upload-box" style="border-color: #007bff;">
+            <h3>Fetch from API</h3>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <input type="text" id="apiToken" placeholder="JWT Token" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <input type="text" id="institutionCode" value="1000000522" placeholder="Institution Code" style="width: 150px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <input type="text" id="consulIpnHash" value="556940f34c39d4010255c227e32920f66a291d10542bc54c8724b85a3aa9cd6c" placeholder="Consul IPN Hash" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button id="fetchScheduleBtn" onclick="fetchSchedule()" style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    📅 Fetch Schedule (load first!)
+                </button>
+                <button id="fetchSlotsBtn" onclick="fetchReservedSlots()" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    🔄 Fetch Reserved Slots
+                </button>
+                <button id="fetchAllBtn" onclick="fetchAll()" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    ⚡ Fetch All
+                </button>
+            </div>
+            <div id="fetchStatus" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+        </div>
+    </div>
+
+    <div id="status" class="status"></div>
+    
+    <div id="bookableAlert" class="bookable-alert">
+        <h2>Available Booking Windows</h2>
+        <div id="bookableSlotsList" class="slots-list"></div>
+    </div>
+    
+    <div id="institutionInfo" class="institution-info"></div>
+    
+    <div id="summary" class="summary">
+        Reserved slots: <span class="green" id="totalSlots">0</span> | 
+        Non-working periods: <span class="red" id="totalNonworking">0</span> |
+        <strong>Bookable windows: <span class="purple" id="totalBookable">0</span></strong> |
+        Date range: <span id="dateRange">-</span>
+    </div>
+
+    <div id="calendarContainer">
+        <div class="no-slots">Load a JSON file to view calendar</div>
+    </div>
+
+    <!-- Modal for day details -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <h2 id="modalTitle">Slots for Date</h2>
+            <div id="modalContent"></div>
+            <button class="modal-close" onclick="closeModal()">Close</button>
+        </div>
+    </div>
+
+    <script>
+        let availableSlots = [];
+        let nonWorkingSlots = [];
+        let slotsByDate = {};
+        let nonWorkingByDate = {};
+        let bookableWindowsByDate = {};
+        let institutionData = null;
+        let workingHoursSchedule = null; // Working hours by day of week from receptionCitizensTime
+        let currentMonth = new Date().getMonth();
+        let currentYear = new Date().getFullYear();
+
+        // Default bookable time range (fallback if no schedule loaded)
+        const DEFAULT_START_HOUR = 9;
+        const DEFAULT_END_HOUR = 12;
+        const SLOT_DURATION_MINUTES = 5; // 5-minute slots
+
+        // Map Ukrainian day names to JS day numbers (0=Sunday, 1=Monday, etc.)
+        const ukrainianDayMap = {
+            'понеділок': 1,  // Monday
+            'вівторок': 2,   // Tuesday
+            'середа': 3,     // Wednesday
+            'четвер': 4,     // Thursday
+            "п'ятниця": 5,   // Friday
+            'субота': 6,     // Saturday
+            'неділя': 0      // Sunday
+        };
+
+        document.getElementById('slotsFile').addEventListener('change', handleSlotsFile);
+        document.getElementById('nonworkingFile').addEventListener('change', handleNonworkingFile);
+        document.getElementById('modalOverlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeModal();
+        });
+
+        // Fetch reserved slots from API
+        async function fetchReservedSlots() {
+            const token = document.getElementById('apiToken').value.trim();
+            const institutionCode = document.getElementById('institutionCode').value.trim();
+            const consulIpnHash = document.getElementById('consulIpnHash').value.trim();
+            const fetchStatus = document.getElementById('fetchStatus');
+            const fetchBtn = document.getElementById('fetchSlotsBtn');
+
+            if (!token) {
+                fetchStatus.innerHTML = '<span style="color: #dc3545;">Please enter JWT token</span>';
+                return;
+            }
+
+            fetchBtn.disabled = true;
+            fetchStatus.innerHTML = '<span style="color: #007bff;">Fetching reserved slots...</span>';
+
+            try {
+                const response = await fetch('https://my.e-consul.gov.ua/external_reader', {
+                    method: 'POST',
+                    headers: {
+                        'accept': '*/*',
+                        'content-type': 'application/json',
+                        'origin': 'https://e-consul.gov.ua',
+                        'referer': 'https://e-consul.gov.ua/',
+                        'token': token
+                    },
+                    body: JSON.stringify({
+                        service: 'e-queue-register',
+                        method: 'public-get-consuls-reserved-slots',
+                        filters: {
+                            institutionCode: institutionCode,
+                            status: [1, 2, 4, 5],
+                            consulIpnHash: [consulIpnHash]
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const json = await response.json();
+                processSlotsData(json);
+                fetchStatus.innerHTML = '<span style="color: #28a745;">Reserved slots fetched!</span>';
+            } catch (error) {
+                console.error('Fetch error:', error);
+                fetchStatus.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
+            } finally {
+                fetchBtn.disabled = false;
+            }
+        }
+
+        // Fetch schedule (non-working hours) from API
+        async function fetchSchedule() {
+            const token = document.getElementById('apiToken').value.trim();
+            const institutionCode = document.getElementById('institutionCode').value.trim();
+            const fetchStatus = document.getElementById('fetchStatus');
+            const fetchBtn = document.getElementById('fetchScheduleBtn');
+
+            if (!token) {
+                fetchStatus.innerHTML = '<span style="color: #dc3545;">Please enter JWT token</span>';
+                return;
+            }
+
+            fetchBtn.disabled = true;
+            fetchStatus.innerHTML = '<span style="color: #007bff;">Fetching schedule...</span>';
+
+            try {
+                const response = await fetch('https://my.e-consul.gov.ua/external_reader', {
+                    method: 'POST',
+                    headers: {
+                        'accept': '*/*',
+                        'content-type': 'application/json',
+                        'origin': 'https://e-consul.gov.ua',
+                        'referer': 'https://e-consul.gov.ua/',
+                        'token': token
+                    },
+                    body: JSON.stringify({
+                        service: 'e-queue-register',
+                        method: 'public-calendar-get-actual-consuls-schedule',
+                        filters: {
+                            institutionCode: institutionCode
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const json = await response.json();
+                processNonworkingData(json);
+                fetchStatus.innerHTML = '<span style="color: #28a745;">Schedule fetched!</span>';
+            } catch (error) {
+                console.error('Fetch error:', error);
+                fetchStatus.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
+            } finally {
+                fetchBtn.disabled = false;
+            }
+        }
+
+        // Fetch both schedule and reserved slots
+        async function fetchAll() {
+            const token = document.getElementById('apiToken').value.trim();
+            const fetchStatus = document.getElementById('fetchStatus');
+
+            if (!token) {
+                fetchStatus.innerHTML = '<span style="color: #dc3545;">Please enter JWT token</span>';
+                return;
+            }
+
+            document.getElementById('fetchAllBtn').disabled = true;
+            document.getElementById('fetchScheduleBtn').disabled = true;
+            document.getElementById('fetchSlotsBtn').disabled = true;
+
+            try {
+                // First fetch schedule (needed for correct working hours)
+                fetchStatus.innerHTML = '<span style="color: #007bff;">Step 1/2: Fetching schedule...</span>';
+                await fetchSchedule();
+                
+                // Then fetch reserved slots
+                fetchStatus.innerHTML = '<span style="color: #007bff;">Step 2/2: Fetching reserved slots...</span>';
+                await fetchReservedSlots();
+                
+                fetchStatus.innerHTML = '<span style="color: #28a745;">All data fetched successfully!</span>';
+            } catch (error) {
+                fetchStatus.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
+            } finally {
+                document.getElementById('fetchAllBtn').disabled = false;
+                document.getElementById('fetchScheduleBtn').disabled = false;
+                document.getElementById('fetchSlotsBtn').disabled = false;
+            }
+        }
+
+        function handleSlotsFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    processSlotsData(json);
+                } catch (error) {
+                    showStatus('Error parsing slots JSON: ' + error.message, 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function handleNonworkingFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    processNonworkingData(json);
+                } catch (error) {
+                    showStatus('Error parsing non-working JSON: ' + error.message, 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function processSlotsData(json) {
+            if (!json.data || !json.data.reservedSlots) {
+                showStatus('Invalid slots JSON format: missing data.reservedSlots', 'error');
+                return;
+            }
+
+            availableSlots = json.data.reservedSlots;
+            organizeSlotsByDate();
+            showStatus(`Loaded ${availableSlots.length} reserved slots` + 
+                (workingHoursSchedule ? '' : ' (load non-working JSON for accurate bookable calculation)'), 'found');
+            
+            if (availableSlots.length > 0) {
+                const dates = availableSlots.map(s => new Date(s.receptionDateAndTimeFrom));
+                const earliest = new Date(Math.min(...dates));
+                currentMonth = earliest.getMonth();
+                currentYear = earliest.getFullYear();
+            }
+            
+            calculateBookableWindows();
+            updateSummary();
+            renderCalendar();
+            renderBookableAlert();
+        }
+
+        function processNonworkingData(json) {
+            if (!json.data || !Array.isArray(json.data) || json.data.length === 0) {
+                showStatus('Invalid non-working JSON format', 'error');
+                return;
+            }
+
+            // Get the consulIpnHash we're looking for
+            const targetConsulIpnHash = document.getElementById('consulIpnHash')?.value.trim() || 
+                '556940f34c39d4010255c227e32920f66a291d10542bc54c8724b85a3aa9cd6c';
+
+            // Find the entry matching the consulIpnHash
+            let matchingEntry = json.data.find(entry => 
+                entry.data?.consulIpnHash === targetConsulIpnHash
+            );
+
+            // Fallback to first entry if no match found
+            if (!matchingEntry) {
+                console.log('No matching consulIpnHash found, using first entry');
+                matchingEntry = json.data[0];
+            }
+
+            if (!matchingEntry?.data?.nonWorkingTime) {
+                showStatus('No non-working time data found for this consul', 'error');
+                return;
+            }
+
+            const data = matchingEntry.data;
+            nonWorkingSlots = data.nonWorkingTime;
+            institutionData = data;
+            
+            // Extract working hours schedule from receptionCitizensTime
+            if (data.receptionCitizensTime && Array.isArray(data.receptionCitizensTime)) {
+                workingHoursSchedule = {};
+                data.receptionCitizensTime.forEach(schedule => {
+                    const dayNum = ukrainianDayMap[schedule.workingDays.toLowerCase()];
+                    if (dayNum !== undefined) {
+                        const [fromHour, fromMin] = schedule.workingHoursFrom.split(':').map(Number);
+                        const [toHour, toMin] = schedule.workingHoursTo.split(':').map(Number);
+                        workingHoursSchedule[dayNum] = {
+                            startMinutes: fromHour * 60 + fromMin,
+                            endMinutes: toHour * 60 + toMin,
+                            startHour: fromHour,
+                            endHour: toHour,
+                            display: `${schedule.workingHoursFrom}-${schedule.workingHoursTo}`
+                        };
+                    }
+                });
+                console.log('Loaded working hours schedule:', workingHoursSchedule);
+            }
+            
+            organizeNonWorkingByDate();
+            renderInstitutionInfo();
+            showStatus(`Loaded ${nonWorkingSlots.length} non-working periods`, 'found');
+            
+            if (nonWorkingSlots.length > 0 && availableSlots.length === 0) {
+                const dates = nonWorkingSlots.map(s => new Date(s.notWorkingDateAndHoursFrom));
+                const earliest = new Date(Math.min(...dates));
+                currentMonth = earliest.getMonth();
+                currentYear = earliest.getFullYear();
+            }
+            
+            calculateBookableWindows();
+            updateSummary();
+            renderCalendar();
+            renderBookableAlert();
+        }
+
+        function organizeSlotsByDate() {
+            slotsByDate = {};
+            availableSlots.forEach(slot => {
+                const date = new Date(slot.receptionDateAndTimeFrom);
+                const key = getDateKey(date);
+                if (!slotsByDate[key]) {
+                    slotsByDate[key] = [];
+                }
+                slotsByDate[key].push(slot);
+            });
+
+            Object.keys(slotsByDate).forEach(key => {
+                slotsByDate[key].sort((a, b) => 
+                    new Date(a.receptionDateAndTimeFrom) - new Date(b.receptionDateAndTimeFrom)
+                );
+            });
+        }
+
+        function organizeNonWorkingByDate() {
+            nonWorkingByDate = {};
+            nonWorkingSlots.forEach(slot => {
+                const date = new Date(slot.notWorkingDateAndHoursFrom);
+                const key = getDateKey(date);
+                if (!nonWorkingByDate[key]) {
+                    nonWorkingByDate[key] = [];
+                }
+                nonWorkingByDate[key].push(slot);
+            });
+
+            Object.keys(nonWorkingByDate).forEach(key => {
+                nonWorkingByDate[key].sort((a, b) => 
+                    new Date(a.notWorkingDateAndHoursFrom) - new Date(b.notWorkingDateAndHoursFrom)
+                );
+            });
+        }
+
+        function getDateKey(date) {
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+
+        function calculateBookableWindows() {
+            bookableWindowsByDate = {};
+            
+            // Skip calculation if working hours schedule is not loaded yet
+            if (!workingHoursSchedule) {
+                console.log('Working hours schedule not loaded - skipping bookable calculation');
+                return;
+            }
+            
+            // Get all unique dates from both non-working slots AND reserved slots
+            const allDates = new Set();
+            nonWorkingSlots.forEach(slot => {
+                const date = new Date(slot.notWorkingDateAndHoursFrom);
+                allDates.add(getDateKey(date));
+            });
+            availableSlots.forEach(slot => {
+                const date = new Date(slot.receptionDateAndTimeFrom);
+                allDates.add(getDateKey(date));
+            });
+
+            allDates.forEach(dateKey => {
+                const dayNonWorking = nonWorkingByDate[dateKey] || [];
+                const dayReserved = slotsByDate[dateKey] || [];
+                
+                // Get working hours for this specific day of the week
+                const workingHours = getWorkingHoursForDate(dateKey);
+                const bookableStart = workingHours.startMinutes;
+                const bookableEnd = workingHours.endMinutes;
+                
+                // Create blocked time ranges for this day (in minutes from midnight)
+                const blockedRanges = [];
+                
+                // Add non-working hours as blocked (parse directly from ISO string to avoid DST issues)
+                dayNonWorking.forEach(slot => {
+                    const from = parseTimeFromISO(slot.notWorkingDateAndHoursFrom);
+                    const to = parseTimeFromISO(slot.notWorkingDateAndHoursTo);
+                    blockedRanges.push({
+                        start: from.totalMinutes,
+                        end: to.totalMinutes
+                    });
+                });
+                
+                // Add reserved slots as blocked (parse directly from ISO string to avoid DST issues)
+                dayReserved.forEach(slot => {
+                    const from = parseTimeFromISO(slot.receptionDateAndTimeFrom);
+                    const to = parseTimeFromISO(slot.receptionDateAndTimeTo);
+                    blockedRanges.push({
+                        start: from.totalMinutes,
+                        end: to.totalMinutes
+                    });
+                });
+
+                // Sort blocked ranges
+                blockedRanges.sort((a, b) => a.start - b.start);
+
+                // Filter to only blocks that overlap with our bookable range
+                const overlappingBlocks = blockedRanges.filter(blocked => 
+                    blocked.start < bookableEnd && blocked.end > bookableStart
+                );
+
+                // Only calculate bookable windows if there are blocks within the working hours range
+                // If nothing blocks this time range, don't show any bookable windows
+                if (overlappingBlocks.length === 0) {
+                    return; // Skip this day - no data in the bookable time range
+                }
+
+                const availableWindows = [];
+                let currentTime = bookableStart;
+
+                for (const blocked of overlappingBlocks) {
+                    const blockStart = Math.max(blocked.start, bookableStart);
+                    const blockEnd = Math.min(blocked.end, bookableEnd);
+
+                    if (currentTime < blockStart) {
+                        availableWindows.push({
+                            start: currentTime,
+                            end: blockStart
+                        });
+                    }
+                    currentTime = Math.max(currentTime, blockEnd);
+                }
+
+                // Add remaining time after last block
+                if (currentTime < bookableEnd) {
+                    availableWindows.push({
+                        start: currentTime,
+                        end: bookableEnd
+                    });
+                }
+
+                if (availableWindows.length > 0) {
+                    bookableWindowsByDate[dateKey] = {
+                        workingHours: workingHours.display,
+                        windows: availableWindows.map(w => ({
+                            from: minutesToTime(w.start),
+                            to: minutesToTime(w.end),
+                            durationMinutes: w.end - w.start
+                        }))
+                    };
+                }
+            });
+        }
+
+        // Get working hours for a specific date based on day of week
+        function getWorkingHoursForDate(dateKey) {
+            const date = new Date(dateKey + 'T12:00:00'); // Use noon to avoid DST issues
+            const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, etc.
+            
+            if (workingHoursSchedule && workingHoursSchedule[dayOfWeek]) {
+                return workingHoursSchedule[dayOfWeek];
+            }
+            
+            // Default fallback
+            return {
+                startMinutes: DEFAULT_START_HOUR * 60,
+                endMinutes: DEFAULT_END_HOUR * 60,
+                startHour: DEFAULT_START_HOUR,
+                endHour: DEFAULT_END_HOUR,
+                display: `${String(DEFAULT_START_HOUR).padStart(2, '0')}:00-${String(DEFAULT_END_HOUR).padStart(2, '0')}:00`
+            };
+        }
+
+        function minutesToTime(minutes) {
+            const h = Math.floor(minutes / 60);
+            const m = minutes % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        }
+
+        // Parse time from ISO string WITHOUT timezone conversion
+        // This extracts hours:minutes directly from the string to avoid DST issues
+        function parseTimeFromISO(isoString) {
+            // Format: "2026-03-10T10:20:00.00-06:00"
+            // Extract the time part directly (characters 11-16 are HH:MM)
+            const timePart = isoString.substring(11, 16);
+            const [hours, minutes] = timePart.split(':').map(Number);
+            return { hours, minutes, totalMinutes: hours * 60 + minutes };
+        }
+
+        // Parse date from ISO string (YYYY-MM-DD)
+        function parseDateFromISO(isoString) {
+            return isoString.substring(0, 10);
+        }
+
+        function renderBookableAlert() {
+            const alert = document.getElementById('bookableAlert');
+            const list = document.getElementById('bookableSlotsList');
+            
+            const allBookable = Object.entries(bookableWindowsByDate)
+                .sort(([a], [b]) => a.localeCompare(b));
+            
+            if (allBookable.length === 0) {
+                alert.style.display = 'none';
+                return;
+            }
+
+            let html = '';
+            allBookable.forEach(([dateKey, data]) => {
+                const date = new Date(dateKey + 'T00:00:00');
+                const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                
+                data.windows.forEach(w => {
+                    html += `
+                        <div class="bookable-slot">
+                            <span class="date">${dateStr}</span>
+                            <span class="time">${w.from} - ${w.to} (${w.durationMinutes} min)</span>
+                        </div>
+                    `;
+                });
+            });
+
+            list.innerHTML = html;
+            alert.style.display = 'block';
+        }
+
+        function renderInstitutionInfo() {
+            if (!institutionData) return;
+            
+            const container = document.getElementById('institutionInfo');
+            let html = `<h2>${institutionData.institutionName}</h2>`;
+            html += `<div>Code: ${institutionData.institutionCode}</div>`;
+            
+            if (institutionData.receptionCitizensTime) {
+                html += `<div class="working-hours">`;
+                institutionData.receptionCitizensTime.forEach(day => {
+                    html += `<div class="working-day">${day.workingDays}: ${day.workingHoursFrom} - ${day.workingHoursTo}</div>`;
+                });
+                html += `</div>`;
+            }
+            
+            container.innerHTML = html;
+            container.style.display = 'block';
+        }
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + type;
+        }
+
+        function updateSummary() {
+            const allDates = [];
+            availableSlots.forEach(s => allDates.push(new Date(s.receptionDateAndTimeFrom)));
+            nonWorkingSlots.forEach(s => allDates.push(new Date(s.notWorkingDateAndHoursFrom)));
+
+            if (allDates.length === 0) {
+                document.getElementById('summary').style.display = 'none';
+                return;
+            }
+
+            const earliest = new Date(Math.min(...allDates));
+            const latest = new Date(Math.max(...allDates));
+
+            const totalBookableWindows = Object.values(bookableWindowsByDate)
+                .reduce((sum, data) => sum + data.windows.length, 0);
+
+            document.getElementById('totalSlots').textContent = availableSlots.length;
+            document.getElementById('totalNonworking').textContent = nonWorkingSlots.length;
+            document.getElementById('totalBookable').textContent = totalBookableWindows;
+            document.getElementById('dateRange').textContent = `${formatDateShort(earliest)} - ${formatDateShort(latest)}`;
+            document.getElementById('summary').style.display = 'block';
+        }
+
+        function renderCalendar() {
+            const container = document.getElementById('calendarContainer');
+            
+            if (availableSlots.length === 0 && nonWorkingSlots.length === 0) {
+                container.innerHTML = '<div class="no-slots">Load a JSON file to view calendar</div>';
+                return;
+            }
+
+            const firstDay = new Date(currentYear, currentMonth, 1);
+            const lastDay = new Date(currentYear, currentMonth + 1, 0);
+            const startDay = firstDay.getDay();
+            const totalDays = lastDay.getDate();
+            const today = new Date();
+
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                               'July', 'August', 'September', 'October', 'November', 'December'];
+
+            let html = `
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color has-slots"></div>
+                        <span>Reserved slots</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color has-nonworking"></div>
+                        <span>Non-working</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color bookable"></div>
+                        <span>Bookable (05-08)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color today"></div>
+                        <span>Today</span>
+                    </div>
+                </div>
+                <div class="calendar-nav">
+                    <button onclick="changeMonth(-1)">&#8592; Previous</button>
+                    <span class="month-year">${monthNames[currentMonth]} ${currentYear}</span>
+                    <button onclick="changeMonth(1)">Next &#8594;</button>
+                </div>
+                <div class="calendar">
+                    <div class="calendar-header">
+                        <div>Sun</div>
+                        <div>Mon</div>
+                        <div>Tue</div>
+                        <div>Wed</div>
+                        <div>Thu</div>
+                        <div>Fri</div>
+                        <div>Sat</div>
+                    </div>
+                    <div class="calendar-grid">
+            `;
+
+            // Previous month days
+            const prevMonth = new Date(currentYear, currentMonth, 0);
+            const prevMonthDays = prevMonth.getDate();
+            for (let i = startDay - 1; i >= 0; i--) {
+                const day = prevMonthDays - i;
+                html += `<div class="calendar-day other-month"><div class="day-number">${day}</div></div>`;
+            }
+
+            // Current month days
+            for (let day = 1; day <= totalDays; day++) {
+                const dateKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const daySlots = slotsByDate[dateKey] || [];
+                const dayNonWorking = nonWorkingByDate[dateKey] || [];
+                const dayBookableData = bookableWindowsByDate[dateKey];
+                const dayBookable = dayBookableData ? dayBookableData.windows : [];
+                const isToday = today.getDate() === day && 
+                               today.getMonth() === currentMonth && 
+                               today.getFullYear() === currentYear;
+                
+                let classes = 'calendar-day';
+                if (isToday) classes += ' today';
+                else if (daySlots.length > 0 && dayNonWorking.length > 0) classes += ' has-both';
+                else if (daySlots.length > 0) classes += ' has-slots';
+                else if (dayNonWorking.length > 0) classes += ' has-nonworking';
+                
+                if (dayBookable.length > 0) classes += ' has-bookable';
+
+                html += `<div class="${classes}">
+                    <div class="day-number">
+                        <span>${day}</span>
+                        ${dayBookable.length > 0 ? '<span class="bookable-badge">BOOKABLE</span>' : ''}
+                    </div>
+                    <div class="day-slots">`;
+
+                // Combine and show slots (use ISO string parsing to avoid DST issues)
+                const allItems = [];
+                daySlots.forEach(s => allItems.push({ 
+                    type: 'available', 
+                    timeMinutes: parseTimeFromISO(s.receptionDateAndTimeFrom).totalMinutes 
+                }));
+                dayNonWorking.forEach(s => allItems.push({ 
+                    type: 'nonworking', 
+                    timeMinutes: parseTimeFromISO(s.notWorkingDateAndHoursFrom).totalMinutes 
+                }));
+                dayBookable.forEach(w => allItems.push({ 
+                    type: 'bookable', 
+                    timeMinutes: parseInt(w.from.split(':')[0]) * 60 + parseInt(w.from.split(':')[1])
+                }));
+                
+                // Sort by time
+                allItems.sort((a, b) => a.timeMinutes - b.timeMinutes);
+
+                const maxVisible = 3;
+                allItems.slice(0, maxVisible).forEach(item => {
+                    const timeDisplay = minutesToTime(item.timeMinutes);
+                    html += `<div class="slot-pill ${item.type}" onclick="showDaySlots('${dateKey}')">${timeDisplay}</div>`;
+                });
+
+                const total = daySlots.length + dayNonWorking.length + dayBookable.length;
+                if (total > maxVisible) {
+                    html += `<div class="more-slots" onclick="showDaySlots('${dateKey}')">+${total - maxVisible} more</div>`;
+                }
+
+                html += `</div></div>`;
+            }
+
+            // Next month days
+            const totalCells = startDay + totalDays;
+            const remaining = 7 - (totalCells % 7);
+            if (remaining < 7) {
+                for (let i = 1; i <= remaining; i++) {
+                    html += `<div class="calendar-day other-month"><div class="day-number">${i}</div></div>`;
+                }
+            }
+
+            html += `</div></div>`;
+            container.innerHTML = html;
+        }
+
+        function changeMonth(delta) {
+            currentMonth += delta;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            } else if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            renderCalendar();
+        }
+
+        function showDaySlots(dateKey) {
+            const slots = slotsByDate[dateKey] || [];
+            const nonWorking = nonWorkingByDate[dateKey] || [];
+            const bookableData = bookableWindowsByDate[dateKey];
+            const bookable = bookableData ? bookableData.windows : [];
+            const workingHoursDisplay = bookableData ? bookableData.workingHours : getWorkingHoursForDate(dateKey).display;
+            
+            if (slots.length === 0 && nonWorking.length === 0 && bookable.length === 0) return;
+
+            const date = new Date(dateKey + 'T00:00:00');
+            document.getElementById('modalTitle').textContent = formatDateLong(date);
+
+            let content = '';
+            
+            if (bookable.length > 0) {
+                content += `<h3>Bookable Windows (${workingHoursDisplay})</h3>`;
+                bookable.forEach(w => {
+                    content += `
+                        <div class="modal-slot bookable">
+                            <div class="time">${w.from} - ${w.to}</div>
+                            <div class="duration">${w.durationMinutes} minutes available</div>
+                        </div>
+                    `;
+                });
+            }
+            
+            if (slots.length > 0) {
+                content += '<h3>Reserved Slots</h3>';
+                slots.forEach(slot => {
+                    const fromTime = parseTimeFromISO(slot.receptionDateAndTimeFrom);
+                    const toTime = parseTimeFromISO(slot.receptionDateAndTimeTo);
+                    const durationMin = toTime.totalMinutes - fromTime.totalMinutes;
+                    content += `
+                        <div class="modal-slot available">
+                            <div class="time">${minutesToTime(fromTime.totalMinutes)} - ${minutesToTime(toTime.totalMinutes)}</div>
+                            <div class="duration">${durationMin} minutes</div>
+                        </div>
+                    `;
+                });
+            }
+            
+            if (nonWorking.length > 0) {
+                content += '<h3>Non-Working Hours</h3>';
+                nonWorking.forEach(slot => {
+                    const fromTime = parseTimeFromISO(slot.notWorkingDateAndHoursFrom);
+                    const toTime = parseTimeFromISO(slot.notWorkingDateAndHoursTo);
+                    const durationMin = toTime.totalMinutes - fromTime.totalMinutes;
+                    content += `
+                        <div class="modal-slot nonworking">
+                            <div class="time">${minutesToTime(fromTime.totalMinutes)} - ${minutesToTime(toTime.totalMinutes)}</div>
+                            <div class="duration">${durationMin} minutes</div>
+                        </div>
+                    `;
+                });
+            }
+
+            document.getElementById('modalContent').innerHTML = content;
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+
+        function formatDateShort(date) {
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        function formatDateLong(date) {
+            return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        }
+
+        function formatTime(date) {
+            return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+
+        function formatTimeShort(date) {
+            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
+    </script>
+</body>
+</html>
