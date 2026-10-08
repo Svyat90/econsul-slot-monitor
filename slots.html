@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reserved Slots Calendar</title>
+    <!-- Banners of the e-Consul Helper extension follow its design A (docs/design/extension) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
     <style>
         * {
             box-sizing: border-box;
@@ -380,9 +383,51 @@
         .legend-color.has-nonworking { background: #ffebee; border: 1px solid #ffcdd2; }
         .legend-color.today { background: #fff3cd; border: 1px solid #ffeeba; }
         .legend-color.bookable { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+
+        /* e-Consul Helper extension: status row and login banner (design A) */
+        .ext-banners {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+            font-family: Manrope, system-ui, sans-serif;
+            color: #0B1B2B;
+        }
+        .ext-banner {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: #FFFFFF;
+            border: 1px solid #E3E8EF;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+        .ext-banner.error { background: #FDECEA; border-color: #F3B8B2; }
+        .ext-banner[hidden] { display: none; }
+        .ext-banner .ext-text { flex: 1; }
+        .ext-banner b { font-weight: 700; }
+        .ext-banner a { font-weight: 700; color: #0057B8; }
+        .ext-banner a:hover { color: #003F86; }
+        .ext-dot { width: 10px; height: 10px; border-radius: 50%; background: #1E7B34; flex: none; }
+        .ext-dot.error { background: #B42318; }
+        .ext-dot.muted { background: #C5CFDB; }
     </style>
 </head>
 <body>
+    <!-- e-Consul Helper extension (extension/): connection, session, login banner -->
+    <div class="ext-banners">
+        <div id="loginBanner" class="ext-banner error" hidden>
+            <span class="ext-dot error"></span>
+            <div id="loginBannerText" class="ext-text"></div>
+            <a href="#" id="loginLink">Увійти</a>
+        </div>
+        <div id="extStatus" class="ext-banner">
+            <span id="extStatusDot" class="ext-dot muted"></span>
+            <div id="extStatusText" class="ext-text">Розширення не підключено · токен вводиться вручну</div>
+        </div>
+    </div>
+
     <h1>Reserved Slots Calendar</h1>
     
     <div class="upload-section">
@@ -441,6 +486,18 @@
                 </label>
                 <span style="color: #666;">· schedule refresh every 30 min</span>
             </div>
+            <!-- Optional date range: filters alerts, the "new:" log lines and the slots sent to the extension -->
+            <div style="display: flex; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; align-items: center; font-size: 13px;">
+                <span>Дати слотів:</span>
+                <label>не раніше
+                    <input type="date" id="dateFrom" style="padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                </label>
+                <label>не пізніше
+                    <input type="date" id="dateTo" style="padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                </label>
+                <button onclick="clearDateRange()" style="background: white; border: 1px solid #ddd; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">Очистити</button>
+            </div>
+            <div id="dateRangeHint" style="margin-bottom: 10px; font-size: 12px; color: #666;"></div>
             <div style="margin-bottom: 10px; font-size: 13px;">
                 <label><input type="checkbox" id="fastChecks" checked>
                     Fast checks around the opening of a new day: every 15–20 s from 2 min before to 3 min after</label>
@@ -455,7 +512,7 @@
                 <button id="monitorStartBtn" onclick="startMonitoring()" style="background: #6f42c1; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
                     ▶ Start monitoring
                 </button>
-                <button id="monitorStopBtn" onclick="stopMonitoring('Stopped by user')" disabled style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                <button id="monitorStopBtn" onclick="stopMonitoring('Stopped by user', 'user')" disabled style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
                     ■ Stop
                 </button>
                 <button id="checkNowBtn" onclick="checkNow()" title="Check the reserved slots right now; a running monitor continues from this check" style="background: #17a2b8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
@@ -466,6 +523,9 @@
                 </button>
                 <button onclick="testAlert('slots')" style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🔔 Test slot alert</button>
                 <button onclick="testAlert('session')" style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🔕 Test session alert</button>
+                <button id="testSelectedBtn" onclick="testExtension('selected')" disabled title="The extension plays its “slot selected” signal (30 s – 2 min; stop it with “Mute”)" style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">📣 Test slot-selected (ext)</button>
+                <button id="testMuteBtn" onclick="testExtension('mute')" disabled style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🔇 Mute (ext)</button>
+                <button id="testSlotsBtn" onclick="testExtension('slots')" disabled title="Sends a test app:slots with two made-up slots; nothing is selected on the site yet" style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">📨 Send test app:slots</button>
             </div>
             <div id="monitorStatus" style="margin-top: 10px; font-size: 13px; color: #333;">Not running</div>
             <div id="notificationHint" style="margin-top: 6px; font-size: 12px; color: #dc3545;"></div>
@@ -518,6 +578,7 @@
         let slotsByDate = {};
         let nonWorkingByDate = {};
         let bookableWindowsByDate = {};
+        let freeSlotConsuls = {}; // "YYYY-MM-DD HH:MM" -> consulIpnHash of every consul free at that time
         let institutionData = null;
         let scheduleRows = []; // All entries of the schedule response (every consul, every schedule period)
         let workingHoursSchedule = null; // Working hours by day of week from receptionCitizensTime
@@ -740,6 +801,7 @@
             } catch (error) {
                 console.error('Fetch error:', error);
                 fetchStatus.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
+                if (error.status === 401 || error.status === 403) postToExt('app:auth-failed', { status: error.status, soundPlayed: false, token: document.getElementById('apiToken').value.trim() });
                 return false;
             } finally {
                 fetchBtn.disabled = false;
@@ -771,6 +833,7 @@
             } catch (error) {
                 console.error('Fetch error:', error);
                 fetchStatus.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
+                if (error.status === 401 || error.status === 403) postToExt('app:auth-failed', { status: error.status, soundPlayed: false, token: document.getElementById('apiToken').value.trim() });
                 return false;
             } finally {
                 fetchBtn.disabled = false;
@@ -1060,6 +1123,7 @@
         // consulate wall-clock time written in the ISO strings.
         function calculateBookableWindows() {
             bookableWindowsByDate = {};
+            freeSlotConsuls = {};
 
             if (scheduleRows.length === 0) {
                 console.log('Schedule not loaded - skipping bookable calculation');
@@ -1086,6 +1150,8 @@
                     const entry = freeByDate[day.dateKey] = freeByDate[day.dateKey] || { workingHours: new Set(), starts: new Set() };
                     entry.workingHours.add(day.display);
                     entry.starts.add(t);
+                    const slotKey = `${day.dateKey} ${minutesToTime(t)}`;
+                    (freeSlotConsuls[slotKey] = freeSlotConsuls[slotKey] || []).push(day.consulIpnHash);
                 }
             });
 
@@ -1468,6 +1534,8 @@
             knownFree: null, // free slots seen by the previous check; only slots not in it trigger an alert
             checking: false,
             nextKind: 'scheduled', // 'scheduled' or 'fast': how the pending check was planned
+            stoppedBy: null, // why it stopped: 'user' (Stop), 'session' (401/403 or the extension), 'other'
+            outOfRange: null, // { dropped, total, at }: free slots of the last check outside the date range
             audio: null
         };
 
@@ -1663,10 +1731,56 @@
             playTones([...chime, ...chime, ...chime], 'sine');
         }
 
-        // Session lost: low two-tone alarm, harsh square wave
+        // Session lost: broken glass, twice. A burst of high-passed white noise with a sharp decay,
+        // then a dozen short high "tinkles" (3–6 kHz) at random delays. Same as glass() in
+        // extension/sounds.js: keep the two copies in sync
         function playSessionSound() {
-            const alarm = [[330, 0.35], [220, 0.35]];
-            playTones([...alarm, ...alarm, ...alarm], 'square');
+            const ctx = getAudio();
+            const start = ctx.currentTime + 0.05;
+            glassCrash(ctx, start);
+            glassCrash(ctx, start + 1.25);
+        }
+
+        function glassCrash(ctx, at) {
+            const length = Math.round(ctx.sampleRate * 0.5);
+            const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            const highpass = ctx.createBiquadFilter();
+            highpass.type = 'highpass';
+            highpass.frequency.value = 1800;
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.0001, at);
+            gain.gain.exponentialRampToValueAtTime(0.55, at + 0.004);
+            gain.gain.exponentialRampToValueAtTime(0.08, at + 0.06);
+            gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.45);
+            noise.connect(highpass).connect(gain).connect(ctx.destination);
+            noise.start(at);
+            noise.stop(at + 0.5);
+
+            const pieces = 10 + Math.floor(Math.random() * 5);
+            for (let i = 0; i < pieces; i++) {
+                const t = at + 0.02 + Math.pow(Math.random(), 1.6) * 0.95;
+                const frequency = 3000 + Math.random() * 3000;
+                const duration = 0.06 + Math.random() * 0.18;
+                const level = 0.06 + Math.random() * 0.12;
+                glassTone(ctx, frequency, t, duration, level);
+                glassTone(ctx, frequency * 1.47, t, duration * 0.7, level * 0.5); // inharmonic overtone
+            }
+        }
+
+        function glassTone(ctx, frequency, at, duration, level) {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.frequency.value = frequency;
+            gain.gain.setValueAtTime(0.0001, at);
+            gain.gain.exponentialRampToValueAtTime(level, at + 0.002);
+            gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+            osc.connect(gain).connect(ctx.destination);
+            osc.start(at);
+            osc.stop(at + duration + 0.02);
         }
 
         // The site's own route for a new "Запис на візит" application:
@@ -1700,6 +1814,13 @@
             } else if (!DRAFT_URL_RE.test(url)) {
                 hint.style.color = '#dc3545';
                 hint.textContent = 'Not a draft link. Copy the address of the application page, e.g. https://e-consul.gov.ua/tasks/<id>/consularServiceInfo. A new application will be opened instead.';
+            } else if (draft && draft.url === url && draft.expiresAt) {
+                // Created by the extension: the exact deletion time is known
+                const expired = Date.now() >= draft.expiresAt;
+                hint.style.color = expired ? '#dc3545' : '#666';
+                hint.textContent = expired
+                    ? `The site deleted this draft at ${new Date(draft.expiresAt).toLocaleString()}. Create a new one: “Створити нову” in the extension.`
+                    : `“Book on e-consul” opens this draft (found by the extension; created ${new Date(draft.savedAt).toLocaleString()}, the site deletes it at ${new Date(draft.expiresAt).toLocaleString()}).`;
             } else if (draft && draft.url === url && Date.now() - draft.savedAt > DRAFT_TTL_MS) {
                 hint.style.color = '#dc3545';
                 hint.textContent = 'Saved over 24 h ago: the site has probably deleted this draft. Create a new one and paste its link.';
@@ -1767,9 +1888,12 @@
 
         function alertSession(error) {
             playSessionSound();
-            showNotification('e-consul session expired',
-                `The token no longer works (${error.message}). Log in to e-consul.gov.ua, paste the new token and start monitoring again.`,
-                'session-expired');
+            // With the extension connected it shows its own system notification with "Увійти"
+            if (!ext.connected) {
+                showNotification('e-consul session expired',
+                    `The token no longer works (${error.message}). Log in to e-consul.gov.ua, paste the new token and start monitoring again.`,
+                    'session-expired');
+            }
             document.title = '🔴 Session expired — Reserved Slots Calendar';
         }
 
@@ -1819,20 +1943,32 @@
                 });
                 processSlotsData(reserved, { keepView: true });
 
+                // knownFree holds every free slot, so a slot outside the date range does not count as
+                // new later just because the range was widened
                 const free = getFreeSlotKeys();
-                const fresh = monitor.knownFree ? free.filter(key => !monitor.knownFree.has(key)) : free;
+                const inRange = free.filter(inDateRange);
+                const fresh = monitor.knownFree ? inRange.filter(key => !monitor.knownFree.has(key)) : inRange;
                 monitor.knownFree = new Set(free);
-                monitor.lastResult = `${free.length} free` + (fresh.length ? `, ${fresh.length} new` : '') + ` at ${new Date().toLocaleTimeString()}`;
+                monitor.outOfRange = { dropped: free.length - inRange.length, total: free.length, at: Date.now() };
+                renderDateRangeHint();
+                const outside = free.length - inRange.length;
+                monitor.lastResult = `${inRange.length} free` + (outside ? ` (+${outside} outside dates)` : '') +
+                    (fresh.length ? `, ${fresh.length} new` : '') + ` at ${new Date().toLocaleTimeString()}`;
                 // The log shows newest entries first: add the per-date lines before the check line
                 // so they read below it, earliest date first
                 formatSlotLines(fresh).reverse().forEach(line => monitorLog(`  new: ${line}`, 'found'));
-                monitorLog(`${label}: ${free.length} free slot(s)` + (fresh.length ? `, ${fresh.length} new` : ''), fresh.length ? 'found' : 'info');
-                if (fresh.length) alertSlots(inst, fresh, free.length);
+                monitorLog(`${label}: ${inRange.length} free slot(s)` + (outside ? `, ${outside} outside the date range` : '') +
+                    (fresh.length ? `, ${fresh.length} new` : ''), fresh.length ? 'found' : 'info');
+                if (fresh.length) {
+                    alertSlots(inst, fresh, inRange.length);
+                    sendSlotsToExtension(fresh);
+                }
             } catch (error) {
                 if (error.status === 401 || error.status === 403) {
                     monitor.lastResult = `session expired (${error.message})`;
-                    stopMonitoring(`Session expired (${error.message})`);
+                    stopMonitoring(`Session expired (${error.message})`, 'session');
                     alertSession(error);
+                    postToExt('app:auth-failed', { status: error.status, soundPlayed: true, token: document.getElementById('apiToken').value.trim() });
                     return;
                 }
                 monitor.lastResult = `error: ${error.message}`;
@@ -1865,6 +2001,7 @@
             }
             monitor.nextAt = now + delayMs;
             monitor.nextKind = kind;
+            reportMonitor();
             monitor.timer = setTimeout(async () => {
                 await runCheck(kind);
                 if (monitor.running) scheduleNextCheck();
@@ -1894,39 +2031,349 @@
             if (await runCheck('manual') && monitor.running) scheduleNextCheck();
         }
 
-        async function startMonitoring() {
+        // resumed: started again by a new token from the extension after the session ended. It keeps
+        // the free slots known before the stop, so only slots that appeared since then are new.
+        async function startMonitoring(resumed = false) {
             if (!canCheck() || monitor.running) return;
             const inst = getSelectedInstitution();
 
-            getAudio(); // must be created inside the click so the sound can play later
-            if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
+            if (!resumed) {
+                getAudio(); // must be created inside the click so the sound can play later
+                if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
+            }
             renderNotificationHint();
 
             monitor.running = true;
-            monitor.checks = 0;
-            resetMonitorState();
+            monitor.stoppedBy = null;
+            if (!resumed) {
+                monitor.checks = 0;
+                resetMonitorState();
+            }
             document.title = 'Reserved Slots Calendar';
             document.getElementById('monitorStartBtn').disabled = true;
             document.getElementById('monitorStopBtn').disabled = false;
             const { min, max } = readIntervalBounds();
-            monitorLog(`Started: ${inst.name}, ${locations.services[getSelectedServiceCode()] || getSelectedServiceCode()}, every ${min}–${max}s`);
+            monitorLog(`${resumed ? 'Resumed after login' : 'Started'}: ${inst.name}, ${locations.services[getSelectedServiceCode()] || getSelectedServiceCode()}, every ${min}–${max}s`,
+                resumed ? 'found' : 'info');
             monitor.ticker = setInterval(renderMonitorStatus, 1000);
+            reportMonitor();
 
             await runCheck();
             if (monitor.running && !monitor.checking) scheduleNextCheck();
         }
 
-        function stopMonitoring(reason) {
+        // cause: 'user' (Stop button), 'session' (the token stopped working; a new token from the
+        // extension starts monitoring again) or 'other'
+        function stopMonitoring(reason, cause = 'other') {
             if (!monitor.running) return;
             monitor.running = false;
+            monitor.stoppedBy = cause;
             clearTimeout(monitor.timer);
             clearInterval(monitor.ticker);
             monitor.nextAt = 0;
             document.getElementById('monitorStartBtn').disabled = false;
             document.getElementById('monitorStopBtn').disabled = true;
-            monitorLog(`Stopped: ${reason}`, reason.startsWith('Session') ? 'error' : 'info');
+            monitorLog(`Stopped: ${reason}`, cause === 'session' ? 'error' : 'info');
             renderMonitorStatus();
+            reportMonitor();
+            renderExtStatus();
         }
+
+        // ---- Date range ----
+        // Optional "not earlier / not later" dates (YYYY-MM-DD, inclusive; empty = no limit). They
+        // filter alerts, the "new:" log lines and the slots sent to the extension. The calendar and
+        // "Available Booking Windows" still show every free slot.
+        const DATE_RANGE_KEY = 'slots.dateRange';
+
+        function getDateRange() {
+            const from = document.getElementById('dateFrom').value || null;
+            const to = document.getElementById('dateTo').value || null;
+            return { from, to };
+        }
+
+        // slotKey: "YYYY-MM-DD HH:MM"
+        function inDateRange(slotKey) {
+            const { from, to } = getDateRange();
+            const dateKey = slotKey.slice(0, 10);
+            return (!from || dateKey >= from) && (!to || dateKey <= to);
+        }
+
+        function saveDateRange() {
+            try { localStorage.setItem(DATE_RANGE_KEY, JSON.stringify(getDateRange())); } catch (e) { /* storage unavailable */ }
+            renderDateRangeHint();
+        }
+
+        function clearDateRange() {
+            document.getElementById('dateFrom').value = '';
+            document.getElementById('dateTo').value = '';
+            saveDateRange();
+        }
+
+        function renderDateRangeHint() {
+            const hint = document.getElementById('dateRangeHint');
+            const { from, to } = getDateRange();
+            hint.style.color = '#666';
+            if (from && to && from > to) {
+                hint.style.color = '#dc3545';
+                hint.textContent = '«Не раніше» пізніше за «не пізніше»: жоден слот не пройде фільтр.';
+                return;
+            }
+            if (!from && !to) {
+                hint.textContent = 'Без обмежень за датами: сповіщення про всі нові слоти.';
+                return;
+            }
+            const show = d => d.split('-').reverse().join('.');
+            const range = from && to ? `з ${show(from)} по ${show(to)}` : from ? `з ${show(from)}` : `по ${show(to)}`;
+            // Counted on the current calculation: the last check or a manual fetch
+            const free = getFreeSlotKeys();
+            const dropped = free.filter(key => !inDateRange(key)).length;
+            hint.textContent = `Сповіщення лише про слоти ${range}.` +
+                (free.length ? ` Фільтр відкидає ${dropped} з ${free.length} вільних слотів.` : '');
+        }
+
+        (function initDateRange() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(DATE_RANGE_KEY));
+                if (saved) {
+                    document.getElementById('dateFrom').value = saved.from || '';
+                    document.getElementById('dateTo').value = saved.to || '';
+                }
+            } catch (e) { /* storage unavailable */ }
+            ['dateFrom', 'dateTo'].forEach(id => document.getElementById(id).addEventListener('change', saveDateRange));
+            renderDateRangeHint();
+        })();
+
+        // ---- e-Consul Helper extension (extension/, docs/plans/extension-plan.md) ----
+        // The extension's content script app-bridge.js talks to this page with window.postMessage:
+        // { source: 'econsul-app' | 'econsul-ext', type, ...payload }, this origin only. It brings the
+        // session token, the login state and (later) the draft; the page sends new slots, the
+        // monitoring state and API 401/403. Without the extension the page works as before.
+        const ext = {
+            connected: false,
+            version: null,
+            auth: null,       // last ext:auth: { loggedIn, exp, reason }
+            helloPending: null
+        };
+        const EXT_HELLO_EVERY_MS = 15000;
+        const EXT_HELLO_TIMEOUT_MS = 3000;
+        const TOKEN_WARNING_MS = 30 * 60 * 1000;
+
+        function postToExt(type, payload = {}) {
+            window.postMessage({ ...payload, type, source: 'econsul-app' }, window.location.origin);
+        }
+
+        function audioReady() {
+            return !!(monitor.audio && monitor.audio.state === 'running');
+        }
+
+        // Heartbeat: the bridge answers app:hello with ext:hello; no answer means no extension
+        function extHello() {
+            postToExt('app:hello', { audioReady: audioReady() });
+            clearTimeout(ext.helloPending);
+            ext.helloPending = setTimeout(() => {
+                if (ext.connected) { ext.connected = false; renderExtStatus(); }
+            }, EXT_HELLO_TIMEOUT_MS);
+            reportSelection();
+            reportMonitor();
+        }
+
+        function reportMonitor() {
+            if (!ext.connected) return;
+            const inst = getSelectedInstitution();
+            const { active, next } = getFastWindow();
+            const release = active || next;
+            postToExt('app:monitor', {
+                audioReady: audioReady(),
+                monitor: {
+                    running: monitor.running,
+                    nextAt: monitor.nextAt || 0,
+                    nextKind: monitor.nextKind,
+                    checking: monitor.checking,
+                    lastResult: monitor.lastResult,
+                    stoppedBy: monitor.stoppedBy,
+                    institution: inst ? inst.name : null,
+                    nextRelease: release ? { at: release.at, opening: release.opening } : null
+                }
+            });
+        }
+
+        function reportSelection() {
+            if (!ext.connected) return;
+            const inst = getSelectedInstitution();
+            if (!inst || !locations) return;
+            const serviceCode = getSelectedServiceCode();
+            postToExt('app:selection', {
+                selection: {
+                    institutionCode: inst.code,
+                    institutionName: inst.name,
+                    countryName: inst.country,
+                    serviceCode,
+                    serviceName: locations.services[serviceCode] || serviceCode
+                }
+            });
+        }
+
+        // New slots in the date range, earliest first
+        function sendSlotsToExtension(slotKeys, test = false) {
+            if (!ext.connected) return;
+            const slots = [...slotKeys].sort().map(key => {
+                const [date, time] = key.split(' ');
+                return { date, time, consulIpnHash: (freeSlotConsuls[key] || [])[0] || null };
+            });
+            const { from, to } = getDateRange();
+            const range = {};
+            if (from) range.from = from;
+            if (to) range.to = to;
+            postToExt('app:slots', { slots, range, test });
+            monitorLog(`${test ? 'Test: sent' : 'Sent'} ${slots.length} slot(s) to the extension, earliest ${slots[0].date.split('-').reverse().join('.')} ${slots[0].time}`);
+        }
+
+        function formatTokenUntil(exp) {
+            const date = new Date(exp);
+            const time = date.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+            const day = new Date(exp); day.setHours(0, 0, 0, 0);
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const diff = Math.round((day - today) / 86400000);
+            return diff === 0 ? `${time} сьогодні` : diff === 1 ? `${time} завтра` : `${time} ${date.toLocaleDateString('uk-UA')}`;
+        }
+
+        // Status row and login banner at the top of the page (design A)
+        function renderExtStatus() {
+            const dot = document.getElementById('extStatusDot');
+            const text = document.getElementById('extStatusText');
+            const banner = document.getElementById('loginBanner');
+            const bannerText = document.getElementById('loginBannerText');
+            const auth = ext.auth;
+            const now = Date.now();
+            banner.hidden = true;
+            if (!ext.connected) {
+                dot.className = 'ext-dot muted';
+                text.textContent = 'Розширення не підключено · токен вводиться вручну';
+                return;
+            }
+            if (!auth || auth.loggedIn == null) {
+                dot.className = 'ext-dot muted';
+                text.textContent = 'Розширення підключено · стан сесії невідомий: відкрийте e-consul.gov.ua';
+                return;
+            }
+            if (auth.loggedIn === false || (auth.exp && auth.exp <= now)) {
+                dot.className = 'ext-dot error';
+                text.textContent = 'Розширення підключено · ви не увійшли на e-consul';
+                banner.hidden = false;
+                bannerText.innerHTML = monitor.stoppedBy === 'session'
+                    ? '<b>Увійдіть на e-consul.</b> Моніторинг продовжиться сам.'
+                    : '<b>Увійдіть на e-consul.</b> Токен прийде сюди сам.';
+                return;
+            }
+            dot.className = 'ext-dot';
+            text.innerHTML = auth.exp
+                ? `Розширення підключено · токен до ${formatTokenUntil(auth.exp)}`
+                : 'Розширення підключено · ви увійшли на e-consul';
+            if (auth.exp && auth.exp - now < TOKEN_WARNING_MS) {
+                banner.hidden = false;
+                bannerText.innerHTML = `<b>Сесія скінчиться о ${formatTokenUntil(auth.exp).split(' ')[0]}.</b> Увійдіть на e-consul знову, щоб моніторинг не зупинився.`;
+            }
+        }
+
+        function onExtAuth(msg) {
+            const wasLoggedIn = ext.auth && ext.auth.loggedIn === true;
+            ext.auth = { loggedIn: msg.loggedIn, exp: msg.exp, reason: msg.reason };
+            if (msg.loggedIn === false) {
+                // The session ended outside a check (the site logged out, the token expired):
+                // stop now instead of failing on the next request
+                if (monitor.running) {
+                    monitor.lastResult = 'session expired (extension)';
+                    stopMonitoring(`Session expired (extension: ${msg.reason || 'logged out'})`, 'session');
+                }
+                if (msg.alert) {
+                    playSessionSound();
+                    document.title = '🔴 Session expired — Reserved Slots Calendar';
+                }
+            } else if (msg.loggedIn === true && !wasLoggedIn && document.title.startsWith('🔴')) {
+                document.title = 'Reserved Slots Calendar';
+            }
+            renderExtStatus();
+        }
+
+        function onExtToken(msg) {
+            if (!msg.token) return;
+            const input = document.getElementById('apiToken');
+            if (input.value.trim() !== msg.token) {
+                input.value = msg.token;
+                monitorLog('Token received from the extension');
+            }
+            postToExt('app:received', { exp: msg.exp || null }); // the popup shows that the token arrived
+            if (!monitor.running && monitor.stoppedBy === 'session') startMonitoring(true);
+        }
+
+        // ext:draft: { url, taskId, createdAt, expiresAt } or null. The site deletes the draft at
+        // expiresAt, so the hint shows that time instead of "saved …"
+        function onExtDraft(draft) {
+            if (!draft || !draft.url) return; // no draft in the extension: keep a link pasted by hand
+            const input = document.getElementById('draftUrl');
+            if (input.value.trim() !== draft.url) monitorLog('Draft link received from the extension');
+            input.value = draft.url;
+            postToExt('app:received', { draftUrl: draft.url });
+            try {
+                // Without createdAt (GET /tasks/{id} not read) the 24 h hint counts from when the
+                // link was first seen, as for a pasted link
+                const prev = loadDraft();
+                const savedAt = draft.createdAt || (prev && prev.url === draft.url ? prev.savedAt : draft.foundAt || Date.now());
+                localStorage.setItem(DRAFT_KEY, JSON.stringify({ url: draft.url, savedAt, expiresAt: draft.expiresAt || null, fromExtension: true }));
+            } catch (e) { /* storage unavailable */ }
+            renderDraftHint();
+        }
+
+        window.addEventListener('message', event => {
+            if (event.source !== window || event.origin !== window.location.origin) return;
+            const msg = event.data;
+            if (!msg || msg.source !== 'econsul-ext') return;
+            if (msg.type === 'ext:hello') {
+                clearTimeout(ext.helloPending);
+                const firstContact = !ext.connected;
+                ext.connected = true;
+                ext.version = msg.version;
+                ['testSelectedBtn', 'testMuteBtn', 'testSlotsBtn'].forEach(id => { document.getElementById(id).disabled = false; });
+                if (firstContact) {
+                    monitorLog(`Extension connected (v${msg.version})`);
+                    postToExt('app:hello', { audioReady: audioReady() }); // the bridge answers with the current state
+                    reportSelection();
+                    reportMonitor();
+                }
+                renderExtStatus();
+            } else if (msg.type === 'ext:auth') {
+                onExtAuth(msg);
+            } else if (msg.type === 'ext:token') {
+                onExtToken(msg);
+            } else if (msg.type === 'ext:draft') {
+                onExtDraft(msg.draft);
+            } else if (msg.type === 'ext:slots-received') {
+                // acknowledgement of app:slots; selection on the site comes with stage 4 of the plan
+            }
+        });
+
+        document.getElementById('loginLink').addEventListener('click', event => {
+            event.preventDefault();
+            if (ext.connected) postToExt('app:login');
+            else window.open('https://e-consul.gov.ua/', '_blank', 'noopener');
+        });
+
+        // Test buttons: the extension's "slot selected" signal, mute, and app:slots with two
+        // made-up slots (the extension only records them for now)
+        function testExtension(kind) {
+            getAudio(); // a click: unlock this page's audio too
+            if (kind === 'selected') postToExt('app:test-sound', { sound: 'selected' });
+            else if (kind === 'mute') postToExt('app:mute');
+            else if (kind === 'slots') sendSlotsToExtension(['2027-03-31 09:50', '2027-03-31 10:10'], true);
+        }
+
+        ['countrySelect', 'institutionSelect', 'serviceSelect'].forEach(id =>
+            document.getElementById(id).addEventListener('change', reportSelection));
+        // A click anywhere unlocks this page's audio, so it can play the session sound itself
+        document.addEventListener('click', () => { if (!audioReady()) { getAudio(); setTimeout(reportMonitor, 100); } }, { capture: true });
+        extHello();
+        setInterval(extHello, EXT_HELLO_EVERY_MS);
+        setInterval(renderExtStatus, 30 * 1000); // expiry warning and "token until" without events
 
         // ---- Schedule change log ----
         // Each schedule refresh is compared with the previous snapshot of the same institution.
