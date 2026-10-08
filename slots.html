@@ -441,12 +441,28 @@
                 </label>
                 <span style="color: #666;">· schedule refresh every 30 min</span>
             </div>
+            <div style="margin-bottom: 10px; font-size: 13px;">
+                <label><input type="checkbox" id="fastChecks" checked>
+                    Fast checks around the opening of a new day: every 15–20 s from 2 min before to 3 min after</label>
+                <div id="releaseInfo" style="margin-top: 4px; font-size: 12px; color: #666;"></div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; font-size: 13px;">
+                <label for="draftUrl">Draft link</label>
+                <input type="url" id="draftUrl" placeholder="https://e-consul.gov.ua/tasks/… (steps 1–3 filled on the site; empty = new application)" style="flex: 1; min-width: 300px; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+            </div>
+            <div id="draftHint" style="margin: -4px 0 10px; font-size: 12px; color: #666;"></div>
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <button id="monitorStartBtn" onclick="startMonitoring()" style="background: #6f42c1; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
                     ▶ Start monitoring
                 </button>
                 <button id="monitorStopBtn" onclick="stopMonitoring('Stopped by user')" disabled style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
                     ■ Stop
+                </button>
+                <button id="checkNowBtn" onclick="checkNow()" title="Check the reserved slots right now; a running monitor continues from this check" style="background: #17a2b8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    ⟳ Check now
+                </button>
+                <button onclick="openBookingPage()" title="Opens the draft from “Draft link”, or a new “Запис на візит” application" style="background: #fd7e14; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                    ↗ Book on e-consul
                 </button>
                 <button onclick="testAlert('slots')" style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🔔 Test slot alert</button>
                 <button onclick="testAlert('session')" style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🔕 Test session alert</button>
@@ -468,7 +484,9 @@
     <div id="status" class="status"></div>
     
     <div id="bookableAlert" class="bookable-alert">
-        <h2>Available Booking Windows</h2>
+        <h2>Available Booking Windows
+            <button onclick="openBookingPage()" style="margin-left: 10px; vertical-align: middle; background: #fd7e14; color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px;">↗ Book on e-consul</button>
+        </h2>
         <div id="bookableSlotsList" class="slots-list"></div>
     </div>
     
@@ -984,14 +1002,15 @@
             return (minutes < 0 ? '-' : '+') + minutesToTime(Math.abs(minutes));
         }
 
-        function buildScheduleDays() {
-            const today = getDateKey(new Date());
+        // nowMs lets the release calculation ask which days the site will offer at a later moment
+        function buildScheduleDays(nowMs = Date.now()) {
+            const today = getDateKey(new Date(nowMs));
             const firstDay = addDays(today, 1); // startDayMove = 1: booking starts tomorrow
             // Verified against the site (Chicago and Houston): a day is offered while its opening time,
             // in consulate time, is earlier than now + numberWeeks - 1 day. So the last day depends on
             // the current time of day.
             const offset = getConsulateOffset();
-            const horizonEnd = Date.now() + (getNumberWeeks() * 7 - 1) * 86400000;
+            const horizonEnd = nowMs + (getNumberWeeks() * 7 - 1) * 86400000;
             const lastDay = addDays(today, getNumberWeeks() * 7);
             const holidays = getHolidaySet();
             const rowsByConsul = {};
@@ -1447,8 +1466,17 @@
             lastResult: '',
             scheduleFetchedAt: 0,
             knownFree: null, // free slots seen by the previous check; only slots not in it trigger an alert
+            checking: false,
+            nextKind: 'scheduled', // 'scheduled' or 'fast': how the pending check was planned
             audio: null
         };
+
+        // Fast checks around the moment a new day enters the calendar (see buildScheduleDays):
+        // the day opens when its opening time is earlier than now + numberWeeks - 1 day, i.e.
+        // (numberWeeks * 7 - 1) days before that opening time.
+        const FAST_CHECKS = { beforeMs: 2 * 60 * 1000, afterMs: 3 * 60 * 1000, minSeconds: 15, maxSeconds: 20 };
+        const RELEASE_LOOKAHEAD_DAYS = 8; // enough to get past weekends and holidays
+        let releaseCache = null;
 
         function readIntervalBounds() {
             const min = Math.max(MIN_INTERVAL_SECONDS, Number(document.getElementById('intervalMin').value) || 60);
@@ -1475,7 +1503,90 @@
         function resetMonitorState() {
             monitor.knownFree = null;
             monitor.scheduleFetchedAt = 0;
+            releaseCache = null;
         }
+
+        // Upcoming moments when new days open for booking, earliest first:
+        // [{ at, opening: "09:00", days: [{ dateKey, display }] }]. A release stays in the list
+        // until its fast-check window ends. null while the schedule is not loaded.
+        function getUpcomingReleases() {
+            const inst = getSelectedInstitution();
+            if (!inst || !scheduleRows.length) return null;
+            const key = `${inst.code}|${getSelectedServiceCode()}`;
+            const now = Date.now();
+            if (releaseCache && releaseCache.rows === scheduleRows && releaseCache.key === key &&
+                now - releaseCache.computedAt < 30000) {
+                return releaseCache.value.filter(r => r.at + FAST_CHECKS.afterMs > now);
+            }
+            const leadMs = (getNumberWeeks() * 7 - 1) * 86400000;
+            const offset = getConsulateOffset();
+            const byMoment = {};
+            buildScheduleDays(now + RELEASE_LOOKAHEAD_DAYS * 86400000).forEach(day => {
+                const opening = minutesToTime(day.startMinutes);
+                const at = Date.parse(`${day.dateKey}T${opening}:00${offset}`) - leadMs;
+                if (at + FAST_CHECKS.afterMs <= now) return;
+                const release = byMoment[at] = byMoment[at] || { at, opening, days: [] };
+                if (!release.days.some(d => d.dateKey === day.dateKey && d.display === day.display)) {
+                    release.days.push({ dateKey: day.dateKey, display: day.display });
+                }
+            });
+            const value = Object.values(byMoment).sort((a, b) => a.at - b.at);
+            releaseCache = { rows: scheduleRows, key, computedAt: now, value };
+            return value;
+        }
+
+        // { active, next }: the release whose fast window contains now, and the next one after it
+        function getFastWindow(now = Date.now()) {
+            const releases = getUpcomingReleases() || [];
+            const active = releases.find(r => r.at - FAST_CHECKS.beforeMs <= now && now < r.at + FAST_CHECKS.afterMs) || null;
+            const next = releases.find(r => r.at - FAST_CHECKS.beforeMs > now) || null;
+            return { active, next };
+        }
+
+        function fastChecksEnabled() {
+            return document.getElementById('fastChecks').checked;
+        }
+
+        function formatDuration(ms) {
+            const totalMinutes = Math.max(0, Math.round(ms / 60000));
+            const d = Math.floor(totalMinutes / 1440), h = Math.floor(totalMinutes / 60) % 24, m = totalMinutes % 60;
+            if (d) return `${d}d ${h}h`;
+            return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+        }
+
+        function describeRelease(release) {
+            const days = release.days.map(d => `${d.dateKey.split('-').reverse().join('.')} ${d.display}`).join(', ');
+            return `${new Date(release.at).toLocaleTimeString()} your time (${release.opening} consulate time): ${days}`;
+        }
+
+        function renderReleaseInfo() {
+            const info = document.getElementById('releaseInfo');
+            const releases = getUpcomingReleases();
+            if (!releases) {
+                info.textContent = 'New-day openings: load the schedule (Fetch Schedule or start monitoring) to calculate them.';
+                return;
+            }
+            if (!releases.length) {
+                info.textContent = `No new days open in the next ${RELEASE_LOOKAHEAD_DAYS} days.`;
+                return;
+            }
+            const now = Date.now();
+            const { active } = getFastWindow(now);
+            const lines = [];
+            if (active) {
+                const fastState = fastChecksEnabled() && monitor.running ? 'fast checks now' : 'fast window now';
+                lines.push(`⚡ ${fastState}, until ${new Date(active.at + FAST_CHECKS.afterMs).toLocaleTimeString()} · ` +
+                    (active.at > now ? `opens in ${Math.ceil((active.at - now) / 1000)}s` : 'opened') +
+                    ` · ${describeRelease(active)}`);
+            }
+            releases.filter(r => r !== active).slice(0, 3).forEach((r, i) => {
+                lines.push(`${i === 0 && !active ? 'Next new day' : 'Then'} in ${formatDuration(r.at - now)} at ${describeRelease(r)}`);
+            });
+            info.innerHTML = lines.map(line => `<div>${line}</div>`).join('');
+            info.style.color = active ? '#6f42c1' : '#666';
+        }
+
+        setInterval(renderReleaseInfo, 1000);
 
         function monitorLog(message, kind = 'info') {
             const colors = { info: '#333', found: '#28a745', warn: '#b8860b', error: '#dc3545' };
@@ -1496,7 +1607,7 @@
             const inst = getSelectedInstitution();
             const seconds = Math.max(0, Math.round((monitor.nextAt - Date.now()) / 1000));
             status.textContent = `Running for ${inst ? inst.name : '—'} · checks: ${monitor.checks} · ` +
-                (monitor.nextAt ? `next check in ${seconds}s` : 'checking…') +
+                (monitor.nextAt ? `next ${monitor.nextKind === 'fast' ? 'fast ' : ''}check in ${seconds}s` : 'checking…') +
                 (monitor.lastResult ? ` · last: ${monitor.lastResult}` : '');
         }
 
@@ -1558,11 +1669,79 @@
             playTones([...alarm, ...alarm, ...alarm], 'square');
         }
 
-        // requireInteraction keeps the notification on screen until the user closes it
-        function showNotification(title, body, tag) {
+        // The site's own route for a new "Запис на візит" application:
+        // /tasks/create/{workflowTemplateId}/{taskTemplateId}. It takes no prefill parameters,
+        // so the four steps are filled on the site. Without a session the site sends the user
+        // to login and returns here afterwards (localStorage.redirectURL).
+        const BOOKING_URL = 'https://e-consul.gov.ua/tasks/create/161374/161374001';
+        // The site deletes unsent drafts a day after creation (deleteDraftAfterCreateAt: "1d")
+        const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+        const DRAFT_KEY = 'slots.draft';
+        // An existing application: /tasks/{taskId} or /tasks/{taskId}/{stepId}
+        const DRAFT_URL_RE = /^https:\/\/e-consul\.gov\.ua\/tasks\/(?!create\/|my-tasks)[^/?#]+(\/[^?#]*)?$/;
+
+        // Saved draft { url, savedAt } or null. savedAt approximates the draft's creation time
+        function loadDraft() {
+            try { return JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch (e) { return null; }
+        }
+
+        function getValidDraftUrl() {
+            const url = document.getElementById('draftUrl').value.trim();
+            return DRAFT_URL_RE.test(url) ? url : null;
+        }
+
+        function renderDraftHint() {
+            const hint = document.getElementById('draftHint');
+            const url = document.getElementById('draftUrl').value.trim();
+            const draft = loadDraft();
+            hint.style.color = '#666';
+            if (!url) {
+                hint.textContent = 'No draft: “Book on e-consul” opens a new application.';
+            } else if (!DRAFT_URL_RE.test(url)) {
+                hint.style.color = '#dc3545';
+                hint.textContent = 'Not a draft link. Copy the address of the application page, e.g. https://e-consul.gov.ua/tasks/<id>/consularServiceInfo. A new application will be opened instead.';
+            } else if (draft && draft.url === url && Date.now() - draft.savedAt > DRAFT_TTL_MS) {
+                hint.style.color = '#dc3545';
+                hint.textContent = 'Saved over 24 h ago: the site has probably deleted this draft. Create a new one and paste its link.';
+            } else {
+                const savedAt = draft && draft.url === url ? new Date(draft.savedAt) : null;
+                hint.textContent = '“Book on e-consul” opens this draft' +
+                    (savedAt ? ` (saved ${savedAt.toLocaleString()}; drafts live ~24 h)` : '') + '.';
+            }
+        }
+
+        function saveDraftUrl() {
+            const url = document.getElementById('draftUrl').value.trim();
+            const prev = loadDraft();
+            try {
+                if (!url) localStorage.removeItem(DRAFT_KEY);
+                else if (!prev || prev.url !== url) localStorage.setItem(DRAFT_KEY, JSON.stringify({ url, savedAt: Date.now() }));
+            } catch (e) { /* storage unavailable */ }
+            renderDraftHint();
+        }
+
+        (function initDraftUrl() {
+            const draft = loadDraft();
+            if (draft && draft.url) document.getElementById('draftUrl').value = draft.url;
+            document.getElementById('draftUrl').addEventListener('change', saveDraftUrl);
+            renderDraftHint();
+            setInterval(renderDraftHint, 60 * 1000); // the 24 h warning appears without a reload
+        })();
+
+        // Opens the prepared draft if there is a valid link, otherwise a new application
+        function openBookingPage() {
+            window.open(getValidDraftUrl() || BOOKING_URL, '_blank', 'noopener');
+        }
+
+        // requireInteraction keeps the notification on screen until the user closes it.
+        // onClick replaces the default "focus this tab" action.
+        function showNotification(title, body, tag, onClick) {
             if (!('Notification' in window) || Notification.permission !== 'granted') return false;
             const notification = new Notification(title, { body, tag, renotify: true, requireInteraction: true });
-            notification.onclick = () => { window.focus(); notification.close(); };
+            notification.onclick = () => {
+                if (onClick) onClick(); else window.focus();
+                notification.close();
+            };
             return true;
         }
 
@@ -1582,7 +1761,7 @@
             const lines = formatSlotLines(freshKeys);
             const body = lines.slice(0, 4).join('\n') + (lines.length > 4 ? `\n…and ${lines.length - 4} more day(s)` : '') +
                 `\nTotal free: ${totalFree}`;
-            showNotification(`New free slots: ${inst.name}`, body, 'slots-found');
+            showNotification(`New free slots: ${inst.name}`, body + '\nClick to book on e-consul', 'slots-found', openBookingPage);
             document.title = `🟢 ${freshKeys.length} new slot(s) — Reserved Slots Calendar`;
         }
 
@@ -1609,9 +1788,15 @@
             });
         }
 
-        async function runCheck() {
+        // kind: 'scheduled', 'fast' (fast window) or 'manual' (Check now). Returns false if a check
+        // is already running.
+        async function runCheck(kind = 'scheduled') {
+            if (monitor.checking) return false;
+            monitor.checking = true;
+            document.getElementById('checkNowBtn').disabled = true;
             const inst = getSelectedInstitution();
             const checkNumber = ++monitor.checks;
+            const label = `Check #${checkNumber}` + (kind === 'scheduled' ? '' : ` (${kind})`);
             monitor.nextAt = 0;
             renderMonitorStatus();
             try {
@@ -1624,7 +1809,7 @@
                 const consulHashes = getServiceConsulHashes();
                 if (consulHashes.length === 0) {
                     monitor.lastResult = 'no consul provides this service';
-                    monitorLog(`Check #${checkNumber}: no consul at this institution provides the selected service`, 'warn');
+                    monitorLog(`${label}: no consul at this institution provides the selected service`, 'warn');
                     return;
                 }
                 const reserved = await callExternalReader('public-get-consuls-reserved-slots', {
@@ -1641,7 +1826,7 @@
                 // The log shows newest entries first: add the per-date lines before the check line
                 // so they read below it, earliest date first
                 formatSlotLines(fresh).reverse().forEach(line => monitorLog(`  new: ${line}`, 'found'));
-                monitorLog(`Check #${checkNumber}: ${free.length} free slot(s)` + (fresh.length ? `, ${fresh.length} new` : ''), fresh.length ? 'found' : 'info');
+                monitorLog(`${label}: ${free.length} free slot(s)` + (fresh.length ? `, ${fresh.length} new` : ''), fresh.length ? 'found' : 'info');
                 if (fresh.length) alertSlots(inst, fresh, free.length);
             } catch (error) {
                 if (error.status === 401 || error.status === 403) {
@@ -1651,33 +1836,67 @@
                     return;
                 }
                 monitor.lastResult = `error: ${error.message}`;
-                monitorLog(`Check #${checkNumber} failed: ${error.message}`, 'error');
+                monitorLog(`${label} failed: ${error.message}`, 'error');
+            } finally {
+                monitor.checking = false;
+                document.getElementById('checkNowBtn').disabled = false;
+                renderMonitorStatus();
             }
+            return true;
         }
 
+        // Random delay from the interval bounds; inside a fast window 15–20 s, and a normal delay
+        // that would run past the start of the next fast window is cut to that start
         function scheduleNextCheck() {
+            clearTimeout(monitor.timer);
+            const now = Date.now();
             const { min, max } = readIntervalBounds();
-            const delaySeconds = Math.round(min + Math.random() * (max - min));
-            monitor.nextAt = Date.now() + delaySeconds * 1000;
+            let delayMs = Math.round(min + Math.random() * (max - min)) * 1000;
+            let kind = 'scheduled';
+            if (fastChecksEnabled()) {
+                const { active, next } = getFastWindow(now);
+                if (active) {
+                    delayMs = Math.round(FAST_CHECKS.minSeconds + Math.random() * (FAST_CHECKS.maxSeconds - FAST_CHECKS.minSeconds)) * 1000;
+                    kind = 'fast';
+                } else if (next && now + delayMs > next.at - FAST_CHECKS.beforeMs) {
+                    delayMs = Math.max(1000, next.at - FAST_CHECKS.beforeMs - now);
+                    kind = 'fast';
+                }
+            }
+            monitor.nextAt = now + delayMs;
+            monitor.nextKind = kind;
             monitor.timer = setTimeout(async () => {
-                await runCheck();
+                await runCheck(kind);
                 if (monitor.running) scheduleNextCheck();
-            }, delaySeconds * 1000);
+            }, delayMs);
             renderMonitorStatus();
         }
 
-        async function startMonitoring() {
+        // Token and location are required for any check; shows the reason in fetchStatus
+        function canCheck() {
             const fetchStatus = document.getElementById('fetchStatus');
             if (!document.getElementById('apiToken').value.trim()) {
                 fetchStatus.innerHTML = '<span style="color: #dc3545;">Please enter JWT token</span>';
-                return;
+                return false;
             }
-            const inst = getSelectedInstitution();
-            if (!inst) {
+            if (!getSelectedInstitution()) {
                 fetchStatus.innerHTML = '<span style="color: #dc3545;">Select a location first</span>';
-                return;
+                return false;
             }
-            if (monitor.running) return;
+            return true;
+        }
+
+        // Check right away; a running monitor plans its next check from this one
+        async function checkNow() {
+            if (monitor.checking || !canCheck()) return;
+            getAudio(); // inside the click, so the slot sound can play
+            clearTimeout(monitor.timer);
+            if (await runCheck('manual') && monitor.running) scheduleNextCheck();
+        }
+
+        async function startMonitoring() {
+            if (!canCheck() || monitor.running) return;
+            const inst = getSelectedInstitution();
 
             getAudio(); // must be created inside the click so the sound can play later
             if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
@@ -1694,7 +1913,7 @@
             monitor.ticker = setInterval(renderMonitorStatus, 1000);
 
             await runCheck();
-            if (monitor.running) scheduleNextCheck();
+            if (monitor.running && !monitor.checking) scheduleNextCheck();
         }
 
         function stopMonitoring(reason) {
