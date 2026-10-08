@@ -1566,15 +1566,20 @@
             return true;
         }
 
-        function alertSlots(inst, freshKeys, totalFree) {
-            playSlotSound();
+        // ["2027-03-31 09:50", "2027-03-31 10:10"] -> ["31.03.2027: 09:50, 10:10"], one line per date
+        function formatSlotLines(slotKeys) {
             const byDate = {};
-            freshKeys.forEach(key => {
+            slotKeys.forEach(key => {
                 const [dateKey, time] = key.split(' ');
                 (byDate[dateKey] = byDate[dateKey] || []).push(time);
             });
-            const lines = Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b))
-                .map(([dateKey, times]) => `${dateKey.split('-').reverse().join('.')}: ${times.join(', ')}`);
+            return Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b))
+                .map(([dateKey, times]) => `${dateKey.split('-').reverse().join('.')}: ${times.sort().join(', ')}`);
+        }
+
+        function alertSlots(inst, freshKeys, totalFree) {
+            playSlotSound();
+            const lines = formatSlotLines(freshKeys);
             const body = lines.slice(0, 4).join('\n') + (lines.length > 4 ? `\n…and ${lines.length - 4} more day(s)` : '') +
                 `\nTotal free: ${totalFree}`;
             showNotification(`New free slots: ${inst.name}`, body, 'slots-found');
@@ -1633,6 +1638,9 @@
                 const fresh = monitor.knownFree ? free.filter(key => !monitor.knownFree.has(key)) : free;
                 monitor.knownFree = new Set(free);
                 monitor.lastResult = `${free.length} free` + (fresh.length ? `, ${fresh.length} new` : '') + ` at ${new Date().toLocaleTimeString()}`;
+                // The log shows newest entries first: add the per-date lines before the check line
+                // so they read below it, earliest date first
+                formatSlotLines(fresh).reverse().forEach(line => monitorLog(`  new: ${line}`, 'found'));
                 monitorLog(`Check #${checkNumber}: ${free.length} free slot(s)` + (fresh.length ? `, ${fresh.length} new` : ''), fresh.length ? 'found' : 'info');
                 if (fresh.length) alertSlots(inst, fresh, free.length);
             } catch (error) {
