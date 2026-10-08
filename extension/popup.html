@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>e-Consul Helper</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<header class="head">
+    <div class="logo" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFD500" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg>
+    </div>
+    <div class="title">e-Consul Helper</div>
+    <span id="pill" class="pill muted">…</span>
+</header>
+
+<!-- The files on disk are newer than the loaded extension (unpacked: the background and the
+     content scripts are read only when the extension is reloaded) -->
+<div id="reloadNote" class="reload-note" hidden>
+    Код розширення оновлено. Натисніть ⟳ на картці e-Consul Helper у <span class="mono">chrome://extensions</span>, щоб він запрацював.
+</div>
+
+<!-- Not logged in, or the session state is not known yet -->
+<main id="loggedOut" class="alert-card" hidden>
+    <div class="msg">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B42318" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none" aria-hidden="true"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+        <div>
+            <div id="outTitle" class="msg-title">Сесія на e-consul скінчилась</div>
+            <div id="outText" class="sub">Моніторинг зупинено. Він запуститься сам, щойно ви увійдете.</div>
+        </div>
+    </div>
+    <button id="loginBtn" class="primary" type="button">Увійти на e-consul</button>
+</main>
+
+<!-- Logged in -->
+<div id="loggedIn" hidden>
+    <main class="body">
+        <section class="section">
+            <div class="label">Сесія</div>
+            <div class="status-line"><span class="dot"></span>Ви увійшли на e-consul</div>
+            <div id="tokenLeft" class="sub"></div>
+            <div id="tokenBar" class="bar"><div></div></div>
+            <div id="tokenNote" class="note"></div>
+        </section>
+
+        <section class="section">
+            <div class="label">Чернетка</div>
+            <div id="draftTitle" class="strong"></div>
+            <div id="draftText" class="sub"></div>
+            <div id="draftNote" class="note"></div>
+            <div class="row top">
+                <button id="openDraftBtn" class="primary" type="button">Відкрити чернетку</button>
+                <button id="newDraftBtn" class="secondary" type="button">Створити нову</button>
+            </div>
+        </section>
+
+        <!-- Shown once the extension creates the morning draft itself (stage 3 of the plan) -->
+        <div class="time-row" hidden>
+            <label for="draftTime">Нова чернетка щодня о</label>
+            <input id="draftTime" inputmode="numeric" maxlength="5" autocomplete="off" spellcheck="false">
+        </div>
+
+        <div class="panel">
+            <div id="monitorTitle" class="strong"></div>
+            <div id="monitorText" class="sub"></div>
+            <div id="slotsText" class="sub" hidden></div>
+        </div>
+    </main>
+    <footer class="foot">
+        <button id="muteBtn" class="secondary" type="button">Вимкнути звук</button>
+        <button id="pauseBtn" class="secondary" type="button">Призупинити</button>
+    </footer>
+    <!-- Until stages 3–4 there is nothing to pause: say so instead of a silent toggle -->
+    <div class="foot-note">«Призупинити» зупинятиме автоматичний вибір слота й створення чернетки — їх ще не додано, тож зараз кнопка лише ставить позначку «Пауза».</div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

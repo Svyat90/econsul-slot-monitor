@@ -1,0 +1,128 @@
+/* Design A · Державний: docs/design/extension/README.md */
+@font-face {
+    font-family: 'Manrope';
+    font-weight: 200 800;
+    src: url(fonts/manrope-cyrillic.woff2) format('woff2');
+    unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+    font-family: 'Manrope';
+    font-weight: 200 800;
+    src: url(fonts/manrope-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-weight: 500;
+    src: url(fonts/ibm-plex-mono-500-cyrillic.woff2) format('woff2');
+    unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-weight: 500;
+    src: url(fonts/ibm-plex-mono-500-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+    --bg: #EEF2F7;
+    --card: #FFFFFF;
+    --text: #0B1B2B;
+    --text-2: #3E4C5B;
+    --label: #4A5868;
+    --divider: #E3E8EF;
+    --border: #C5CFDB;
+    --accent: #0057B8;
+    --accent-hover: #003F86;
+    --yellow: #FFD500;
+    --ok: #1E7B34;
+    --ok-badge: #1E6B34;
+    --ok-badge-bg: #E3F4E8;
+    --error: #B42318;
+    --panel: #F4F7FB;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+    width: 360px;
+    background: var(--card);
+    color: var(--text);
+    font: 400 14px/1.4 Manrope, system-ui, sans-serif;
+}
+[hidden] { display: none !important; }
+b { font-weight: 700; color: var(--text); }
+
+.head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--divider);
+}
+.logo {
+    width: 28px; height: 28px; border-radius: 8px; background: var(--accent);
+    display: flex; align-items: center; justify-content: center; flex: none;
+}
+.title { flex: 1; font-weight: 800; font-size: 16px; }
+.pill { font-size: 12px; font-weight: 700; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { color: var(--ok-badge); background: var(--ok-badge-bg); }
+.pill.error { color: #FFFFFF; background: var(--error); }
+.pill.muted { color: var(--label); background: var(--divider); }
+
+.body { padding: 16px 20px; display: flex; flex-direction: column; gap: 18px; }
+.section { display: flex; flex-direction: column; gap: 8px; }
+.label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--label); }
+.status-line { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+.dot.error { background: var(--error); }
+.dot.muted { background: var(--border); }
+.sub { font-size: 14px; color: var(--text-2); }
+.sub.error, .sub.error b { color: var(--error); }
+.note { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text-2); }
+.note:empty { display: none; }
+.note .dot { margin-top: 6px; }
+.strong { font-weight: 700; }
+.bar { height: 6px; background: var(--divider); border-radius: 3px; overflow: hidden; }
+.bar > div { height: 6px; background: var(--accent); border-radius: 3px; }
+.bar.error > div { background: var(--error); }
+
+.row { display: flex; gap: 8px; }
+.row.top { margin-top: 4px; }
+button {
+    height: 44px; border-radius: 8px; cursor: pointer;
+    font: 700 14px Manrope, system-ui, sans-serif;
+}
+button.primary { flex: 1; border: 0; background: var(--accent); color: #FFFFFF; }
+button.primary:hover { background: var(--accent-hover); }
+button.secondary { padding: 0 14px; border: 1px solid var(--border); background: #FFFFFF; color: var(--text); font-weight: 600; }
+button.secondary:hover { background: var(--panel); }
+button:disabled { cursor: default; opacity: .45; }
+button:disabled:hover { background: inherit; }
+button.primary:disabled:hover { background: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.time-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.time-row label { font-size: 14px; color: var(--text-2); }
+.time-row input {
+    width: 72px; height: 36px; border: 1px solid var(--border); border-radius: 8px;
+    text-align: center; font: 500 14px var(--mono); color: var(--text);
+}
+.time-row input.invalid { border-color: var(--error); color: var(--error); }
+
+.panel { display: flex; flex-direction: column; gap: 6px; padding: 12px; background: var(--panel); border-radius: 8px; }
+.panel .strong { font-size: 14px; }
+.panel .sub { font-size: 13px; }
+.mono { font-family: var(--mono); font-weight: 500; }
+
+.foot { display: flex; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--divider); }
+.foot button { flex: 1; height: 40px; padding: 0; font-size: 13px; }
+.foot-note { padding: 0 20px 16px; margin-top: -4px; font-size: 12px; color: var(--label); }
+
+.alert-card { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.alert-card .msg { display: flex; gap: 12px; align-items: flex-start; }
+.alert-card .msg-title { font-weight: 800; font-size: 16px; }
+.alert-card .msg .sub { margin-top: 4px; }
+.alert-card button.primary { flex: none; }
+
+.reload-note { margin: 12px 20px 0; padding: 12px; font-size: 13px; background: #FDECEA; border: 1px solid #F3B8B2; border-radius: 8px; }
+.reload-note .mono { font-size: 12px; }
