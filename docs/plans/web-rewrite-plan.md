@@ -843,3 +843,105 @@ e-Consul Helper»), перенесена дослівно; тексти журн
 | `web/src/application/{run-check,monitor}*` | S4.T5 |
 | `web/src/application/extension-link*` | S4.T6 |
 | `web/src/features/status/**`, `web/src/app/{providers.tsx,Layout.tsx,Layout.module.css}` | S4.T7 |
+
+## Етап 5 — задачі
+
+Загальне. Контракти API (`server/src/contracts/{common,request-log,checks,reservation-log,schedule-log,summary}.ts`)
+і порти `web` (`ServerApi` з `recordRequest` / `recordCheck` / `recordReservations`, `LogHistory`,
+`Ids`, `AppSession`, `RequestMeta` у `EconsulApi`) — готові (S5.T0); задачі будують на них і не
+змінюють їх. Таблиці вже є (етап 1); тип `monitor_checks.new_slots` — `{ date, time, consulIpnHash }[]`
+(лише тип jsonb, без міграції).
+
+- **Rules для задач `server`:**
+  - Модуль CRUD: `routes.ts` → `repository.ts`, без `service.ts`; Drizzle лише в `repository.ts`; маршрут — плагін `FastifyPluginAsyncZod<{ repository }>`, схеми з контрактів — onion-architecture §11
+  - `POST` — пачка з контракту (`batchOf`, `.strict()`), одна вставка `insert(...).values(rows).onConflictDoNothing({ target: <table>.clientId })`, 204 — drizzle-orm-patterns «In this project»
+  - `GET` — фільтри з контракту, нові зверху (`ORDER BY id DESC`), `before` → `id < before`, `limit`; `nextCursor` — найменший `id` сторінки, якщо сторінка повна, інакше `null`; відповідь — контрактний тип (дати — ISO-рядки, не `Date`) — fastify «In this project»
+  - Лише INSERT і SELECT; без колонок і полів для токена, заголовків, тіл відповідей — postgresql-table-design «In this project», security
+  - Тести: репозиторій — `*.it.test.ts` проти `econsul_test` (`createTestDb()`, `truncate` у `beforeEach`); маршрут — `app.inject()` з фейковим репозиторієм (компілятори zod у тесті); зайвий ключ `token` → 4xx — onion-architecture §11
+  - Імпорти з `.ts`, без `enum` — fastify rules/typescript.md
+- **Rules для задач `web`:** як у етапі 4 («Загальне»); запис у журнали ніколи не кидає й не гальмує моніторинг; токен не потрапляє в жоден запис.
+- **Verify:** свої тести + typecheck, lint (web), arch:check свого модуля.
+
+### Wave 0 — основна сесія
+
+#### S5.T0 — контракти API, порти, залежності
+- Files: `server/src/contracts/**`, `server/src/db/schema/monitor-checks.ts` (тип jsonb), `web/src/application/ports.ts`, `web/package.json` (`@tanstack/react-query`)
+
+### Wave 1 — паралельно
+
+#### S5.T1 — модуль `request-log`
+- Module: server · Files: `server/src/modules/request-log/{repository.ts,repository.it.test.ts,routes.ts,routes.test.ts}` (new)
+- Interface: `createRequestLogRepository(db: Db): RequestLogRepository` (`insertMany(entries: RequestLogEntry[]): Promise<number>`, `list(query: RequestLogQuery): Promise<Page<StoredRequestLogEntry>>`); `requestLogRoutes: FastifyPluginAsyncZod<{ repository: RequestLogRepository }>` — `POST /api/request-log`, `GET /api/request-log`
+- Steps: тести — вставка й повтор (0); фільтри `method`, `outcome`, `source`, `from`/`to`, курсор; `network_error` з `httpStatus: null` зберігається (CHECK у таблиці).
+
+#### S5.T2 — модуль `checks`
+- Module: server · Files: `server/src/modules/checks/{repository.ts,repository.it.test.ts,routes.ts,routes.test.ts}` (new)
+- Interface: `createChecksRepository(db)` (`insertMany(entries: CheckEntry[])`, `list(query: CheckQuery)`); `checksRoutes` — `POST /api/checks`, `GET /api/checks` (`kind`, `outcome`, `onlyNew` → `new_count > 0`)
+- Steps: тести — вставка/повтор; фільтри; `onlyNew`.
+
+#### S5.T3 — модуль `reservation-log`
+- Module: server · Files: `server/src/modules/reservation-log/{repository.ts,repository.it.test.ts,routes.ts,routes.test.ts}` (new)
+- Interface: `createReservationLogRepository(db)` (`insertMany(events: ReservationEvent[])`, `list(query: ReservationQuery)`); `reservationLogRoutes` — `POST /api/reservation-log`, `GET /api/reservation-log`
+
+#### S5.T4 — `schedule-log`: API-маршрути й JSONL
+- Module: server · Files: `server/src/modules/schedule-log/{repository.ts,repository.it.test.ts,routes.ts,routes.test.ts}`
+- Interface (додатково до наявного): `ScheduleLogRepository.list(query: HistoryQuery): Promise<Page<StoredScheduleLogEntry>>`, `listAll(): AsyncIterable<ScheduleLogEntry>` або `Promise<ScheduleLogEntry[]>` (за зростанням `checked_at`); `scheduleLogApiRoutes: FastifyPluginAsyncZod<{ repository }>` — `POST /api/schedule-log` (пачка), `GET /api/schedule-log`, `GET /api/schedule-log.jsonl` (`application/x-ndjson`, по рядку на запис у форматі старого `logs/schedule-changes.jsonl`, `Content-Disposition: attachment; filename="schedule-changes.jsonl"`). Старий `scheduleLogLegacyRoutes` лишається до етапу 8.
+
+#### S5.T5 — модуль `summary`
+- Module: server · Files: `server/src/modules/summary/{repository.ts,repository.it.test.ts,routes.ts,routes.test.ts}` (new)
+- Interface: `createSummaryRepository(db): { summary(query: SummaryQuery): Promise<Summary> }`; `summaryRoutes` — `GET /api/summary?from&to[&institutionCode]`
+- Підрахунок — SQL (`count(*) FILTER (WHERE …)`, `sum(new_count)`, `max(started_at) FILTER (WHERE new_count > 0)`) над `monitor_checks` і `reservation_events` у межах `[from, to)`; без читання рядків у JS.
+
+#### S5.T6 — адаптери `server-api` (пачки) і `log-history`, `browserIds`
+- Module: web · Files: `web/src/adapters/server-api/{server-api.ts,server-api.test.ts}`, `web/src/adapters/log-history/{log-history.ts,log-history.test.ts}` (new), `web/src/adapters/browser-runtime/{browser-runtime.ts,browser-runtime.test.ts}`
+- Interface: `createServerApi(deps?: { fetchFn?; scheduler?: Scheduler; flushMs?: number; maxQueued?: number }): ServerApi & { flush(): Promise<void> }`; `createLogHistory(fetchFn?): LogHistory`; `browserIds: Ids` (`crypto.randomUUID()`)
+- Черга на кожен журнал; відправка пачками ≤ 100 на `POST /api/<журнал>` кожні `flushMs` (типово 5 с) і одразу, коли назбиралось 20; 204 → прибрати; 503/мережа → лишити й повторити пізніше (подвоєння інтервалу до 60 с); 4xx (не 503) → викинути пачку й `console.warn` без вмісту; межа черги `maxQueued` (типово 2000 на журнал) — найстаріші відкидаються. `recordScheduleChange` → `POST /api/schedule-log` (пачка), більше не `/schedule-log`.
+- Steps: тести з фейковим `fetch` і фейковим `Scheduler`: пачкування; повтор після 503 і після помилки мережі; межа черги; 422 не повторюється; жоден запис не містить `token`.
+
+#### S5.T7 — адаптер `request-log` (обгортка `EconsulApi`)
+- Module: web · Files: `web/src/adapters/request-log/{request-log.ts,request-log.test.ts}` (new)
+- Interface: `withRequestLog(api: EconsulApi, deps: { server: ServerApi; clock: Clock; ids: Ids; session: AppSession }): EconsulApi`
+- Кожен виклик → `server.recordRequest`: `service: 'e-queue-register'`, `method`, `institutionCode`, `filters` (без токена: `{ institutionCode }` або `{ institutionCode, status, consulIpnHash }`), `startedAt`, `durationMs` (з `clock`), `httpStatus` (успіх → 200; `SessionExpiredError` / `EconsulUnavailableError` → їхній `status`; мережа → `null`), `outcome` (`ok`, `session_expired`, `unavailable`, `schema_error`, `network_error`), `itemsCount` (рядків розкладу / зайнятих слотів), `responseBytes: null`, `checkKind` / `checkSeq` з `meta`, `source: 'app'`, `errorMessage` (≤ 500 символів, без токена). Результат і помилка проходять далі без змін. Обгортка імпортує лише порт `EconsulApi`, не адаптер `econsul-api` — onion-architecture §2 (виняток `request-log`).
+- Steps: тести — успіх; 401; 500; мережа; схема; токен не в записі.
+
+#### S5.T8 — монітор пише перевірки й резервування
+- Module: web · Files: `web/src/application/{run-check.ts,run-check.test.ts,monitor.ts,monitor.test.ts}`
+- Interface: `createMonitor` deps — додатково `ids: Ids; session: AppSession`; виклики `EconsulApi` — з `meta: { checkKind, checkSeq }`
+- Кожна перевірка → `server.recordCheck` (успіх і помилка; `newSlots` — `{ date, time, consulIpnHash }` з `slotConsuls`; `outOfRangeCount`; `durationMs` з `clock`). Зайняті слоти між двома перевірками однієї установи → `diffReserved` → `server.recordReservations` (`previousCheckAt` — час попередньої перевірки, `detectedAt` — поточної); зміна установи скидає попередні.
+- Steps: тести — запис перевірки (успіх, 500, 401); резервування на другій перевірці; перша перевірка — без резервувань; зміна установи — без хибних резервувань.
+
+### Wave 2
+
+#### S5.T9 — підключення модулів сервера
+- Module: server · Depends on: S5.T1–S5.T5 · Files: `server/src/app.ts`, `server/src/app.test.ts`, `server/src/platform/container.ts`
+- `AppDeps` — репозиторії всіх модулів; реєстрація маршрутів; `GET /api/locations` (файл довідника); помилка підключення до бази (`ECONNREFUSED`, `57P01`, `08*`) у будь-якому `/api` → 503 `{ error: 'Database unavailable' }`. Тести — `app.inject()` з фейками: маршрути відповідають; база недоступна → 503.
+
+#### S5.T10 — сторінка «Моніторинг» і composition root
+- Module: web · Depends on: S5.T6–S5.T8 · Files: `web/src/features/monitoring/**` (new), `web/src/app/pages/MonitoringPage.tsx`, `web/src/app/providers.tsx`, `web/src/hooks/use-app-services.ts`, `web/src/test/fake-services.tsx`
+- Rules (додатково): дані сервера — TanStack Query (`QueryClientProvider` у `providers.tsx`), ключі за фільтрами й лічильником перевірок монітора (`checks`), щоб нова перевірка оновлювала журнали; не копіювати в `useState` — frontend-ui-architecture «In this project»; `LogHistory` — у `AppServices`; помилка сервера — повідомлення в картці, сторінка працює
+- Designs: `web/docs/design/monitoring.png` (зведення за день: перевірок / нових вільних / резервувань / скасувань; журнал перевірок з фільтрами «Усі», «Нові слоти», «Помилки», «Часті»; журнал резервувань; зміни розкладу з «Завантажити JSONL»)
+- Composition: `withRequestLog(createEconsulApi(), …)`, `createServerApi({ scheduler })`, `browserIds`, `session` (`tabSessionId` — `browserIds.uuid()` раз на вкладку, `appVersion` — `import.meta.env` / `package.json` `version`)
+- Steps: RTL з фейковим `LogHistory`: картки зведення; фільтр «Нові слоти» → запит з `onlyNew`; помилка сервера → повідомлення; посилання JSONL.
+
+### Wave 3 — основна сесія
+
+#### S5.T11 — перевірка
+- Збірка, перезапуск сервера; записи з'являються в таблицях після моніторингу на `/next/`
+  (потребує токена від розширення — разом із користувачем); сервер зупинено → моніторинг триває,
+  записи доходять після запуску; `pg_dump` робочої бази без рядка токена.
+
+### Ownership
+
+| Файли | Задача |
+|---|---|
+| `server/src/contracts/**`, `web/src/application/ports.ts` | S5.T0 |
+| `server/src/modules/request-log/**` | S5.T1 |
+| `server/src/modules/checks/**` | S5.T2 |
+| `server/src/modules/reservation-log/**` | S5.T3 |
+| `server/src/modules/schedule-log/**` | S5.T4 |
+| `server/src/modules/summary/**` | S5.T5 |
+| `web/src/adapters/{server-api,log-history,browser-runtime}/**` | S5.T6 |
+| `web/src/adapters/request-log/**` | S5.T7 |
+| `web/src/application/{run-check,monitor}*` | S5.T8 |
+| `server/src/app.ts`, `app.test.ts`, `platform/container.ts` | S5.T9 |
+| `web/src/features/monitoring/**`, `MonitoringPage.tsx`, `providers.tsx`, `hooks/use-app-services.ts`, `test/fake-services.tsx` | S5.T10 |

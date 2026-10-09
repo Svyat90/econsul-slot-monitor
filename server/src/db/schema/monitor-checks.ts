@@ -16,7 +16,7 @@ export const monitorChecks = pgTable('monitor_checks', {
     freeCount: integer('free_count'), // null when the check failed
     newCount: integer('new_count'),
     outOfRangeCount: integer('out_of_range_count'),
-    newSlots: jsonb('new_slots').$type<{ from: string; to: string; consulIpnHash: string }[]>().notNull().default([]),
+    newSlots: jsonb('new_slots').$type<{ date: string; time: string; consulIpnHash: string | null }[]>().notNull().default([]),
     tabSessionId: uuid('tab_session_id').notNull(),
     appVersion: text('app_version').notNull(),
     errorMessage: text('error_message'),
