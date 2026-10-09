@@ -1,7 +1,7 @@
 # Ідеї (брейншторм)
 
 > **ЧЕРНЕТКА: неперевірені ідеї, НЕ вимоги.** Не вважайте цей файл джерелом правди.
-> Узгоджене — у `docs/plans/` і `docs/booking.md`.
+> Узгоджене — у `docs/`, `docs/plans/` і в `docs/` та `plans/` модулів.
 > Веде скіл `brainstorm`. Архів: `docs/brainstorm/archive.md`.
 
 next_id: 1

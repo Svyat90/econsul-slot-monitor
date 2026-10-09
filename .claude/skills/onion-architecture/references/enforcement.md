@@ -7,17 +7,19 @@ baseline to maintain.
 | File | Role |
 |---|---|
 | `.dependency-cruiser.cjs` | the rules (`forbidden`) and resolver options |
-| `pnpm arch:check` | `depcruise src extension --config .dependency-cruiser.cjs` |
+| `pnpm arch:check` | `depcruise src server/src extension --config .dependency-cruiser.cjs` |
 
 ## The rules
 
 | Rule | From | Forbidden target | Why |
 |---|---|---|---|
 | `contracts-are-the-core` | `src/domain/contracts/**` | anything but itself and `zod` | innermost ring; also used by the extension |
-| `domain-is-pure` | `src/domain/**` | `react`, `next`, `src/application`, `src/adapters`, `src/server`, `src/app`, `src/features` | no framework and no I/O in the domain |
-| `application-is-framework-free` | `src/application/**` | `react`, `next`, `src/adapters`, `src/server`, `src/app`, `src/features` | use cases talk to ports only |
+| `domain-is-pure` | `src/domain/**` | `react`, `next`, `src/application`, `src/adapters`, `server`, `src/app`, `src/features` | no framework and no I/O in the domain |
+| `application-is-framework-free` | `src/application/**` | `react`, `next`, `src/adapters`, `server`, `src/app`, `src/features` | use cases talk to ports only |
 | `ui-does-not-touch-adapters` | `src/features/**`, `src/app/**` except `providers.tsx` and `api/**` | `src/adapters/**` | only the composition root picks implementations |
-| `server-only-stays-on-server` | anything except `src/app/api/**` and `src/server/**` | `src/server/**` | the schedule-log writer and other Node code never reach the client bundle |
+| `web-does-not-import-server` | `src/**` | `server/**` | the web app reaches the server only over HTTP |
+| `server-routes-do-not-touch-the-db` | `server/src/modules/*/routes.ts` | `server/src/db/**`, `drizzle-orm` | CRUD routes call their repository |
+| `server-services-do-not-know-the-orm` | `server/src/modules/*/service.ts` | `server/src/db/**`, `drizzle-orm` | data goes through repositories |
 | `adapters-are-leaves` | `src/adapters/<a>/**` | `src/adapters/<b>/**` (except `_shared`), `src/application`, `src/features`, `src/app` | adapters implement ports, they do not orchestrate |
 | `no-cross-feature-imports` | `src/features/<a>/**` | `src/features/<b>/**` | see `frontend-ui-architecture` |
 | `extension-uses-contracts-only` | `extension/**` | `src/**` except `src/domain/contracts/**` | the extension is a separate client of the protocol |

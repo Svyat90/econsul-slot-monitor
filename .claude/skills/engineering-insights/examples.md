@@ -1,7 +1,7 @@
 # Insight examples
 
 Shape reference for the `engineering-insights` skill. The good examples restate
-entries already in `docs/insights.md`; they show the shape, they are not to be
+entries already in `extension/docs/insights.md`; they show the shape, they are not to be
 copied again.
 
 ## Vague vs useful
@@ -39,7 +39,7 @@ from zero.
 
 ## Shape reference by section
 
-`## Сайт і API e-Consul`
+`docs/insights.md` → `## Сайт і API e-Consul`
 
 ```markdown
 ### Останній день календаря залежить від часу доби (YYYY-MM-DD)
@@ -54,7 +54,7 @@ from zero.
 (Here the rule itself lives in `docs/booking.md`; the insight is the trap of
 getting it wrong, with a pointer.)
 
-`## Застосунок`
+the app's `docs/insights.md` (today `docs/insights.md` → `## Застосунок`)
 
 ```markdown
 ### Подвійний запуск моніторингу в React Strict Mode (YYYY-MM-DD)

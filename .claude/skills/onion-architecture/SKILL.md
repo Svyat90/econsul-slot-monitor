@@ -2,7 +2,7 @@
 name: onion-architecture
 description: "Onion (clean / hexagonal, ports-and-adapters) architecture for the e-Consul slot monitor web app: which ring a piece of code belongs to, which way imports may point, where the slot algorithm, monitoring rules, e-Consul API calls, extension messaging, notifications, storage and the schedule log live, how time, randomness and the session token are handled, and how errors cross the rings. Use when porting logic out of slots.html, adding or restructuring a use case, port or adapter; when a component or hook calls fetch, Date.now(), Math.random(), localStorage, Notification or window.postMessage directly; when deciding where a function belongs; when reviewing a change for structure; or when the user mentions onion, clean or hexagonal architecture, layers, ports and adapters, dependency rule, use cases or domain logic — even if they never say 'architecture'. Not for React/Next.js API details or folder layout of the UI (react-best-practices, next-best-practices, frontend-ui-architecture cover those)."
 metadata:
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # Onion Architecture (e-Consul slot monitor)
@@ -19,11 +19,13 @@ Those are outer rings that plug in.
    calendar days (§6), how its web worker decides a slot is free (§7), why the old
    version showed phantom slots (§8), monitoring and day releases (§9), booking
    (§14). Domain code must match it; a change in behaviour is a change to that doc.
-3. `docs/plans/extension-plan.md` §8 — the message protocol between the app and
-   the extension. It is a contract, not an implementation detail.
-4. `docs/insights.md` — known traps (React re-rendering the site, `chrome.storage.session`
-   cleared on reload, the token appearing seconds after load).
-5. `docs/brainstorm/ideas.md` — the decision log for the rewrite (stack, layout).
+3. `extension/plans/extension-plan.md` §8 — the message protocol between the app
+   and the extension. It is a contract, not an implementation detail.
+4. `docs/insights.md` and `<module>/docs/insights.md` (`extension/docs/insights.md`)
+   — known traps (React re-rendering the site, `chrome.storage.session` cleared on
+   reload, the token appearing seconds after load).
+5. The module's own `CLAUDE.md`, `README.md`, `docs/` and `plans/`.
+6. `docs/brainstorm/ideas.md` — the decision log for the rewrite (stack, layout).
    If it settled something this file contradicts, the recorded decision wins and
    this file is out of date: say so.
 
@@ -36,7 +38,8 @@ forwards calls costs more than it returns. In this app:
 - **Always:** the dependency direction (section 3) and "no clock, no randomness,
   no I/O in the domain" (section 5). They are free and they are what makes the
   slot algorithm testable against recorded responses.
-- **Full rings** (pure domain + use case + ports): free-slot calculation, calendar
+- **Full rings** (pure domain + use case + ports): the request log (a decorator
+  over the e-Consul port, section 11), free-slot calculation, calendar
   days and the horizon rule, day-release times and fast-check windows, the
   monitoring loop (check → diff → alert → schedule next), session-expiry handling,
   handing found slots to the extension.
@@ -56,14 +59,16 @@ DOM or a browser only to check a calculation.
 > rules do not change.
 
 ```
-composition root   src/app/providers.tsx (client deps) · src/app/api/**/route.ts (server deps)
+composition root   src/app/providers.tsx (client deps)
  └─ presentation   src/app/** pages · src/features/** components and hooks
      └─ application   src/application/** use cases · ports.ts
          └─ domain        src/domain/{slots,monitoring,locations}/** pure functions
              └─ core          src/domain/contracts/** zod schemas + types + domain errors
 
-infrastructure     src/adapters/** (browser) · src/server/** (server-only)
+infrastructure     src/adapters/** (browser)
                    └─ implement the ports; wired in by the composition root
+server/            separate module (Fastify + Drizzle + Postgres): request log,
+                   schedule-change log — its own rings, section 11
 extension/         separate entry point (MV3); may import src/domain/contracts only
 ```
 
@@ -71,10 +76,10 @@ extension/         separate entry point (MV3); may import src/domain/contracts o
 |---|---|---|---|
 | **Contracts** (core) | `src/domain/contracts/` — e-Consul response schemas (schedule row, reserved slot, `nonWorkingTime`), `locations.json` schema, extension message protocol (`ext:*`, `app:*`), domain errors | zod, itself | anything else |
 | **Domain** | `src/domain/slots/` (calendar days, horizon, free slots, windows), `src/domain/monitoring/` (release times, fast window, next-check delay, new-slot diff, date-range filter), `src/domain/locations/` | contracts | React, Next, `fetch`, `window`, `chrome.*`, `localStorage`, `Date.now()`, `new Date()` without an argument, `Math.random()`, adapters |
-| **Application** | `src/application/<use-case>.ts`, `src/application/ports.ts` | domain, contracts, ports | React, Next, `src/adapters/**`, `src/server/**`, browser globals |
-| **Presentation** | `src/app/**` (pages, layouts), `src/features/**` (components, hooks) | application, domain (read-only helpers for display), contracts | `src/adapters/**` directly, `src/server/**` from client code, `fetch` to e-Consul |
-| **Infrastructure** | `src/adapters/econsul-api`, `extension-bridge`, `alerts` (Notification + Web Audio), `settings-store` (localStorage), `schedule-log` (HTTP client); `src/server/schedule-log-file.ts` | contracts, ports, browser/Node APIs | application use cases, presentation, other adapters |
-| **Composition root** | `src/app/providers.tsx`, `src/app/api/**/route.ts` | everything | — (this is where rings are wired) |
+| **Application** | `src/application/<use-case>.ts`, `src/application/ports.ts` | domain, contracts, ports | React, Next, `src/adapters/**`, `server/**`, browser globals |
+| **Presentation** | `src/app/**` (pages, layouts), `src/features/**` (components, hooks) | application, domain (read-only helpers for display), contracts | `src/adapters/**` directly, `server/**`, `fetch` to e-Consul |
+| **Infrastructure** | `src/adapters/econsul-api`, `request-log` (decorator over `EconsulApi` + batching HTTP client to `server/`), `extension-bridge`, `alerts` (Notification + Web Audio), `settings-store` (localStorage), `schedule-log` (HTTP client) | contracts, ports, browser APIs | application use cases, presentation, other adapters (except `request-log` wrapping the `EconsulApi` *port*) |
+| **Composition root** | `src/app/providers.tsx` | everything | — (this is where rings are wired) |
 
 Three facts about this app that change the textbook picture:
 
@@ -106,8 +111,9 @@ both a use case and the concrete adapter that satisfies its port.
 - An adapter never imports another adapter; if two need the same helper, it is
   either domain (pure) or a shared infrastructure util under `src/adapters/_shared/`.
 - `extension/` never imports `src/` outside `src/domain/contracts/`.
-- `src/server/**` starts with `import 'server-only'` and is never reachable from a
-  `'use client'` module.
+- The web app talks to `server/` only over HTTP through an adapter; it never
+  imports server code. Shared request/response shapes live in the server's
+  contracts and are copied or aliased into `src/domain/contracts/`.
 
 ## 4. Where does X go?
 
@@ -128,7 +134,9 @@ both a use case and the concrete adapter that satisfies its port.
 | `window.postMessage` bridge, origin and `source` checks | `adapters/extension-bridge/` | infrastructure |
 | `new Notification`, Web Audio tones, glass crash | `adapters/alerts/` | infrastructure |
 | `localStorage` keys (`slots.selection`, `slots.interval`, draft, date range) | `adapters/settings-store/` | infrastructure |
-| Writing `logs/schedule-changes.jsonl` | `src/server/schedule-log-file.ts` behind `app/api/schedule-log/route.ts` | infrastructure + composition root |
+| Recording each e-Consul request (method, filters, status, duration, outcome) | `adapters/request-log/` — wraps `EconsulApi`, batches to `POST /request-log` | infrastructure |
+| Storing and querying the request log | `server/src/modules/request-log/` (routes → repository) | server, section 11 |
+| Writing the schedule-change log | `server/src/modules/schedule-log/` (today `main.go` → `logs/schedule-changes.jsonl`) | server, section 11 |
 | Building the deps object, picking fakes for tests | `src/app/providers.tsx` | composition root |
 | Calendar grid, day modal, monitoring log view | `features/<feature>/components/` | presentation |
 
@@ -205,8 +213,9 @@ ports → return a result the UI can render. Keep effects at the edges (Seemann'
 
 `src/app/providers.tsx` builds the deps once (lazily, client-side), and provides
 them through context. Tests and Storybook pass fakes through the same props.
-Server route handlers build their own server-only deps. If a new port needs
-wiring, it is added here and nowhere else.
+Wrapping is wiring too: `withRequestLog(econsulApi, requestLogClient)` happens
+here, so no use case knows requests are logged. If a new port needs wiring, it is
+added here and nowhere else.
 
 ## 6. Ordering of effects
 
@@ -219,6 +228,11 @@ The app never books through the API; the extension clicks in the site's own UI
   with the next change, not silently dropped.
 - Alert first, then side work: a failing log write or bridge must never swallow a
   "new slots" alert.
+- The request log is fire-and-forget for the caller: the decorator records the
+  entry *after* the e-Consul call settles, returns the call's own result or error
+  unchanged, and flushes batches in the background. A down `server/` costs log
+  entries (kept in a bounded in-memory queue, then dropped with a counter), never a
+  check.
 
 ## 7. Errors
 
@@ -252,15 +266,45 @@ to make a new violation pass.
 
 - [ ] Nothing in `src/domain/**` reads the clock, randomness, storage, network or a browser global.
 - [ ] No component or hook calls `fetch`, `localStorage`, `Notification`, `postMessage` or Web Audio.
-- [ ] e-Consul is called only from `adapters/econsul-api`, only from the browser; the token never reaches `src/server/**`, a log or a URL.
+- [ ] e-Consul is called only from `adapters/econsul-api`, only from the browser; the token never reaches `server/`, a log or a URL.
 - [ ] Every e-Consul response and every extension message is parsed by its contract schema at the adapter.
 - [ ] Use cases take narrow `Deps`; nothing is `new`-ed inside them; timers go through `Scheduler`.
 - [ ] Slot-algorithm changes come with fixture tests and a matching update to `docs/booking.md`.
-- [ ] Extension message changes update `domain/contracts/extension-messages.ts` and `docs/plans/extension-plan.md` §8 together.
+- [ ] Extension message changes update `domain/contracts/extension-messages.ts` and `extension/plans/extension-plan.md` §8 together.
+- [ ] Every e-Consul request goes through the `request-log` decorator; log entries carry no token, headers or response bodies.
+- [ ] In `server/`, Drizzle appears only in repositories and `db/`; routes call one method.
 - [ ] No adapter imports another adapter; no feature imports another feature.
 - [ ] A failing side effect (log, bridge) cannot suppress a "new slots" or "session expired" alert.
 
-## 11. How to answer
+## 11. The server module (`server/`)
+
+> Proposed 2026-10-09 together with the request log; confirm in brainstorm.
+
+Same rule, smaller onion — it is mostly the CRUD case from section 1:
+
+```
+composition root   server/src/app.ts · server.ts · modules/index.ts · platform/container.ts
+ └─ presentation   modules/<m>/routes.ts (Fastify + zod schemas)
+     └─ application   modules/<m>/service.ts — only when there is logic (summaries, retention)
+         └─ contracts     server/src/contracts/** (zod; shared with the web app)
+infrastructure     modules/<m>/repository.ts (Drizzle) · db/** (schema, client, migrations)
+```
+
+- `request-log` and `schedule-log` are CRUD-shaped: `routes.ts` → `repository.ts`.
+  Do not add a service that only forwards. A summary or retention job is logic and
+  gets a service plus pure functions.
+- Routes validate with zod (`.strict()` bodies), call one method, return a contract
+  type. No Drizzle import in routes or services; no `reply` outside routes.
+- A batch insert is one statement; idempotent on `client_id`
+  (`drizzle-orm-patterns` → "In this project").
+- The server never calls e-Consul and never receives the token (section 2).
+- Tests: repositories against real Postgres (`*.it.test.ts`), routes with
+  `app.inject()`, pure summary rules without a DB.
+
+Fastify, Drizzle and table details: `fastify-best-practices`, `drizzle-orm-patterns`,
+`postgresql-table-design` — each has an "In this project" section.
+
+## 12. How to answer
 
 - **"Review this module / change"** — read `references/audit.md` and go through
   its passes in order.
@@ -289,3 +333,5 @@ Defer to other skills instead of restating them:
 - component and hook correctness → `react-best-practices`; Next.js APIs → `next-best-practices`
 - schema authoring → `zod`; type-level tricks → `typescript-expert`
 - token handling, `postMessage` and extension permissions → `security`
+- Fastify routes and plugins → `fastify-best-practices`; queries and migrations →
+  `drizzle-orm-patterns`; table design → `postgresql-table-design`

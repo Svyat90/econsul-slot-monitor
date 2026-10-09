@@ -53,7 +53,7 @@ src/
         _components/                # used only by this route
           MonitorView/
           StatusLine/
-    api/schedule-log/route.ts       # the app's own endpoint (server-only writer)
+    api/…/route.ts                  # only if the app owns endpoints
   features/                         # used by 2+ routes
     slots/
       api/                          # fetchers, schemas, query keys/options

@@ -38,8 +38,9 @@ a React + Next.js app; the stack and root are recorded in
 - **It is a client-heavy app.** e-Consul is called from the browser with the
   user's token (Cloudflare blocks server calls), monitoring runs in the open tab,
   and the Chrome extension talks to the page through `postMessage`. So most of the
-  UI is client components; the server side is small (static `locations.json`,
-  the schedule-change log route). Section 7's last bullet applies.
+  UI is client components. Our own backend is a separate module, `server/`
+  (request log, schedule-change log), reached over HTTP through an adapter —
+  not Next.js route handlers. Section 7's last bullet applies.
 - **Tier 1 is bigger than usual and lives outside features.** The slot algorithm,
   the horizon rule and the monitoring schedule are a pure domain in `src/domain/`,
   and the I/O sits behind ports in `src/application/` and `src/adapters/`.
@@ -51,7 +52,7 @@ a React + Next.js app; the stack and root are recorded in
   auto-booking toggle), `session` (token field and expiry state).
 - Data from e-Consul does not go through TanStack Query: it is owned by the
   monitor store (`useSyncExternalStore`). Do not add a second cache for it.
-- UI copy is Ukrainian; the design reference is `docs/design/extension/`.
+- UI copy is Ukrainian; the design reference is `extension/docs/design/`.
 
 ## 1. Principles
 

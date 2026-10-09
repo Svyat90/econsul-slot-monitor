@@ -73,7 +73,7 @@ The draft hint needs the task's `createdAt` (`GET /tasks/{id}`).
 5. **Use case** calls `deps.econsul.getTask(...)`; the UI never sees the HTTP call.
 
 In this app the extension already reads drafts from the site's own tab, so first
-ask whether the app needs this call at all (`docs/plans/extension-plan.md` §4).
+ask whether the app needs this call at all (`extension/plans/extension-plan.md` §4).
 
 ## 4. Typing the extension protocol
 
@@ -95,7 +95,7 @@ export type ExtMessage = z.infer<typeof ExtMessage>;
 The `extension-bridge` adapter checks `event.source === window` and
 `event.origin === window.location.origin`, `safeParse`s with `ExtMessage`, drops
 anything that fails, and hands typed messages to the use case. A new message type
-is added to the union and to the table in `extension-plan.md` §8 in one commit.
+is added to the union and to the table in `extension/plans/extension-plan.md` §8 in one commit.
 
 ## 5. Session expiry, end to end
 

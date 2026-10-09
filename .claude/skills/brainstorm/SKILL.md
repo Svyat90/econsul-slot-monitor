@@ -8,14 +8,15 @@ description: "Compares ideas for the e-Consul slot monitor (the web-app rewrite,
 Turns loose ideas into comparable, recorded options. One draft file carries them
 across chats: `docs/brainstorm/ideas.md`. It is a **draft**, never a source of
 truth. Canonical descriptions live in `docs/booking.md` (how the site and the app
-work) and `docs/plans/` (agreed plans).
+work), `docs/plans/` (agreed cross-module plans) and each module's `docs/` and
+`plans/`.
 
 ## Hard rules
 
 - The file is a draft. Never cite it as a requirement, never copy its content into
-  `docs/plans/` or `docs/booking.md` on your own. When an idea is ready, offer a
+  a `plans/` or `docs/` folder on your own. When an idea is ready, offer a
   plan as a separate step and wait for the user.
-- Never write to `docs/insights.md`. That belongs to `engineering-insights`.
+- Never write to any `insights.md`. That belongs to `engineering-insights`.
 - Read `docs/brainstorm/ideas.md` before comparing anything. No file read, no
   comparison.
 - Write to the file only in `record` mode, after the user confirms the outcome.
@@ -27,7 +28,7 @@ work) and `docs/plans/` (agreed plans).
 - Do not agree to please. A recommendation needs evidence; say how confident it is.
 - Nothing here may lead to a real booking or a queue entry on e-consul.gov.ua as a
   way of "checking an idea". Exploration of the live site follows
-  `docs/plans/extension-plan.md` §12.
+  `extension/plans/extension-plan.md` §12.
 
 ## Modes
 
@@ -66,11 +67,12 @@ Compare:
 
 **1. Search order.** Look in this order and stop when you have enough to compare:
 
-1. `docs/insights.md` — traps already paid for (React re-rendering the site,
-   storage cleared on reload, testing the extension in Chrome);
-2. `docs/plans/` — what is agreed and what is left (`extension-plan.md`);
+1. `docs/insights.md` and the touched module's `docs/insights.md`
+   (`extension/docs/insights.md`) — traps already paid for;
+2. `docs/plans/` (cross-module) and the module's `plans/`
+   (`extension/plans/extension-plan.md`) — what is agreed and what is left;
 3. `docs/booking.md` (the site, the API, the algorithm, the app's features) and
-   `docs/design/` (design A of the extension);
+   the module's `docs/` (`extension/docs/how-it-works.md`, `extension/docs/design/`);
 4. the code: `slots.html`, `extension/`, `main.go`, `locations.json`.
 
 Curated sources come first because they may already answer the question; the
@@ -129,7 +131,8 @@ change your mind. Then stop and wait for the user.
 Rejected ideas stay with a reason, so they are not proposed again. A real
 reversal is a new entry that supersedes the old one; the old body is never
 rewritten, only given a dated note and the status `superseded-by-IDEA-NNN`.
-`promoted` means the idea became a real plan in `docs/plans/`: record the link,
+`promoted` means the idea became a real plan — in `<module>/plans/`, or in
+`docs/plans/` when it spans modules: record the link,
 and from then on that document is the source of truth.
 
 Decisions that change how the code is organised (stack, root folder, layout) are
