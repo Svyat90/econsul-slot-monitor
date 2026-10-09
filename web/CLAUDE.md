@@ -26,3 +26,5 @@ API, алгоритм слотів) і в `docs/insights.md` модуля й к�
   що вже зроблено.
 - [../extension/plans/extension-plan.md](../extension/plans/extension-plan.md) §8 — протокол
   повідомлень із розширенням.
+- [docs/fixtures.md](docs/fixtures.md) — перед тестами домену: звідки фікстури й як записати свіжі.
+  `scripts/record-econsul-fixtures.js` запускає лише людина у своїй сесії.

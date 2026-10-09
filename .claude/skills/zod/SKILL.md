@@ -7,6 +7,25 @@ description: Zod schema validation best practices for type safety, parsing, and 
 
 Comprehensive schema validation guide for Zod in TypeScript applications. Contains 43 rules across 8 categories, prioritized by impact to guide automated refactoring and code generation.
 
+## In this project — read first
+
+**Zod 4** (`zod@^4`, imported from `"zod"`) in both `web/` and `server/`, same version (decision
+2026-10-09, `docs/plans/web-rewrite-plan.md` §11). Many examples below are written in the Zod 3
+style; they still run on Zod 4, but write new code in Zod 4 idioms:
+
+- string formats are top-level: `z.email()`, `z.uuid()`, `z.iso.datetime({ offset: true })` —
+  not `z.string().email()`;
+- custom messages go in `{ error: '…' }`, not `{ message: '…' }`; `.flatten()` → `z.flattenError()`
+  / `z.treeifyError()`;
+- strict objects: `z.strictObject({...})` (every request body of `server/` is strict, so a stray
+  `token` key is rejected — `fastify-best-practices` › In this project);
+- e-Consul timestamps look like `2026-11-11T09:00:00.00-06:00`: parse them with
+  `z.iso.datetime({ offset: true })` and keep the string — the slot algorithm reads the wall-clock
+  time written in it (`docs/booking.md` §7); never convert to the local time zone in a schema
+  `transform`;
+- the app ↔ extension protocol is a `z.discriminatedUnion('type', …)` in
+  `web/src/domain/contracts/extension-messages.ts` (`onion-architecture` §5).
+
 ## When to Apply
 
 Reference these guidelines when:

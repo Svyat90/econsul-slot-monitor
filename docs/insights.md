@@ -20,3 +20,15 @@
 з'явилися. 2026-10-09 вони запрацювали, щойно користувач увійшов у розширення Claude у Chrome.
 Claude бачить і керує лише вкладками своєї групи, а не вкладками користувача. Тому чернетку
 відкривав за адресою з `localStorage` застосунку (`slots.draft`).
+
+## Інструменти
+
+### Системний `python3` без PyYAML — frontmatter перевіряти через Ruby (2026-10-09)
+
+`python3 -c "import yaml"` на цьому Mac падає з `ModuleNotFoundError: No module named 'yaml'`, а
+`pip install` змінює системне середовище. Ruby зі стандартною бібліотекою YAML є.
+
+Правило: перевіряти frontmatter скілів і агентів так:
+`ruby -ryaml -e 's=File.read(ARGV[0]); YAML.safe_load(s[/\A---\n(.*?)\n---/m,1])' <file>` — для
+кожного `.claude/skills/*/SKILL.md` і `.claude/agents/*.md` після правок опису (`description` з
+двокрапкою чи лапками легко ламає YAML).

@@ -21,5 +21,6 @@
 | Документ | Про що |
 |---|---|
 | [docs/design/README.md](docs/design/README.md) | Макет, знімки екранів, токени дизайну |
+| [docs/fixtures.md](docs/fixtures.md) | Записані відповіді e-Consul для тестів і як записати свіжі |
 | `docs/insights.md` | Неочевидна поведінка (з'явиться з першим інсайтом) |
 | `plans/` | Плани саме цього модуля; загальний план переписування — [../docs/plans/web-rewrite-plan.md](../docs/plans/web-rewrite-plan.md) |
