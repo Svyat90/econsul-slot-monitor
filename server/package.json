@@ -9,6 +9,7 @@
     "start": "node src/server.ts",
     "dev": "PORT=3001 node --watch src/server.ts",
     "typecheck": "tsc --noEmit",
+    "arch:check": "depcruise src --config .dependency-cruiser.cjs",
     "test": "vitest run",
     "test:unit": "vitest run --exclude '**/*.it.test.ts'",
     "test:it": "vitest run '.it.test.ts'",
