@@ -5,10 +5,14 @@ import type { FreeSlots } from '@/domain/slots/free-slots.ts';
 import { clampIntervalBounds, FAST_CHECKS, planNextCheck } from '@/domain/monitoring/schedule.ts';
 import type { DateRange, SlotKey } from '@/domain/monitoring/slots-diff.ts';
 import type { ReservedSlot } from '@/domain/contracts/econsul.ts';
-import type { Alerts, AppSession, Clock, EconsulApi, Ids, LocationsSource, Random, Scheduler, ServerApi, SettingsStore, TimerHandle } from './ports.ts';
+import { SessionExpiredError } from '@/domain/contracts/errors.ts';
+import type { Alerts, AppSession, Clock, EconsulApi, Ids, LocationsSource, NotificationPermissionState, Random, Scheduler, ServerApi, SettingsStore, TimerHandle } from './ports.ts';
 import {
+    alertSession,
+    alertSlots,
     DEFAULT_TITLE,
     runCheck,
+    setTabTitle,
     type CheckKind,
     type MonitorLogEntry,
     type MonitorState,
@@ -38,6 +42,11 @@ export interface Monitor {
     setInterval(bounds: { min: number; max: number }): void;
     setFastChecks(enabled: boolean): void;
     setDateRange(range: DateRange): void;
+    setTabTitleMarks(on: boolean): void;
+    notificationPermission(): NotificationPermissionState;
+    requestNotifications(): Promise<NotificationPermissionState>;
+    audioReady(): boolean;
+    testAlert(kind: 'slots' | 'session'): Promise<void>; // the alert with made-up data, nothing is booked
     log(message: string, kind?: MonitorLogEntry['kind']): void;
     dispose(): void;
 }
@@ -60,12 +69,15 @@ export type MonitorDeps = {
 const DEFAULT_INSTITUTION = '1000000510'; // Houston
 const DEFAULT_SERVICE = '1';
 const LOG_LIMIT = 100;
+const TEST_SLOTS: SlotKey[] = ['2027-03-31 09:50', '2027-03-31 10:10'];
+const TEST_TITLE_RESET_MS = 5000;
 
 type Handlers = { [K in keyof MonitorEvents]: Set<MonitorEvents[K]> };
 
 export function createMonitor(deps: MonitorDeps): Monitor {
     const { econsul, server, settings, alerts, clock, ids, session, random, scheduler } = deps;
     let state: MonitorState = {
+        tabTitleMarks: true,
         locations: null,
         selection: null,
         hasToken: false,
@@ -204,7 +216,7 @@ export function createMonitor(deps: MonitorDeps): Monitor {
             patch({ checks: 0 });
             resetMonitorState();
         }
-        alerts.setTabTitle(DEFAULT_TITLE);
+        setTabTitle(context, DEFAULT_TITLE);
         const { min, max } = state.interval;
         const serviceName = state.locations?.services[selection.serviceCode] || selection.serviceCode;
         log(
@@ -229,6 +241,7 @@ export function createMonitor(deps: MonitorDeps): Monitor {
         patch({
             interval: settings.loadInterval() ?? state.interval,
             dateRange: settings.loadDateRange(),
+            tabTitleMarks: settings.loadTabTitleMarks(),
         });
         try {
             const locations = await deps.locations.load();
@@ -305,6 +318,25 @@ export function createMonitor(deps: MonitorDeps): Monitor {
         setDateRange(range) {
             settings.saveDateRange(range);
             patch({ dateRange: range });
+        },
+        setTabTitleMarks(on) {
+            settings.saveTabTitleMarks(on);
+            patch({ tabTitleMarks: on });
+        },
+        notificationPermission: () => alerts.notificationPermission(),
+        requestNotifications: () => alerts.requestNotificationPermission(),
+        audioReady: () => alerts.audioReady(),
+        // testAlert() of slots.html: the same alert as a real one, with two made-up slots
+        async testAlert(kind) {
+            alerts.unlockAudio(); // inside the click, so the sound can play
+            if (alerts.notificationPermission() === 'default') await alerts.requestNotificationPermission();
+            if (disposed) return;
+            if (kind === 'slots') {
+                alertSlots(context, state.selection?.institution ?? { name: 'Test location' }, TEST_SLOTS, TEST_SLOTS.length);
+            } else {
+                alertSession(context, new SessionExpiredError(401, 'HTTP 401: test'));
+            }
+            scheduler.setTimeout(() => setTabTitle(context, DEFAULT_TITLE), TEST_TITLE_RESET_MS);
         },
         log,
         dispose() {

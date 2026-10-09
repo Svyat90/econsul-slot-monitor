@@ -30,8 +30,9 @@ const reservedWithout = (...indices: number[]): ReservedResponse => ({
 const FIRST_FREE = ['2026-10-12 10:50', '2026-12-28 11:20'];
 const NEXT_FREED = '2026-10-14 10:30';
 
-function setup(options: { dateRange?: { from: string | null; to: string | null } } = {}) {
+function setup(options: { dateRange?: { from: string | null; to: string | null }; tabTitleMarks?: boolean } = {}) {
     const events: string[] = [];
+    const titles: string[] = [];
     const calls = { schedule: 0, reserved: 0 };
     let nowMs = NOW;
     let reserved: ReservedResponse = reservedWithout(0, 1);
@@ -72,9 +73,10 @@ function setup(options: { dateRange?: { from: string | null; to: string | null }
     const alerts = {
         newSlots: () => events.push('alert'),
         sessionExpired: () => events.push('session-alert'),
-        setTabTitle: () => undefined,
+        setTabTitle: (title: string) => void titles.push(title),
     } as unknown as Alerts;
     let state: MonitorState = {
+        tabTitleMarks: options.tabTitleMarks ?? true,
         locations,
         selection: { institution, serviceCode: '1' },
         hasToken: true,
@@ -145,6 +147,7 @@ function setup(options: { dateRange?: { from: string | null; to: string | null }
         ctx,
         calls,
         events,
+        titles,
         fresh,
         auth,
         metas,
@@ -160,6 +163,19 @@ function setup(options: { dateRange?: { from: string | null; to: string | null }
 
 
 describe('runCheck', () => {
+    it('marks the tab title on new slots and on session loss; not when tab title marks are off', async () => {
+        const on = setup();
+        await runCheck(on.ctx, 'scheduled');
+        expect(on.titles).toEqual(['🟢 Нових слотів: 2 — Монітор слотів']);
+        const off = setup({ tabTitleMarks: false });
+        await runCheck(off.ctx, 'scheduled');
+        expect(off.events).toContain('alert');
+        expect(off.titles).toEqual([]);
+        off.fail(new SessionExpiredError(401));
+        await runCheck(off.ctx, 'scheduled');
+        expect(off.titles).toEqual([]);
+    });
+
     it('first check: schedule and reserved slots, every free slot is new, log lines, then the alert, then newSlots (as runCheck() in slots.html)', () => {
         const t = setup();
         return runCheck(t.ctx, 'scheduled').then((ok) => {

@@ -6,7 +6,7 @@ import type { AppMessageBody, Clock, Draft, Scheduler, SettingsStore, TimerHandl
 
 const NOW = 1_800_000_000_000;
 
-function setup(overrides: Partial<MonitorState> = {}) {
+function setup(overrides: Partial<MonitorState> = {}, initialDraft: Draft | null = null) {
     let nowMs = NOW;
     const sent: AppMessageBody[] = [];
     let listener: ((message: ExtMessage) => void) | null = null;
@@ -50,7 +50,7 @@ function setup(overrides: Partial<MonitorState> = {}) {
         nowMs = end;
     };
     const clock: Clock = { now: () => nowMs, localDateKey: () => '2026-10-09', browserOffsetMinutes: () => 0 };
-    let draft: Draft | null = null;
+    let draft: Draft | null = initialDraft;
     const settings = {
         loadDraft: () => draft,
         saveDraft: vi.fn((d: Draft | null) => {
@@ -66,6 +66,7 @@ function setup(overrides: Partial<MonitorState> = {}) {
     } as unknown as Alerts;
 
     let state: MonitorState = {
+        tabTitleMarks: true,
         locations: { institutions: [], services: { '1': 'Паспорт' } } as unknown as MonitorState['locations'],
         selection: {
             institution: { code: '10', name: 'Х', country: 'США' } as never,
@@ -107,6 +108,35 @@ function setup(overrides: Partial<MonitorState> = {}) {
 }
 
 describe('extension link', () => {
+    it('setDraftUrl saves a new link with savedAt = now, keeps the time of the same link, clears on empty', () => {
+        const t = setup();
+        expect(t.link.getState().draft).toBeNull();
+        t.link.setDraftUrl('  https://e-consul.gov.ua/tasks/1 ');
+        expect(t.link.getState().draft).toEqual({ url: 'https://e-consul.gov.ua/tasks/1', savedAt: NOW });
+        expect(t.settings.saveDraft).toHaveBeenLastCalledWith({ url: 'https://e-consul.gov.ua/tasks/1', savedAt: NOW });
+        t.advance(60_000);
+        t.link.setDraftUrl('https://e-consul.gov.ua/tasks/1');
+        expect(t.link.getState().draft?.savedAt).toBe(NOW);
+        t.link.setDraftUrl('https://e-consul.gov.ua/tasks/2');
+        expect(t.link.getState().draft?.savedAt).toBe(NOW + 60_000);
+        t.link.setDraftUrl('  ');
+        expect(t.link.getState().draft).toBeNull();
+        expect(t.settings.saveDraft).toHaveBeenLastCalledWith(null);
+    });
+
+    it('the draft at start comes from the settings store', () => {
+        const t = setup({}, { url: 'https://e-consul.gov.ua/tasks/9', savedAt: 5 });
+        expect(t.link.getState().draft).toEqual({ url: 'https://e-consul.gov.ua/tasks/9', savedAt: 5 });
+    });
+
+    it('no session title when tab title marks are off', () => {
+        const t = setup({ tabTitleMarks: false });
+        t.link.start();
+        t.receive({ type: 'ext:auth', loggedIn: false, alert: true });
+        expect(t.alerts.setTabTitle).not.toHaveBeenCalled();
+        expect(t.alerts.playSessionSound).toHaveBeenCalled();
+    });
+
     it('first ext:hello connects and sends hello, selection and monitor', () => {
         const t = setup();
         t.link.start();

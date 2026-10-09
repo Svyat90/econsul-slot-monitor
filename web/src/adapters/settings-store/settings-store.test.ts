@@ -49,6 +49,19 @@ describe('settings store', () => {
         expect(storage.getItem('slots.draft')).toBeNull();
     });
 
+    it('tab title marks are on by default; a saved false is read back', () => {
+        const storage = memoryStorage();
+        const store = createSettingsStore(storage);
+        expect(store.loadTabTitleMarks()).toBe(true);
+        store.saveTabTitleMarks(false);
+        expect(storage.getItem('slots.tabTitleMarks')).toBe('false');
+        expect(store.loadTabTitleMarks()).toBe(false);
+        store.saveTabTitleMarks(true);
+        expect(store.loadTabTitleMarks()).toBe(true);
+        expect(createSettingsStore(memoryStorage({ 'slots.tabTitleMarks': 'oops' })).loadTabTitleMarks()).toBe(true);
+        expect(createSettingsStore(throwing).loadTabTitleMarks()).toBe(true);
+    });
+
     it('falls back to defaults on broken JSON', () => {
         const store = createSettingsStore(memoryStorage({
             'slots.selection': '{oops', 'slots.interval': 'nope', 'slots.dateRange': '[', 'slots.draft': '{', 'slots.schedule.X': '1',
@@ -68,6 +81,7 @@ describe('settings store', () => {
             store.saveSelection({ institution: 'A', service: 'B' });
             store.saveInterval({ min: 1, max: 2 });
             store.saveDateRange({ from: null, to: null });
+            store.saveTabTitleMarks(false);
             store.saveDraft(null);
             store.saveDraft({ url: 'u', savedAt: 1 });
             store.saveScheduleSnapshot('X', { checkedAt: 't', rows: [] });

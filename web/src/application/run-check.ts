@@ -27,6 +27,7 @@ export type CheckKind = 'scheduled' | 'fast' | 'manual';
 export type MonitorLogEntry = { at: number; message: string; kind: 'info' | 'found' | 'warn' | 'error' };
 
 export type MonitorState = {
+    tabTitleMarks: boolean; // 🟢/🔴 marks in the tab title; off leaves the title alone
     locations: Locations | null;
     selection: { institution: Institution; serviceCode: string } | null;
     hasToken: boolean;
@@ -158,7 +159,12 @@ function computeReleases(
     return upcomingReleases(scheduleInput(selection, locations, rows, [], clock, now), now);
 }
 
-function alertSlots(ctx: RunCheckContext, institution: Institution, fresh: readonly SlotKey[], totalFree: number): void {
+// The tab title is touched only while the marks are on (settings: «Мітка в заголовку вкладки»)
+export function setTabTitle(ctx: Pick<RunCheckContext, 'alerts' | 'getState'>, title: string): void {
+    if (ctx.getState().tabTitleMarks) ctx.alerts.setTabTitle(title);
+}
+
+export function alertSlots(ctx: Pick<RunCheckContext, 'alerts' | 'openBooking' | 'getState'>, institution: Pick<Institution, 'name'>, fresh: readonly SlotKey[], totalFree: number): void {
     const lines = formatSlotLines(fresh);
     const body =
         lines.slice(0, 4).join('\n') +
@@ -169,17 +175,17 @@ function alertSlots(ctx: RunCheckContext, institution: Institution, fresh: reado
         body: `${body}\nНатисніть, щоб записатися на e-consul`,
         onClick: ctx.openBooking,
     });
-    ctx.alerts.setTabTitle(`🟢 Нових слотів: ${fresh.length} — ${DEFAULT_TITLE}`);
+    setTabTitle(ctx, `🟢 Нових слотів: ${fresh.length} — ${DEFAULT_TITLE}`);
 }
 
-function alertSession(ctx: RunCheckContext, error: SessionExpiredError): void {
+export function alertSession(ctx: Pick<RunCheckContext, 'alerts' | 'extensionConnected' | 'getState'>, error: SessionExpiredError): void {
     // With the extension connected it shows its own system notification with "Увійти"
     ctx.alerts.sessionExpired({
         title: 'Сесія e-consul завершилась',
         body: `Токен більше не працює (${error.message}). Увійдіть на e-consul.gov.ua, вставте новий токен і запустіть моніторинг знову.`,
         notify: !ctx.extensionConnected(),
     });
-    ctx.alerts.setTabTitle(`🔴 Сесія завершилась — ${DEFAULT_TITLE}`);
+    setTabTitle(ctx, `🔴 Сесія завершилась — ${DEFAULT_TITLE}`);
 }
 
 function outcomeOf(error: unknown): RequestOutcome {

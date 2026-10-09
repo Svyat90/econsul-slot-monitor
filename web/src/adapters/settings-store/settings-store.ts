@@ -7,6 +7,7 @@ const SELECTION_KEY = 'slots.selection';
 const INTERVAL_KEY = 'slots.interval';
 const DATE_RANGE_KEY = 'slots.dateRange';
 const DRAFT_KEY = 'slots.draft';
+const TAB_TITLE_MARKS_KEY = 'slots.tabTitleMarks';
 const SCHEDULE_KEY_PREFIX = 'slots.schedule.';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -91,6 +92,12 @@ export function createSettingsStore(storage?: Storage): SettingsStore {
         },
         saveScheduleSnapshot(institutionCode, snapshot) {
             writeJson(SCHEDULE_KEY_PREFIX + institutionCode, snapshot);
+        },
+        loadTabTitleMarks() {
+            return readJson(TAB_TITLE_MARKS_KEY) !== false;
+        },
+        saveTabTitleMarks(on) {
+            writeJson(TAB_TITLE_MARKS_KEY, on);
         },
     };
 }

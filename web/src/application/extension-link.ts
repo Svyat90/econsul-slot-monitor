@@ -25,6 +25,7 @@ export interface ExtensionLink {
     dispose(): void;
     login(): void;
     setAutoBook(on: boolean): void;
+    setDraftUrl(url: string): void; // a link pasted by hand; empty removes the saved one
     testSound(kind: 'selected' | 'mute' | 'slots'): void;
     userGesture(): void; // a click on the page: unlock audio and report audioReady
 }
@@ -158,11 +159,11 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
             monitor.sessionLost(msg.reason || '');
             if (msg.alert) {
                 alerts.playSessionSound();
-                alerts.setTabTitle(SESSION_TITLE);
+                if (monitor.getState().tabTitleMarks) alerts.setTabTitle(SESSION_TITLE);
                 sessionTitleShown = true;
             }
         } else if (msg.loggedIn === true && !wasLoggedIn && sessionTitleShown) {
-            alerts.setTabTitle(DEFAULT_TITLE);
+            if (monitor.getState().tabTitleMarks) alerts.setTabTitle(DEFAULT_TITLE);
             sessionTitleShown = false;
         }
     }
@@ -256,6 +257,19 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
         setAutoBook(on) {
             patch({ autoBook: on });
             bridge.send({ type: 'app:settings', patch: { autoBook: on } });
+        },
+        // saveDraftUrl() of slots.html: the same link keeps its savedAt, a new one starts the 24 h count
+        setDraftUrl(url) {
+            const value = url.trim();
+            if (!value) {
+                settings.saveDraft(null);
+                patch({ draft: null });
+                return;
+            }
+            if (state.draft?.url === value) return;
+            const saved: Draft = { url: value, savedAt: clock.now() };
+            settings.saveDraft(saved);
+            patch({ draft: saved });
         },
         userGesture() {
             if (alerts.audioReady()) return;

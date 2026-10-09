@@ -16,6 +16,7 @@ import type {
     Clock,
     EconsulApi,
     IntervalBounds,
+    NotificationPermissionState,
     RequestMeta,
     ScheduleSnapshot,
     Scheduler,
@@ -87,15 +88,25 @@ function setup(options: { startAt?: number; random?: number } = {}) {
     };
 
     const alertCalls: string[] = [];
+    const titles: string[] = [];
+    const slotAlerts: { title: string; body: string }[] = [];
+    let permission: NotificationPermissionState = 'granted';
     const alerts: Alerts = {
-        notificationPermission: () => 'granted',
-        requestNotificationPermission: async () => 'granted',
+        notificationPermission: () => permission,
+        requestNotificationPermission: async () => {
+            alertCalls.push('request');
+            permission = 'granted';
+            return permission;
+        },
         unlockAudio: () => void alertCalls.push('unlock'),
         audioReady: () => true,
-        newSlots: () => void alertCalls.push('newSlots'),
+        newSlots: (a) => {
+            alertCalls.push('newSlots');
+            slotAlerts.push(a);
+        },
         sessionExpired: (a) => void alertCalls.push(`sessionExpired:${a.notify}`),
         playSessionSound: () => undefined,
-        setTabTitle: () => undefined,
+        setTabTitle: (title) => void titles.push(title),
         openUrl: () => undefined,
     };
 
@@ -110,6 +121,8 @@ function setup(options: { startAt?: number; random?: number } = {}) {
         saveDateRange: (r) => void (store.range = r),
         loadDraft: () => null,
         saveDraft: () => undefined,
+        loadTabTitleMarks: () => (store.tabTitleMarks as boolean | undefined) ?? true,
+        saveTabTitleMarks: (on) => void (store.tabTitleMarks = on),
         loadScheduleSnapshot: (code) => snapshots.get(code) ?? null,
         saveScheduleSnapshot: (code, s) => void snapshots.set(code, s),
     };
@@ -142,6 +155,9 @@ function setup(options: { startAt?: number; random?: number } = {}) {
         calls,
         responses,
         alertCalls,
+        titles,
+        slotAlerts,
+        setPermission: (p: NotificationPermissionState) => void (permission = p),
         scheduleChanges,
         metas,
         checkEntries,
@@ -162,6 +178,45 @@ async function ready(t: ReturnType<typeof setup>) {
 const messages = (t: ReturnType<typeof setup>) => t.monitor.getState().log.map((e) => e.message);
 
 describe('monitor', () => {
+    it('tab title marks: on by default, loaded by init, saved; off keeps the title untouched', async () => {
+        const t = setup();
+        t.store.tabTitleMarks = false;
+        await t.monitor.init();
+        expect(t.monitor.getState().tabTitleMarks).toBe(false);
+        t.monitor.setToken('secret-token', 'manual');
+        await t.monitor.start();
+        expect(t.alertCalls).toContain('newSlots');
+        expect(t.titles).toEqual([]);
+        t.monitor.setTabTitleMarks(true);
+        expect(t.store.tabTitleMarks).toBe(true);
+        expect(t.monitor.getState().tabTitleMarks).toBe(true);
+    });
+
+    it('testAlert(slots) asks for permission, shows two made-up slots and restores the title after 5 s', async () => {
+        const t = setup();
+        await t.monitor.init();
+        t.setPermission('default');
+        await t.monitor.testAlert('slots');
+        expect(t.alertCalls).toEqual(['unlock', 'request', 'newSlots']);
+        expect(t.slotAlerts[0]?.body).toContain('Усього вільних: 2');
+        expect(t.slotAlerts[0]?.body).toMatch(/31\.03\.2027/);
+        expect(t.titles).toEqual(['🟢 Нових слотів: 2 — Монітор слотів']);
+        expect(t.pending()).toEqual([5000]);
+        await t.fire();
+        expect(t.titles.at(-1)).toBe('Монітор слотів');
+    });
+
+    it('testAlert(session) raises the session alert; notification and audio state come from the ports', async () => {
+        const t = setup();
+        await t.monitor.init();
+        await t.monitor.testAlert('session');
+        expect(t.alertCalls).toEqual(['unlock', 'sessionExpired:true']);
+        expect(t.monitor.notificationPermission()).toBe('granted');
+        expect(t.monitor.audioReady()).toBe(true);
+        t.setPermission('default');
+        await expect(t.monitor.requestNotifications()).resolves.toBe('granted');
+    });
+
     it('init loads locations and defaults to Houston; start runs a check at once and plans the next', async () => {
         const t = setup();
         await ready(t);
