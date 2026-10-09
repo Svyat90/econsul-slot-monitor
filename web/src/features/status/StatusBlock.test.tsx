@@ -30,6 +30,7 @@ const baseState: MonitorState = {
     outOfRange: null,
     lastFresh: [],
     log: [],
+    tabTitleMarks: true,
 };
 
 function setup(state: Partial<MonitorState> = {}, ext: Partial<ExtensionState> = {}) {
