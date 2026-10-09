@@ -70,9 +70,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         return reply.code(500).send({ error: 'Internal Server Error' });
     });
 
-    // Read per request, like main.go, so edits to slots.html show up on reload.
-    const slotsHtml = () => readFile(`${config.repoRoot}slots.html`);
-    app.get('/', async (_request, reply) => reply.type('text/html; charset=utf-8').send(await slotsHtml()));
+    // The old app, kept at /old until S8.T5. Read per request, like main.go, so edits show up on reload.
+    app.get('/old', async (_request, reply) =>
+        reply.type('text/html; charset=utf-8').send(await readFile(`${config.repoRoot}slots.html`)),
+    );
     app.get('/locations.json', async (_request, reply) =>
         reply.type('application/json; charset=utf-8').send(await readFile(config.locationsPath)),
     );
@@ -99,28 +100,29 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await app.register(reservationLogRoutes, { repository: reservationLog, prefix: '/api' });
     await app.register(summaryRoutes, { repository: summary, prefix: '/api' });
 
-    // New app: only the build folder is served, never the repository root.
+    // New app at the root: only the build folder is served, never the repository root.
     const webBuilt = existsSync(config.webDistPath);
+    const notBuilt = { error: 'web/dist not found: run `pnpm --dir web build` and restart the server' };
     if (webBuilt) {
-        await app.register(fastifyStatic, { root: config.webDistPath, prefix: '/next/' });
+        await app.register(fastifyStatic, { root: config.webDistPath, prefix: '/' });
     }
 
     app.setNotFoundHandler(async (request, reply) => {
-        const path = request.url.split('?')[0] ?? '/';
+        const [path = '/', query] = request.url.split('?');
         if (path === '/api' || path.startsWith('/api/')) {
             return reply.code(404).send({ error: 'Not Found' });
         }
+        const suffix = query === undefined ? '' : `?${query}`;
         if (path === '/next' || path.startsWith('/next/')) {
-            if (!webBuilt) {
-                return reply.code(404).send({ error: 'web/dist not found: run `pnpm --dir web build` and restart the server' });
-            }
-            // SPA route (no file extension) -> index.html; a missing file stays 404.
-            if (extname(path) === '' && request.method === 'GET') {
-                return reply.type('text/html; charset=utf-8').send(await readFile(`${config.webDistPath}/index.html`));
-            }
-            return reply.code(404).send({ error: 'Not Found' });
+            return reply.redirect(`${path.slice('/next'.length) || '/'}${suffix}`, 301);
         }
-        return reply.type('text/html; charset=utf-8').send(await slotsHtml());
+        if (path === '/old/') return reply.redirect(`/old${suffix}`, 301);
+        if (!webBuilt) return reply.code(503).send(notBuilt);
+        // SPA route (no file extension) -> index.html; a missing file stays 404.
+        if (extname(path) === '' && request.method === 'GET') {
+            return reply.type('text/html; charset=utf-8').send(await readFile(`${config.webDistPath}/index.html`));
+        }
+        return reply.code(404).send({ error: 'Not Found' });
     });
 
     return app;

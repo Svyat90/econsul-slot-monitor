@@ -35,62 +35,64 @@ async function build(pingDb: () => Promise<void> = async () => {}) {
 }
 
 describe('static files', () => {
-    const slotsHtml = readFileSync(`${config.repoRoot}slots.html`, 'utf8');
-
-    it('serves slots.html at /', async () => {
-        const { app } = await build();
-        const res = await app.inject({ url: '/' });
-        expect(res.statusCode).toBe(200);
-        expect(res.headers['content-type']).toContain('text/html');
-        expect(res.body).toBe(slotsHtml);
-    });
-
-    it('serves the locations reference as JSON', async () => {
-        const { app } = await build();
-        const res = await app.inject({ url: '/locations.json' });
-        expect(res.statusCode).toBe(200);
-        expect(res.headers['content-type']).toContain('application/json');
-        expect(res.body).toBe(readFileSync(config.locationsPath, 'utf8'));
-    });
-
-    it('falls back to slots.html for any other non-api path', async () => {
-        const { app } = await build();
-        const res = await app.inject({ url: '/whatever/else' });
-        expect(res.statusCode).toBe(200);
-        expect(res.body).toBe(slotsHtml);
-    });
-});
-
-describe('/next (web/dist)', () => {
     const dist = mkdtempSync(join(tmpdir(), 'dist-'));
     mkdirSync(join(dist, 'assets'));
     writeFileSync(join(dist, 'index.html'), '<!doctype html><title>new</title>');
     writeFileSync(join(dist, 'assets', 'a.js'), 'console.log(1)');
-    const buildWith = (webDistPath: string) =>
-        buildApp(fakeDeps({ config: { ...config, webDistPath } }));
+    const buildWith = (webDistPath: string) => buildApp(fakeDeps({ config: { ...config, webDistPath } }));
 
-    it('serves index.html for /next/ and SPA routes', async () => {
+    it('serves index.html for / and SPA routes', async () => {
         const app = await buildWith(dist);
-        for (const url of ['/next/', '/next/slots']) {
+        for (const url of ['/', '/slots', '/settings']) {
             const res = await app.inject({ url });
-            expect(res.statusCode).toBe(200);
+            expect(res.statusCode, url).toBe(200);
             expect(res.body).toContain('<title>new</title>');
         }
     });
 
     it('serves real files and 404s a missing one with an extension', async () => {
         const app = await buildWith(dist);
-        expect((await app.inject({ url: '/next/assets/a.js' })).body).toBe('console.log(1)');
-        expect((await app.inject({ url: '/next/missing.js' })).statusCode).toBe(404);
+        expect((await app.inject({ url: '/assets/a.js' })).body).toBe('console.log(1)');
+        expect((await app.inject({ url: '/missing.js' })).statusCode).toBe(404);
     });
 
-    it('answers 404 with a hint without dist, and / still serves slots.html', async () => {
+    it('redirects /next paths to the same path without /next', async () => {
+        const app = await buildWith(dist);
+        for (const [url, to] of [['/next', '/'], ['/next/', '/'], ['/next/slots', '/slots'], ['/next/slots?a=1', '/slots?a=1']]) {
+            const res = await app.inject({ url: url as string });
+            expect(res.statusCode, url).toBe(301);
+            expect(res.headers.location).toBe(to);
+        }
+    });
+
+    it('serves slots.html at /old and redirects /old/', async () => {
+        const app = await buildWith(dist);
+        const res = await app.inject({ url: '/old' });
+        expect(res.statusCode).toBe(200);
+        expect(res.headers['content-type']).toContain('text/html');
+        expect(res.body).toBe(readFileSync(`${config.repoRoot}slots.html`, 'utf8'));
+        const slash = await app.inject({ url: '/old/' });
+        expect(slash.statusCode).toBe(301);
+        expect(slash.headers.location).toBe('/old');
+    });
+
+    it('serves the locations reference as JSON', async () => {
+        const app = await buildWith(dist);
+        const res = await app.inject({ url: '/locations.json' });
+        expect(res.statusCode).toBe(200);
+        expect(res.headers['content-type']).toContain('application/json');
+        expect(res.body).toBe(readFileSync(config.locationsPath, 'utf8'));
+    });
+
+    it('answers 503 with a hint without dist, while /old and /api still work', async () => {
         const app = await buildWith(join(dist, 'nope'));
-        const res = await app.inject({ url: '/next/' });
-        expect(res.statusCode).toBe(404);
-        expect(res.body).toContain('pnpm --dir web build');
-        const root = await app.inject({ url: '/' });
-        expect(root.body).toBe(readFileSync(`${config.repoRoot}slots.html`, 'utf8'));
+        for (const url of ['/', '/slots']) {
+            const res = await app.inject({ url });
+            expect(res.statusCode, url).toBe(503);
+            expect(res.body).toContain('pnpm --dir web build');
+        }
+        expect((await app.inject({ url: '/old' })).statusCode).toBe(200);
+        expect((await app.inject({ url: '/api/health' })).statusCode).toBe(200);
     });
 });
 
