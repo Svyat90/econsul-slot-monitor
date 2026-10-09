@@ -312,6 +312,8 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
   - F3.2 — `dayTitle` перенесено з компонента в `features/slots/model/day-tiles.ts`, з тестом.
   - F3.3 — підписи як на `settings.png`: «Кожні [60] – [180]», «Дати слотів: не раніше / не пізніше».
 - 2026-10-09 · Етап 6 закрито після F3.x (302 тести, typecheck, lint, arch:check).
+- 2026-10-09 · Етап 7 · S7.T0–S7.T3 виконано; ключі `payload` вибору слота узгоджено (`date`, `time` — як пише розширення). Сервер перезапущено, `GET /api/extension-events` і `/api/request-log?source=extension` відповідають; `pg_dump` робочої бази — 0 збігів токена.
+- 2026-10-09 · Етап 7 закрито: `architecture-reviewer` — PASS, без знахідок; `plan-verifier` — 13 MET, 1 PARTIAL (`selection.stage` — лише `tab-ready`: `econsul:slot-result` приносить тільки підсумок, а підсумок уже пишеться як `selection.selected` / `selection.failed`; проміжні етапи вибору розширення не повідомляє — свідоме відхилення), 3 UNVERIFIABLE (записи після ⟳ розширення 0.4.0, зокрема з закритою вкладкою застосунку — користувач).
 
 ## Етап 1 — задачі
 
@@ -1084,3 +1086,47 @@ e-Consul Helper»), перенесена дослівно; тексти журн
 | `server/src/modules/extension-events/**`, `server/src/app.ts`, `app.test.ts`, `platform/container.ts` | S7.T1 |
 | `extension/**` (перелічені файли) | S7.T2 |
 | `web/src/adapters/log-history/**`, `web/src/features/monitoring/**`, `web/src/test/fake-services.tsx` | S7.T3 |
+
+## Етап 8 — задачі
+
+Рішення користувача 2026-10-09: етап іде у два кроки. Спершу все оборотне — новий застосунок на
+`/`, старий `slots.html` тимчасово на `/old`, документація й скіли. Видалення `slots.html`,
+`main.go`, `go.mod`, старого маршруту `POST /schedule-log` і `/old` — окремою задачею S8.T5, лише
+після підтвердження користувача, що день моніторингу на новому застосунку пройшов без розбіжностей.
+
+### Wave 1 — паралельно
+
+#### S8.T1 — сервер: новий застосунок на `/`, старий на `/old`
+- Module: server · Files: `server/src/app.ts`, `server/src/app.test.ts`, `server/src/platform/config.ts`
+- `@fastify/static` на `web/dist` з `prefix: '/'`; невідомі шляхи без розширення поза `/api` → `web/dist/index.html`; `/next` і `/next/*` → 301 на той самий шлях без `/next`; `GET /old` → `slots.html` (без кінцевої скісної: відносні `locations.json` і `schedule-log` у `slots.html` ведуть на корінь — їхні маршрути лишаються), `/old/` → 301 на `/old`. Немає `web/dist` → `/` відповідає 503 з підказкою зібрати `web/`.
+- Rules: як етап 2 S2.T3 (статика лише на `web/dist`; без кореня репозиторію) і етап 5 (`/api` — JSON 404).
+- Steps: тести `app.inject()` з тимчасовою `dist`: `/`, `/slots`, `/settings` → `index.html`; `/assets/a.js` → файл; `/missing.js` → 404; `/next/slots` → 301 `/slots`; `/old` → `slots.html`; `/api/nope` → 404 JSON; `POST /schedule-log` і `GET /locations.json` — як раніше.
+
+#### S8.T2 — `web/` на корені
+- Module: web · Files: `web/vite.config.ts` (`base: '/'`), `web/scripts/reconcile-with-slots-html.ts` (`slots.html` тепер на `/old`), `web/README.md`, `web/CLAUDE.md`, `web/docs/fixtures.md`, `web/src/domain/__fixtures__/legacy/` (`slots.json`, `slots_not_working.json` з кореня — `git mv`, без змін вмісту; `README.md` — що це: відповіді лютого 2026 без моменту запису, лише для ручних порівнянь)
+- Steps: `pnpm --dir web build`; `reconcile` проти `/old` — 54 ✓.
+
+### Wave 2 — основна сесія
+
+#### S8.T3 — документація й скіли
+- `docs/booking.md` §9 — описує новий застосунок (`web/`, маршрути, моніторинг, журнали) замість
+  `slots.html`; ключові функції — посилання на модулі `web/src/domain` і `application`.
+- Кореневі `CLAUDE.md`, `README.md`; `server/README.md`, `server/CLAUDE.md`; `extension/CLAUDE.md`
+  (протокол — `web/src/domain/contracts/extension-messages.ts` і `web/src/application/extension-link.ts`
+  замість `slots.html`); скіли (`onion-architecture`, `frontend-ui-architecture`, `security`,
+  `fastify-best-practices`, `brainstorm`, `engineering-insights`) — розділи «In this project» без
+  «переписування», агенти (`.claude/agents/*.md`).
+- `docs/brainstorm/ideas.md` — Current focus: план виконано.
+
+#### S8.T4 — перевірка
+- Сервер перезапущено; `/` — новий застосунок, `/old` — старий; headless Chrome без помилок;
+  розширення працює з `/` (міст на `localhost:3000/*` не змінювався). Повний день моніторингу на
+  новому застосунку — користувач.
+
+### Wave 3 — після підтвердження користувача
+
+#### S8.T5 — видалення старого
+- `git rm slots.html main.go go.mod`; прибрати `GET /old`, `scheduleLogLegacyRoutes`
+  (`POST /schedule-log`) і `GET /locations.json` з `server/` (застосунок бере довідник з
+  `/api/locations`); `reconcile` — архівувати або видалити разом зі `slots.html`; документація —
+  без згадок про старий застосунок.
