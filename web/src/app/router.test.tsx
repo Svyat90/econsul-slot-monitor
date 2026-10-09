@@ -6,7 +6,10 @@ import { createFakeServices } from '@/test/fake-services.tsx';
 import { routes } from './router.tsx';
 
 // A selected institution, so the pages show instead of the empty state
-const selection = { institution: { code: 'CHI' }, serviceCode: 'PASSPORT' } as unknown as MonitorState['selection'];
+const selection = {
+    institution: { code: '1000000522', name: 'Генеральне консульство України в Чикаго', countryCode: '840', country: 'США', timeZone: 'GMT-06:00', numberWeeks: 25, serviceMinutes: { '1': 10 } },
+    serviceCode: '1',
+} as MonitorState['selection'];
 
 function renderAt(path: string, monitor: Partial<MonitorState> = { selection }) {
     const router = createMemoryRouter(routes, { initialEntries: [path] });
