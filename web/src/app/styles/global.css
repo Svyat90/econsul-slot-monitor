@@ -1,6 +1,6 @@
 @import './tokens.css';
 
-/* Local fonts only (the page holds the session token). Vite prefixes /fonts/ with `base` (/next/). */
+/* Local fonts only (the page holds the session token). Vite prefixes /fonts/ with `base`. */
 @font-face {
     font-family: 'Manrope';
     font-weight: 200 800;
