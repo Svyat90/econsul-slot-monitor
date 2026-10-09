@@ -746,7 +746,7 @@
             })
             .catch(error => {
                 document.getElementById('fetchStatus').innerHTML =
-                    `<span style="color: #dc3545;">Cannot load locations.json (${error.message}). Open the page through the server: go run main.go</span>`;
+                    `<span style="color: #dc3545;">Cannot load locations.json (${error.message}). Open the page through the server: pnpm --dir server start</span>`;
             });
 
         // POST to e-consul's external_reader. Throws an Error with .status on HTTP errors

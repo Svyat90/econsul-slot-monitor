@@ -310,14 +310,15 @@
 | Файл | Призначення |
 |---|---|
 | `slots.html` | Уся програма: інтерфейс, запити до API, розрахунок, календар |
-| `locations.json` | Довідник країн, установ, послуг і свят (розділ 10) |
-| `main.go` | Сервер на порту 3000: `/locations.json` → файл довідника, `POST /schedule-log` → дописує запис у журнал змін розкладу, будь-який інший шлях → `slots.html` |
-| `logs/schedule-changes.jsonl` | Журнал змін розкладу консулів. Створюється сервером під час моніторингу |
+| `server/data/locations.json` | Довідник країн, установ, послуг і свят (розділ 10) |
+| `server/` | Сервер Fastify на `127.0.0.1:3000` (з етапу 1 [плану переписування](plans/web-rewrite-plan.md)): `/locations.json` → файл довідника, `POST /schedule-log` → запис у таблицю `schedule_changes` у Postgres, `/api/*` → API, будь-який інший шлях → `slots.html` ([server/README.md](../server/README.md)) |
+| `main.go` | Старий сервер з тими самими маршрутами; журнал змін розкладу писав у `logs/schedule-changes.jsonl` (імпортовано в базу). Видаляється на етапі 8 |
 | `extension/` | Розширення Chrome «e-Consul Helper»: токен сесії в програму, сповіщення про вхід (див. [extension/docs/how-it-works.md](../extension/docs/how-it-works.md) і [план](../extension/plans/extension-plan.md)) |
 
-Запуск: `go run main.go` і відкрити `http://localhost:3000`. Без Go працює
-`python3 -m http.server 3000`, тоді адреса `http://localhost:3000/slots.html`. Якщо відкрити
-`slots.html` просто як файл, `locations.json` не завантажиться, і програма покаже про це повідомлення.
+Запуск: `pnpm --dir server run db:up` (Postgres у Docker), потім `pnpm --dir server start` і
+відкрити `http://localhost:3000`. Якщо відкрити `slots.html` просто як файл, `locations.json` не
+завантажиться, і програма покаже про це повідомлення. Без бази сторінка працює, але зміни розкладу
+не зберігаються (`/api/health` → `db: down`).
 
 ### Інтерфейс
 

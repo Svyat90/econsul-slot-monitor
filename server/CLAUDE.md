@@ -2,8 +2,8 @@
 
 Локальний сервер: Fastify 5 + Drizzle + Postgres у Docker. Віддає застосунок `web/` і API `/api/*`
 на `127.0.0.1:3000`, зберігає журнали запитів до e-Consul, перевірок, резервувань, змін розкладу й
-подій розширення. Замінить `main.go`. **Модуль ще не створено кодом** — його будує
-[план](../docs/plans/web-rewrite-plan.md) (етап 1); до того тут лише документація.
+подій розширення. Замінив `main.go` (етап 1 [плану](../docs/plans/web-rewrite-plan.md)); решта
+API — на етапі 5. Як запустити й де що лежить — [README.md](README.md).
 
 ## Перед відповіддю
 
@@ -31,7 +31,13 @@
 - Zod-схеми API в `src/contracts/` — канонічні; `web/` імпортує їх через alias `@contracts`.
   Zod 4, та сама версія, що в `web/package.json`.
 - Міграції — `drizzle-kit generate`, застосовуються командою, не під час старту. Том Postgres у
-  `docker-compose.yml` не видаляти.
+  `docker-compose.yml` не видаляти. `src/db/migrations/**` руками не правити.
+- Інтеграційні тести (`*.it.test.ts`) — лише в базі `econsul_test` через `createTestDb()` з
+  `src/test/db.ts`; робочу базу `econsul` тести не чіпають.
+- Node запускає `.ts` напряму: імпорти з розширенням `.ts`, без `enum`, `namespace` і parameter
+  properties (`erasableSyntaxOnly`).
+- `@fastify/static` не можна направляти на корінь репозиторію — віддасть `logs/` і `.git`.
+  `slots.html` і довідник віддаються як окремі файли.
 
 ## Читати, коли
 

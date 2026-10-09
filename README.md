@@ -8,16 +8,20 @@ Chrome вибирає знайдений слот у чернетці заявк
 
 | Модуль | Що це | Документація |
 |---|---|---|
-| Застосунок (`slots.html`, `main.go`, `locations.json`) | Сторінка моніторингу на `http://localhost:3000` і маленький Go-сервер | [docs/booking.md](docs/booking.md) §9 |
+| Застосунок (`slots.html`) | Сторінка моніторингу на `http://localhost:3000` | [docs/booking.md](docs/booking.md) §9 |
+| [`server/`](server/README.md) | Сервер Fastify + Postgres: віддає сторінку, довідник і зберігає журнали | [server/README.md](server/README.md) |
 | [`extension/`](extension/README.md) | Розширення Chrome «e-Consul Helper» | [extension/README.md](extension/README.md) |
-| [`web/`](web/README.md), `server/` | Заплановано: застосунок на Vite + React і сервер Fastify + Postgres з журналами | [план](docs/plans/web-rewrite-plan.md), [дизайн](web/docs/design/README.md) |
+| [`web/`](web/README.md) | Заплановано: новий застосунок на Vite + React | [план](docs/plans/web-rewrite-plan.md), [дизайн](web/docs/design/README.md) |
 
 Застосунок переписується на Vite + React з сервером Fastify (гілка `feature/web-app-rewrite`).
 
 ## Запуск
 
 ```sh
-go run main.go            # або: python3 -m http.server 3000 і відкрити /slots.html
+pnpm --dir server install
+pnpm --dir server run db:up       # Postgres у Docker
+pnpm --dir server run db:migrate  # один раз і після нових міграцій
+pnpm --dir server start
 ```
 
 Відкрити `http://localhost:3000`, встановити розширення з теки `extension/`
