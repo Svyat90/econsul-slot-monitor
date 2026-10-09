@@ -1,7 +1,7 @@
 // Stage 3 of docs/plans/web-rewrite-plan.md: the new domain must give the same calendar days, free
 // slots and day-opening moments as slots.html on the same recorded responses and the same moment.
 //
-// Opens slots.html from the running server in a separate headless Chrome (puppeteer-core, the
+// Opens slots.html (served at /old) from the running server in a separate headless Chrome (puppeteer-core, the
 // installed Google Chrome, a fresh profile without the extension), feeds it each fixture of
 // src/domain/__fixtures__/econsul/ with Date.now pinned, and compares with the domain functions.
 // No request goes to e-Consul: the page only gets data we hand it.
@@ -37,7 +37,7 @@ const browser = await puppeteer.launch({ executablePath: CHROME, headless: true 
 let failures = 0;
 try {
     const page = await browser.newPage();
-    await page.goto(BASE_URL + '/', { waitUntil: 'networkidle0' });
+    await page.goto(BASE_URL + '/old', { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.querySelectorAll('#countrySelect option').length > 0);
 
     for (const file of files) {
