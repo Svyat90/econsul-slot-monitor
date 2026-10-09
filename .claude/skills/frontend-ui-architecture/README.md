@@ -8,6 +8,7 @@ frontends. This README is for people maintaining the skill; the agent reads
 
 | Version | Date | Change |
 |---|---|---|
+| **1.2.0** | 2026-10-09 | "In this project" rewritten for Vite + React SPA served by Fastify (IDEA-006): routes, features, fonts; Next.js sections marked as not applicable here. |
 | **1.1.0** | 2026-10-09 | Adapted for the e-Consul slot monitor: "In this project" section in §0 (client-heavy app, domain in `src/domain`, expected features, monitor store instead of TanStack Query), examples rewritten with this app's domain, evals removed. |
 | **1.0.0** | 2026-09-21 | First release: principles, layers, "where does X go" table, business-logic tiers, splitting rules, import rules, Next.js App Router placement, review checklist; references for Next.js, layouts + lint enforcement, worked examples. |
 

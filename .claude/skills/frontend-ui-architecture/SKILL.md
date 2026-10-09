@@ -1,8 +1,8 @@
 ---
 name: frontend-ui-architecture
-description: "Code organization and UI architecture for React + Next.js (App Router) frontends: where components, hooks, constants, utils/helpers, types, API calls and business logic live; how to split a component or a feature; which module may import which; where the 'use client' and server-only boundaries sit in the folder tree. Use when creating a new screen, feature or folder, when deciding where a file or function belongs, when a component or file has grown too big and must be split, when promoting code to shared, when reviewing a PR for structure, or when the user asks about project structure, folder layout, feature folders, colocation, FSD, bulletproof-react or 'where should this go' — even if they never say 'architecture'. Not for render performance, hook correctness or Next.js API details (react-best-practices, next-best-practices cover those)."
+description: "Code organization and UI architecture for the React (Vite) web app — and React + Next.js frontends in general: where components, hooks, constants, utils/helpers, types, API calls and business logic live; how to split a component or a feature; which module may import which; where the 'use client' and server-only boundaries sit in the folder tree. Use when creating a new screen, feature or folder, when deciding where a file or function belongs, when a component or file has grown too big and must be split, when promoting code to shared, when reviewing a PR for structure, or when the user asks about project structure, folder layout, feature folders, colocation, FSD, bulletproof-react or 'where should this go' — even if they never say 'architecture'. Not for render performance or hook correctness (react-best-practices covers those)."
 metadata:
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # Frontend UI Architecture
@@ -32,27 +32,37 @@ reasoning to fall back on when the convention is silent.
 ### In this project
 
 The app is being rewritten from one file (`slots.html`, served by `main.go`) into
-a React + Next.js app; the stack and root are recorded in
-`docs/brainstorm/ideas.md`. Facts that shape the layout:
+the `web/` module: **Vite + React + TypeScript**, a client-side SPA with a router
+(IDEA-006 in `docs/brainstorm/ideas.md`). There is **no Next.js**: §7 and
+`references/nextjs-app-router.md` do not apply here — read them only for the
+general placement ideas. Facts that shape the layout:
 
-- **It is a client-heavy app.** e-Consul is called from the browser with the
-  user's token (Cloudflare blocks server calls), monitoring runs in the open tab,
-  and the Chrome extension talks to the page through `postMessage`. So most of the
-  UI is client components. Our own backend is a separate module, `server/`
-  (request log, schedule-change log), reached over HTTP through an adapter —
-  not Next.js route handlers. Section 7's last bullet applies.
+- **Fastify (`server/`) serves the built app and the API (`/api/*`) on
+  `localhost:3000`.** In development Vite runs on `:3000` and proxies `/api` to
+  Fastify. The app talks to the server only through an adapter over `/api`.
+- **e-Consul is called from the browser** with the user's token (Cloudflare
+  blocks server calls); monitoring runs in the open tab; the Chrome extension
+  talks to the page through `postMessage`.
+- **Routes:** `/slots`, `/monitoring`, `/settings` under one layout with the side
+  menu (status block, navigation) and the global banners (session, new slots) —
+  agreed design: Claude Design canvas «Застосунок e-Consul» (IDEA-001).
 - **Tier 1 is bigger than usual and lives outside features.** The slot algorithm,
   the horizon rule and the monitoring schedule are a pure domain in `src/domain/`,
   and the I/O sits behind ports in `src/application/` and `src/adapters/`.
   `onion-architecture` owns those rings; this skill owns `src/app/` and
   `src/features/` and how they consume them.
 - Expected features: `locations` (country/institution/service picker),
-  `slots` (calendar, day modal, booking windows), `monitoring` (controls, status,
-  log, date range, fast checks), `schedule-changes`, `extension` (banner, status,
-  auto-booking toggle), `session` (token field and expiry state).
-- Data from e-Consul does not go through TanStack Query: it is owned by the
-  monitor store (`useSyncExternalStore`). Do not add a second cache for it.
-- UI copy is Ukrainian; the design reference is `extension/docs/design/`.
+  `slots` (calendar, day panel, next opening, nearest free), `monitoring`
+  (daily summary, check log with filters, reservation log, schedule changes),
+  `settings` (search, session, checks, booking, notifications), `status` (side
+  menu block), `extension` (connection state, auto-booking toggle).
+- Data from e-Consul is owned by the monitor store (`useSyncExternalStore`).
+  Server data from `/api` (log history, daily summary) may use TanStack Query;
+  do not copy either into a second cache.
+- UI copy is Ukrainian; the look is design A of the extension
+  (`extension/docs/design/`): Manrope, IBM Plex Mono for times, `#0057B8`.
+  Fonts are self-hosted (`@fontsource/*` or files in `web/public/fonts`), never
+  Google Fonts — the page holds the token.
 
 ## 1. Principles
 
@@ -294,8 +304,7 @@ Covered elsewhere — defer to these skills instead of restating them:
 
 - component purity, hooks rules, `useEffect`, memoization, keys, render
   performance → `react-best-practices`
-- Next.js file conventions in detail, RSC validity rules, async APIs, data
-  fetching patterns, metadata, images, fonts → `next-best-practices`
+- (no Next.js in this project — the `next-best-practices` skill was removed)
 - the pure domain, use cases, ports and adapters (`src/domain`, `src/application`,
   `src/adapters`) → `onion-architecture`
 - auth and authorization inside a Data Access Layer → `security`

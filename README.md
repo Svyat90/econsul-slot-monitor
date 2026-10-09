@@ -10,9 +10,9 @@ Chrome вибирає знайдений слот у чернетці заявк
 |---|---|---|
 | Застосунок (`slots.html`, `main.go`, `locations.json`) | Сторінка моніторингу на `http://localhost:3000` і маленький Go-сервер | [docs/booking.md](docs/booking.md) §9 |
 | [`extension/`](extension/README.md) | Розширення Chrome «e-Consul Helper» | [extension/README.md](extension/README.md) |
-| `server/` | Заплановано: Fastify + Postgres, журнал запитів до e-Consul | — |
+| `web/`, `server/` | Заплановано: застосунок на Vite + React і сервер Fastify + Postgres з журналами | `docs/brainstorm/ideas.md` |
 
-Застосунок переписується на React + Next.js (гілка `feature/web-app-rewrite`).
+Застосунок переписується на Vite + React з сервером Fastify (гілка `feature/web-app-rewrite`).
 
 ## Запуск
 

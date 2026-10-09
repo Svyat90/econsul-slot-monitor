@@ -8,8 +8,8 @@ allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 
 ## In this project — read first
 
-> Status: proposed 2026-10-09, pending the stack decision in `docs/brainstorm/ideas.md`.
-> If brainstorm records a different server or database, this section is out of date: say so.
+> Decided in brainstorm 2026-10-09: IDEA-005 (Fastify + Postgres, records kept forever, extension
+> logs too). Other tables (reservation log, extension events, schedule log) follow the same rules.
 
 Drizzle lives only in `server/src/modules/<m>/repository.ts` and `server/src/db/**`
 (`onion-architecture` §11). Postgres runs in Docker; migrations are generated with
@@ -39,7 +39,8 @@ export const econsulRequests = pgTable('econsul_requests', {
   responseBytes: integer('response_bytes'),
   checkKind: checkKind('check_kind'),
   checkSeq: integer('check_seq'),
-  tabSessionId: uuid('tab_session_id').notNull(),              // one app tab = one session
+  source: text('source').notNull(),                            // 'app' | 'extension'
+  tabSessionId: uuid('tab_session_id').notNull(),              // one app tab / extension run = one session
   appVersion: text('app_version').notNull(),
   errorMessage: text('error_message'),
   receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),

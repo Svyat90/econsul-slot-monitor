@@ -8,6 +8,7 @@ monitor web app. This README is for people maintaining the skill; the agent read
 
 | Version | Date | Change |
 |---|---|---|
+| **1.2.0** | 2026-10-09 | Stack fixed by IDEA-006: Vite + React SPA in `web/`, served with the API by Fastify on `:3000`; Next.js references removed. |
 | **1.1.0** | 2026-10-09 | Server module `server/` (Fastify + Drizzle + Postgres) as its own small onion (§11); request log as a decorator over the e-Consul port with background batching; schedule-change log moves to the server; paths updated after module docs moved into `extension/`. |
 | **1.0.0** | 2026-10-09 | Adapted for this project: ring map for the rewrite of `slots.html` (contracts, pure slot and monitoring domain, use cases with ports, browser adapters, server-only schedule log, composition root), the browser-only e-Consul rule, clock/randomness/timers behind ports, the extension protocol as a contract, testing against recorded responses, proposed dependency-cruiser rules. |
 
@@ -28,9 +29,8 @@ changes meaning or is removed, **minor** when a rule or reference file is added,
 | Request log | Decorator over `EconsulApi` in the composition root, batches to `server/`; logging never blocks or changes a check | use cases stay unaware of logging; a down server costs entries, not checks |
 | Enforcement | dependency-cruiser + ESLint restricted globals, added with the scaffold | no baseline needed when introduced on an empty codebase |
 
-The layout in SKILL §2 is a proposal pending the stack decision in
-`docs/brainstorm/ideas.md`. When that decision is recorded, update §2 and §4 paths
-and bump the minor version.
+The stack is decided (IDEA-006); folder names in SKILL §2 are confirmed by the rewrite plan in
+`docs/plans/`. When the plan changes them, update §2 and §4 and bump the minor version.
 
 ## Sources
 

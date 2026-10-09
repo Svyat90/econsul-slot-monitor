@@ -9,10 +9,11 @@ e-consul.gov.ua, стежить за ними й передає знайдене
 | Модуль | Що це |
 |---|---|
 | `extension/` | Розширення Chrome «e-Consul Helper» (MV3) — [extension/CLAUDE.md](extension/CLAUDE.md) |
-| `slots.html`, `main.go`, `locations.json` (корінь) | Поточний застосунок; ще не модуль — переписується на React + Next.js у гілці `feature/web-app-rewrite` |
-| `server/` (заплановано) | Fastify + Drizzle + Postgres: журнал запитів до e-Consul, журнал змін розкладу |
+| `slots.html`, `main.go`, `locations.json` (корінь) | Поточний застосунок; ще не модуль — переписується в гілці `feature/web-app-rewrite` |
+| `web/` (заплановано) | Новий застосунок: Vite + React + TypeScript (SPA) |
+| `server/` (заплановано) | Fastify + Drizzle + Postgres у Docker: віддає `web/` і API `/api/*` на `localhost:3000`; журнали запитів, резервувань, змін розкладу й подій розширення (зберігаються назавжди) |
 
-Стек і структура переписування фіксуються в `docs/brainstorm/ideas.md`.
+Рішення щодо переписування — у `docs/brainstorm/ideas.md` (IDEA-001…006).
 
 ## Структура модуля
 
@@ -50,6 +51,6 @@ e-consul.gov.ua, стежить за ними й передає знайдене
 
 Процес: `brainstorm`, `engineering-insights`.
 Архітектура: `onion-architecture`, `frontend-ui-architecture`.
-Фронтенд: `react-best-practices`, `next-best-practices`, `react-testing-library`.
+Фронтенд: `react-best-practices`, `react-testing-library`.
 Бекенд і база: `fastify-best-practices`, `drizzle-orm-patterns`, `postgresql-table-design`.
 Загальне: `typescript-expert`, `zod`, `security`, `mermaid-diagram`.

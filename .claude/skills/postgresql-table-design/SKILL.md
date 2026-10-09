@@ -7,8 +7,8 @@ description: In this project — the econsul_requests request-log table and any 
 
 ## In this project — read first
 
-> Status: proposed 2026-10-09, pending the stack decision in `docs/brainstorm/ideas.md`.
-> If brainstorm records a different server or database, this section is out of date: say so.
+> Decided in brainstorm 2026-10-09: IDEA-005 (Fastify + Postgres, records kept forever, extension
+> logs too). Other tables (reservation log, extension events, schedule log) follow the same rules.
 
 The first table is `econsul_requests` — an append-only event log of the web app's requests to
 e-Consul (Drizzle definition: `drizzle-orm-patterns` → "In this project"). How the general rules
@@ -27,8 +27,9 @@ below apply to it:
   Query by the promoted column `institution_code`, not inside the JSON.
 - **NOT NULL** on everything always present; `http_status` is NULL only for network errors, and a
   CHECK keeps that honest: `CHECK ((outcome = 'network_error') = (http_status IS NULL))`.
-- **Retention:** a scheduled `DELETE ... WHERE started_at < now() - interval '180 days'`; decide the
-  period in brainstorm.
+- **Retention: none.** Rows are kept forever for later analysis (decision IDEA-005, 2026-10-09).
+  At this volume that is a few hundred MB over years; revisit only if measured otherwise. No
+  DELETE jobs, no TTL; corrections are new rows, not updates.
 - **Never store** the token, request headers, or response bodies (a reserved-slots body is ~0.5 MB).
 
 The general guidance below is upstream (wshobson/agents) and applies as written.

@@ -14,8 +14,8 @@ baseline to maintain.
 | Rule | From | Forbidden target | Why |
 |---|---|---|---|
 | `contracts-are-the-core` | `src/domain/contracts/**` | anything but itself and `zod` | innermost ring; also used by the extension |
-| `domain-is-pure` | `src/domain/**` | `react`, `next`, `src/application`, `src/adapters`, `server`, `src/app`, `src/features` | no framework and no I/O in the domain |
-| `application-is-framework-free` | `src/application/**` | `react`, `next`, `src/adapters`, `server`, `src/app`, `src/features` | use cases talk to ports only |
+| `domain-is-pure` | `src/domain/**` | `react`, `react-dom`, `src/application`, `src/adapters`, `server`, `src/app`, `src/features` | no framework and no I/O in the domain |
+| `application-is-framework-free` | `src/application/**` | `react`, `react-dom`, `src/adapters`, `server`, `src/app`, `src/features` | use cases talk to ports only |
 | `ui-does-not-touch-adapters` | `src/features/**`, `src/app/**` except `providers.tsx` and `api/**` | `src/adapters/**` | only the composition root picks implementations |
 | `web-does-not-import-server` | `src/**` | `server/**` | the web app reaches the server only over HTTP |
 | `server-routes-do-not-touch-the-db` | `server/src/modules/*/routes.ts` | `server/src/db/**`, `drizzle-orm` | CRUD routes call their repository |

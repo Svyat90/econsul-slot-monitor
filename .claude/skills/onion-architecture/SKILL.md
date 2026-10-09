@@ -1,15 +1,15 @@
 ---
 name: onion-architecture
-description: "Onion (clean / hexagonal, ports-and-adapters) architecture for the e-Consul slot monitor web app: which ring a piece of code belongs to, which way imports may point, where the slot algorithm, monitoring rules, e-Consul API calls, extension messaging, notifications, storage and the schedule log live, how time, randomness and the session token are handled, and how errors cross the rings. Use when porting logic out of slots.html, adding or restructuring a use case, port or adapter; when a component or hook calls fetch, Date.now(), Math.random(), localStorage, Notification or window.postMessage directly; when deciding where a function belongs; when reviewing a change for structure; or when the user mentions onion, clean or hexagonal architecture, layers, ports and adapters, dependency rule, use cases or domain logic — even if they never say 'architecture'. Not for React/Next.js API details or folder layout of the UI (react-best-practices, next-best-practices, frontend-ui-architecture cover those)."
+description: "Onion (clean / hexagonal, ports-and-adapters) architecture for the e-Consul slot monitor web app: which ring a piece of code belongs to, which way imports may point, where the slot algorithm, monitoring rules, e-Consul API calls, extension messaging, notifications, storage and the schedule log live, how time, randomness and the session token are handled, and how errors cross the rings. Use when porting logic out of slots.html, adding or restructuring a use case, port or adapter; when a component or hook calls fetch, Date.now(), Math.random(), localStorage, Notification or window.postMessage directly; when deciding where a function belongs; when reviewing a change for structure; or when the user mentions onion, clean or hexagonal architecture, layers, ports and adapters, dependency rule, use cases or domain logic — even if they never say 'architecture'. Not for React API details or folder layout of the UI (react-best-practices, frontend-ui-architecture cover those)."
 metadata:
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # Onion Architecture (e-Consul slot monitor)
 
 One rule drives this skill: **source-code dependencies point inwards only.**
 The slot algorithm and the monitoring rules sit in the middle and know nothing
-about React, Next.js, `fetch`, the browser, the Chrome extension or the clock.
+about React, Vite, Fastify, `fetch`, the browser, the Chrome extension or the clock.
 Those are outer rings that plug in.
 
 ## 0. Read the existing convention first
@@ -53,13 +53,14 @@ DOM or a browser only to check a calculation.
 
 ## 2. The rings in this app
 
-> Target layout for the rewrite (proposed 2026-10-09). Paths assume the
-> Next.js + TypeScript app agreed in brainstorm; if `docs/brainstorm/ideas.md`
-> records a different stack or root, map the rings onto it — the rings and the
-> rules do not change.
+> Stack agreed in brainstorm (IDEA-006, 2026-10-09): **Vite + React +
+> TypeScript** SPA in the `web/` module, served together with the API by the
+> Fastify `server/` module on `localhost:3000`. Paths in this file are relative
+> to `web/` unless they start with `server/` or `extension/`. The folder names
+> are proposed until the rewrite plan in `docs/plans/` confirms them.
 
 ```
-composition root   src/app/providers.tsx (client deps)
+composition root   src/app/providers.tsx (deps) · src/main.tsx (router)
  └─ presentation   src/app/** pages · src/features/** components and hooks
      └─ application   src/application/** use cases · ports.ts
          └─ domain        src/domain/{slots,monitoring,locations}/** pure functions
@@ -75,9 +76,9 @@ extension/         separate entry point (MV3); may import src/domain/contracts o
 | Ring | Paths | Knows | Must not import |
 |---|---|---|---|
 | **Contracts** (core) | `src/domain/contracts/` — e-Consul response schemas (schedule row, reserved slot, `nonWorkingTime`), `locations.json` schema, extension message protocol (`ext:*`, `app:*`), domain errors | zod, itself | anything else |
-| **Domain** | `src/domain/slots/` (calendar days, horizon, free slots, windows), `src/domain/monitoring/` (release times, fast window, next-check delay, new-slot diff, date-range filter), `src/domain/locations/` | contracts | React, Next, `fetch`, `window`, `chrome.*`, `localStorage`, `Date.now()`, `new Date()` without an argument, `Math.random()`, adapters |
-| **Application** | `src/application/<use-case>.ts`, `src/application/ports.ts` | domain, contracts, ports | React, Next, `src/adapters/**`, `server/**`, browser globals |
-| **Presentation** | `src/app/**` (pages, layouts), `src/features/**` (components, hooks) | application, domain (read-only helpers for display), contracts | `src/adapters/**` directly, `server/**`, `fetch` to e-Consul |
+| **Domain** | `src/domain/slots/` (calendar days, horizon, free slots, windows), `src/domain/monitoring/` (release times, fast window, next-check delay, new-slot diff, date-range filter, reserved-slot diff for the reservation log), `src/domain/locations/` | contracts | React, `fetch`, `window`, `chrome.*`, `localStorage`, `Date.now()`, `new Date()` without an argument, `Math.random()`, adapters |
+| **Application** | `src/application/<use-case>.ts`, `src/application/ports.ts` | domain, contracts, ports | React, `src/adapters/**`, `server/**`, browser globals |
+| **Presentation** | `src/app/**` (router, layout with the side menu, pages), `src/features/**` (components, hooks) | application, domain (read-only helpers for display), contracts | `src/adapters/**` directly, `server/**`, `fetch` to e-Consul |
 | **Infrastructure** | `src/adapters/econsul-api`, `request-log` (decorator over `EconsulApi` + batching HTTP client to `server/`), `extension-bridge`, `alerts` (Notification + Web Audio), `settings-store` (localStorage), `schedule-log` (HTTP client) | contracts, ports, browser APIs | application use cases, presentation, other adapters (except `request-log` wrapping the `EconsulApi` *port*) |
 | **Composition root** | `src/app/providers.tsx` | everything | — (this is where rings are wired) |
 
@@ -85,8 +86,8 @@ Three facts about this app that change the textbook picture:
 
 - **e-Consul is called from the browser, never from our server.** Cloudflare blocks
   requests made outside a browser, and the user's JWT must not reach our server
-  (`docs/booking.md` §1, §14). So the `EconsulApi` adapter is client-only, and the
-  Next.js server never proxies it. A server route that calls `my.e-consul.gov.ua`
+  (`docs/booking.md` §1, §14). So the `EconsulApi` adapter runs in the browser,
+  and Fastify never proxies it. A server route that calls `my.e-consul.gov.ua`
   is a design error, not a shortcut.
 - **The domain replicates someone else's algorithm.** The rules in `domain/slots`
   are not ours to improve; they mirror the site's worker. Every change is checked
@@ -134,7 +135,7 @@ both a use case and the concrete adapter that satisfies its port.
 | `window.postMessage` bridge, origin and `source` checks | `adapters/extension-bridge/` | infrastructure |
 | `new Notification`, Web Audio tones, glass crash | `adapters/alerts/` | infrastructure |
 | `localStorage` keys (`slots.selection`, `slots.interval`, draft, date range) | `adapters/settings-store/` | infrastructure |
-| Recording each e-Consul request (method, filters, status, duration, outcome) | `adapters/request-log/` — wraps `EconsulApi`, batches to `POST /request-log` | infrastructure |
+| Recording each e-Consul request (method, filters, status, duration, outcome) | `adapters/request-log/` — wraps `EconsulApi`, batches to `POST /api/request-log` | infrastructure |
 | Storing and querying the request log | `server/src/modules/request-log/` (routes → repository) | server, section 11 |
 | Writing the schedule-change log | `server/src/modules/schedule-log/` (today `main.go` → `logs/schedule-changes.jsonl`) | server, section 11 |
 | Building the deps object, picking fakes for tests | `src/app/providers.tsx` | composition root |
@@ -329,8 +330,8 @@ Fastify, Drizzle and table details: `fastify-best-practices`, `drizzle-orm-patte
 
 Defer to other skills instead of restating them:
 
-- folder layout of the UI, feature boundaries, `'use client'` placement → `frontend-ui-architecture`
-- component and hook correctness → `react-best-practices`; Next.js APIs → `next-best-practices`
+- folder layout of the UI, feature boundaries, routes → `frontend-ui-architecture`
+- component and hook correctness → `react-best-practices`
 - schema authoring → `zod`; type-level tricks → `typescript-expert`
 - token handling, `postMessage` and extension permissions → `security`
 - Fastify routes and plugins → `fastify-best-practices`; queries and migrations →
