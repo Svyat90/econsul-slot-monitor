@@ -4,9 +4,10 @@
 щоб потім аналізувати, як змінюються слоти й розклад. Fastify 5 + Drizzle + Postgres у Docker.
 Замінив `main.go`.
 
-> Стан: етап 1 [плану](../docs/plans/web-rewrite-plan.md) — сервер замінив `main.go`: віддає
-> `slots.html`, `/locations.json`, приймає `POST /schedule-log` у базу, `GET /api/health`. Решта API —
-> на етапі 5.
+> Стан: етап 5 [плану](../docs/plans/web-rewrite-plan.md) — працюють усі журнали, крім
+> `extension-events` (етап 7). Старі маршрути `slots.html` (`/`, `/locations.json`,
+> `POST /schedule-log`) лишаються до етапу 8. Межі історії — `[from, to)`; база недоступна → `/api`
+> відповідає 503.
 
 ## Запуск
 
