@@ -1,0 +1,17 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-09T12:00:00Z"},
+  "title": "Застосунок e-Consul — варіанти дизайну",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1280, "h": 1560, "title": "Слоти (інтерактивний, вибрано)", "expand": "fill", "is_interactive": true},
+    "Monitoring.dc.html": {"x": 1360, "y": 0, "w": 1280, "h": 1280, "title": "Моніторинг", "expand": "fill", "is_interactive": true},
+    "Settings.dc.html": {"x": 2720, "y": 0, "w": 1280, "h": 1100, "title": "Налаштування", "expand": "fill", "is_interactive": true}
+  },
+  "order": ["Main.dc.html", "Monitoring.dc.html", "Settings.dc.html"],
+  "notes": {
+    "row": {"x": 0, "y": -300, "text": "Застосунок · Картки + бічне меню · стиль дизайну A", "kind": "title1", "maxW": 4000}
+  },
+  "designSystems": []
+}

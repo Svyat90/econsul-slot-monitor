@@ -11,8 +11,8 @@ last_updated: 2026-10-09
 
 - In progress: переписування `slots.html` — IDEA-001…004 узгоджено; лог резервувань іде в базу
   разом із журналом запитів (IDEA-005).
-- Open questions: структура тек і план переписування.
-- Next steps: план переписування в `docs/plans/` (web/, server/, розширення).
+- Open questions: погодження плану `docs/plans/web-rewrite-plan.md`.
+- Next steps: після погодження плану — IDEA-001…006 → `promoted` з посиланням на план; етап 1.
 
 ## Index
 
@@ -244,6 +244,7 @@ e-Consul лише з браузера, моніторинг живе у вкла
 
 Лише дописування, нові зверху. Формат: `YYYY-MM-DD · IDEA-NNN · що змінилось`.
 
+- 2026-10-09 · IDEA-006 · складено чернетку плану docs/plans/web-rewrite-plan.md
 - 2026-10-09 · IDEA-006 · рішення: Vite + React, Fastify віддає застосунок і API на :3000
 - 2026-10-09 · IDEA-005 · розширення логує запити й події (таблиця extension_events)
 - 2026-10-09 · IDEA-005 · рішення: Fastify + Postgres у Docker, записи назавжди; статус exploring

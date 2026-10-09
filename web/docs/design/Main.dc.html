@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Монітор слотів e-Consul</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=IBM+Plex+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#EEF2F7}
+a{color:#0057B8}a:hover{color:#003F86}
+button{font-family:Manrope,system-ui,sans-serif}
+</style>
+</helmet>
+<div style="box-sizing: border-box; background: #EEF2F7; font-family: Manrope, system-ui, sans-serif; color: #0B1B2B; display: flex; flex-wrap: wrap; align-items: stretch">
+
+  <!-- Side menu -->
+  <aside style="flex: 1 1 220px; max-width: 248px; min-width: 200px; box-sizing: border-box; background: #FFFFFF; border-right: 1px solid #E3E8EF; padding: 20px 12px; display: flex; flex-direction: column; gap: 24px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px">
+      <div style="width: 32px; height: 32px; border-radius: 8px; background: {{accent}}; display: flex; align-items: center; justify-content: center; flex: none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFD500" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg>
+      </div>
+      <div style="font-weight: 800; font-size: 16px">Монітор слотів</div>
+    </div>
+
+    <!-- Status: visible in every section -->
+    <section style="display: flex; flex-direction: column; gap: 8px; padding: 14px; background: #F4F7FB; border-radius: 10px">
+      <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13px"><span style="{{statusDot}}"></span>{{pillText}}</div>
+      <div style="font-size: 12px; color: #3E4C5B; white-space: nowrap">Наступна перевірка за <b style="font: 500 12px 'IBM Plex Mono', monospace; color: #0B1B2B">{{nextCheck}}</b></div>
+      <div style="font-size: 12px; color: #3E4C5B; white-space: nowrap">{{sessionText}}</div>
+      <div style="height: 4px; background: #E3E8EF; border-radius: 2px"><div style="{{sessionBar}}"></div></div>
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #3E4C5B; white-space: nowrap">
+        <sc-if value="{{extConnected}}" hint-placeholder-val="{{true}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1E7B34" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex: none" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+        <sc-if value="{{extMissing}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B42318" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex: none" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></sc-if>
+        {{extText}}
+      </div>
+      <div style="display: flex; gap: 6px; margin-top: 4px">
+        <button style="{{runBtnStyle}}">{{runBtnText}}</button>
+        <button style="flex: 1; height: 36px; border: 0; border-radius: 8px; background: {{accent}}; color: #FFFFFF; font-weight: 700; font-size: 13px; cursor: pointer">Перевірити</button>
+      </div>
+    </section>
+
+    <nav style="display: flex; flex-direction: column; gap: 2px">
+      <sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+        <button onClick="{{t.pick}}" style="{{t.style}}">
+          <sc-if value="{{t.isSlots}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg></sc-if>
+          <sc-if value="{{t.isMonitor}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"></path></svg></sc-if>
+          <sc-if value="{{t.isSettings}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"></path><circle cx="16" cy="6" r="2"></circle><circle cx="10" cy="12" r="2"></circle><circle cx="18" cy="18" r="2"></circle></svg></sc-if>
+          <span style="flex: 1; text-align: left">{{t.label}}</span>
+          <span style="{{t.badgeStyle}}">{{t.badge}}</span>
+        </button>
+      </sc-for>
+    </nav>
+  </aside>
+
+  <div style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 24px 24px 48px">
+<div style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px">
+
+  <!-- Section heading -->
+  <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px">
+    <h1 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.01em">{{pageTitle}}</h1>
+    <div style="font-size: 14px; color: #3E4C5B">{{place}}</div>
+  </div>
+
+  <!-- Global banners: above the tabs -->
+  <sc-if value="{{showSession}}" hint-placeholder-val="{{false}}">
+    <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #FDECEA; border: 1px solid #F3B8B2; border-radius: 10px">
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #B42318; flex: none"></span>
+      <div style="flex: 1; font-size: 14px"><b>Сесія на e-consul скінчилась.</b> Моніторинг зупинено і продовжиться сам, щойно ви увійдете.</div>
+      <a href="#" style="font-weight: 700; font-size: 14px">Увійти</a>
+    </div>
+  </sc-if>
+  <sc-if value="{{showNew}}" hint-placeholder-val="{{false}}">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px; background: #E3F4E8; border: 1px solid #A9D8B6; border-radius: 10px">
+      <span style="width: 10px; height: 10px; border-radius: 50%; background: #1E7B34; flex: none"></span>
+      <div style="flex: 1 1 420px; font-size: 14px"><b>Нові вільні слоти:</b> <span style="font: 500 14px 'IBM Plex Mono', monospace">ср 31.03 09:50, 11:40</span> · розширення вибирає слот у чернетці</div>
+      <a href="#" style="font-weight: 700; font-size: 14px">Відкрити чернетку</a>
+    </div>
+  </sc-if>
+
+  <!-- ============ TAB: Слоти ============ -->
+  <sc-if value="{{tabSlots}}" hint-placeholder-val="{{true}}">
+    <div style="display: flex; flex-direction: column; gap: 16px">
+
+      <sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+        <section style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 48px 24px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0057B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg>
+          <div style="font-size: 20px; font-weight: 800">Що шукаємо?</div>
+          <div style="max-width: 440px; font-size: 14px; color: #3E4C5B">Виберіть країну, установу й послугу — тоді тут зʼявиться календар вільних слотів і час наступного відкриття.</div>
+          <button onClick="{{goSettings}}" style="height: 44px; padding: 0 22px; border: 0; border-radius: 8px; background: {{accent}}; color: #FFFFFF; font-weight: 700; font-size: 14px; cursor: pointer">Налаштувати пошук</button>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{hasSearch}}" hint-placeholder-val="{{true}}">
+        <div style="display: flex; flex-direction: column; gap: 16px">
+
+          <!-- Next opening + nearest free -->
+          <div style="display: flex; flex-wrap: wrap; gap: 16px">
+            <section style="flex: 1 1 360px; background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+              <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Наступне відкриття</div>
+              <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px">
+                <div style="font-size: 20px; font-weight: 800">сб, 10.10 о 10:00</div>
+                <div style="font-size: 13px; color: #3E4C5B">09:00 за часом консульства (GMT−06:00)</div>
+              </div>
+              <div style="font-size: 14px; color: #3E4C5B">Відкриється <b style="color: #0B1B2B">пт, 02.04.2027</b> · 18 слотів по 10 хв</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+                <span style="font: 500 13px 'IBM Plex Mono', monospace; background: #F4F7FB; border-radius: 6px; padding: 6px 10px">через 17 год 12 хв</span>
+                <span style="font-size: 13px; font-weight: 700; color: #4B2FB0; background: #EFEAFD; border-radius: 999px; padding: 5px 10px">Часті перевірки 09:58–10:03</span>
+              </div>
+              <div style="font-size: 13px; color: #4A5868">Далі: вт, 13.10 → пн, 05.04 · ср, 14.10 → вт, 06.04</div>
+            </section>
+            <section style="flex: 1 1 360px; background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Найближчі вільні</div>
+                <div style="font-size: 12px; color: #4A5868">у діапазоні 15.03–01.04</div>
+              </div>
+              <sc-for list="{{nearest}}" as="n" hint-placeholder-count="4">
+                <div style="display: flex; align-items: center; gap: 12px; font-size: 14px">
+                  <span style="width: 86px; flex: none; font-weight: 700">{{n.date}}</span>
+                  <span style="font: 500 13px 'IBM Plex Mono', monospace; color: #0057B8">{{n.times}}</span>
+                </div>
+              </sc-for>
+              <div style="display: flex; gap: 8px; margin-top: 4px">
+                <button style="height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: {{accent}}; color: #FFFFFF; font-weight: 700; font-size: 13px; cursor: pointer">Відкрити чернетку</button>
+              </div>
+            </section>
+          </div>
+
+          <!-- Calendar + day panel -->
+          <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+            <section style="flex: 999 1 560px; min-width: 0; background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+              <div style="display: flex; align-items: center; gap: 10px">
+                <button onClick="{{prevMonth}}" aria-label="Попередній місяць" style="width: 36px; height: 36px; border: 1px solid #C5CFDB; border-radius: 8px; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0B1B2B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></button>
+                <div style="flex: 1; font-size: 18px; font-weight: 800">{{monthTitle}}</div>
+                <button onClick="{{nextMonth}}" aria-label="Наступний місяць" style="width: 36px; height: 36px; border: 1px solid #C5CFDB; border-radius: 8px; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0B1B2B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></button>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; font-size: 12px; font-weight: 700; color: #4A5868; text-transform: uppercase; letter-spacing: .04em">
+                <div>пн</div><div>вт</div><div>ср</div><div>чт</div><div>пт</div><div>сб</div><div>нд</div>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px">
+                <sc-for list="{{cells}}" as="c" hint-placeholder-count="35">
+                  <sc-if value="{{c.isBlank}}" hint-placeholder-val="{{false}}"><div style="min-height: 74px"></div></sc-if>
+                  <sc-if value="{{c.isOpen}}" hint-placeholder-val="{{true}}">
+                    <button onClick="{{c.pick}}" style="{{c.style}}">
+                      <span style="display: flex; justify-content: space-between; align-items: center; width: 100%">
+                        <span style="font-weight: 700; font-size: 13px">{{c.num}}</span>
+                        <span style="font-size: 10px; font-weight: 700; color: #0057B8">{{c.tag}}</span>
+                      </span>
+                      <span style="{{c.badgeStyle}}">{{c.badge}}</span>
+                      <span style="display: flex; width: 100%; height: 4px; border-radius: 2px; background: #EEF2F7; overflow: hidden">
+                        <span style="{{c.barReserved}}"></span>
+                        <span style="{{c.barOff}}"></span>
+                      </span>
+                    </button>
+                  </sc-if>
+                  <sc-if value="{{c.isClosed}}" hint-placeholder-val="{{false}}">
+                    <div style="min-height: 74px; border-radius: 8px; padding: 8px; box-sizing: border-box; color: #9AA6B2; font-size: 13px; font-weight: 600">{{c.num}}</div>
+                  </sc-if>
+                  <sc-if value="{{c.isFuture}}" hint-placeholder-val="{{false}}">
+                    <div style="{{c.style}}">
+                      <span style="font-weight: 700; font-size: 13px; color: #6B7785">{{c.num}}</span>
+                      <span style="font-size: 11px; color: #4A5868; line-height: 1.3">{{c.note}}</span>
+                    </div>
+                  </sc-if>
+                </sc-for>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; color: #3E4C5B; padding-top: 4px; border-top: 1px solid #E3E8EF">
+                <span style="display: flex; align-items: center; gap: 6px"><span style="min-width: 20px; height: 18px; border-radius: 9px; background: #0057B8; color: #FFFFFF; font: 500 11px 'IBM Plex Mono', monospace; display: inline-flex; align-items: center; justify-content: center">4</span>вільні</span>
+                <span style="display: flex; align-items: center; gap: 6px"><span style="width: 20px; height: 4px; border-radius: 2px; background: #7D8A99"></span>зайняті</span>
+                <span style="display: flex; align-items: center; gap: 6px"><span style="width: 20px; height: 4px; border-radius: 2px; background: #C9D1DB"></span>неробочі</span>
+                <span style="display: flex; align-items: center; gap: 6px"><span style="width: 16px; height: 12px; border-radius: 3px; border: 1px dashed #8C99A8; background: repeating-linear-gradient(135deg,#F4F7FB 0 4px,#E6EBF1 4px 8px)"></span>ще не відкрито (за горизонтом)</span>
+                <span style="display: flex; align-items: center; gap: 6px"><span style="width: 16px; height: 12px; border-radius: 3px; background: #FFFFFF; border: 1px solid #E3E8EF; opacity: .45"></span>поза діапазоном дат</span>
+              </div>
+              <div style="font-size: 13px; color: #3E4C5B">Вільних у діапазоні: <b style="color: #0B1B2B">18</b> · поза діапазоном: 1 · зайнятих: 1 828 · неробочих проміжків: 300 · відкриті дні 10.10.2026–01.04.2027</div>
+            </section>
+
+            <!-- Day panel -->
+            <section style="flex: 1 1 340px; min-width: 0; background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+              <div>
+                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">День</div>
+                <div style="font-size: 18px; font-weight: 800; margin-top: 4px">{{dayTitle}}</div>
+                <div style="font-size: 13px; color: #3E4C5B; margin-top: 2px">Прийом 09:00–12:00 · {{daySummary}}</div>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px">
+                <sc-for list="{{dayTiles}}" as="s" hint-placeholder-count="18">
+                  <div style="{{s.style}}" title="{{s.hint}}">{{s.time}}</div>
+                </sc-for>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: #3E4C5B">
+                <span>синя рамка — вільний</span><span>сірий закреслений — зайнятий</span><span>пунктир — неробочий</span>
+              </div>
+              <sc-if value="{{dayHasOff}}" hint-placeholder-val="{{true}}">
+                <div style="font-size: 13px; color: #3E4C5B; background: #F4F7FB; border-radius: 8px; padding: 10px 12px"><b style="color: #0B1B2B">Неробочий час:</b> <span style="font: 500 13px 'IBM Plex Mono', monospace">{{dayOff}}</span></div>
+              </sc-if>
+              <div style="display: flex; flex-direction: column; gap: 8px">
+                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Нещодавні резервування</div>
+                <sc-if value="{{dayHasRecent}}" hint-placeholder-val="{{true}}">
+                  <sc-for list="{{dayRecent}}" as="r" hint-placeholder-count="2">
+                    <div style="display: flex; gap: 10px; font-size: 13px">
+                      <span style="font: 500 13px 'IBM Plex Mono', monospace; flex: none">{{r.time}}</span>
+                      <span style="color: #3E4C5B">{{r.when}}</span>
+                    </div>
+                  </sc-for>
+                </sc-if>
+                <sc-if value="{{dayNoRecent}}" hint-placeholder-val="{{false}}">
+                  <div style="font-size: 13px; color: #4A5868">За час моніторингу змін не було.</div>
+                </sc-if>
+              </div>
+              <button style="height: 44px; border: 0; border-radius: 8px; background: {{accent}}; color: #FFFFFF; font-weight: 700; font-size: 14px; cursor: pointer">Відкрити чернетку</button>
+              <div style="font-size: 12px; color: #4A5868; margin-top: -6px">Чернетка: створено о 08:45 · видалиться завтра о 08:45</div>
+            </section>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- ============ TAB: Моніторинг ============ -->
+  <sc-if value="{{tabMonitor}}" hint-placeholder-val="{{false}}">
+   <div style="display: flex; flex-direction: column; gap: 16px">
+    <!-- Today at a glance -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px">
+      <sc-for list="{{stats}}" as="s" hint-placeholder-count="4">
+        <section style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">{{s.label}}</div>
+          <div style="{{s.valueStyle}}">{{s.value}}</div>
+          <div style="font-size: 12px; color: #4A5868">{{s.note}}</div>
+        </section>
+      </sc-for>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+      <section style="flex: 999 1 560px; min-width: 0; background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Журнал перевірок</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <sc-for list="{{filters}}" as="f" hint-placeholder-count="4">
+              <button onClick="{{f.pick}}" style="{{f.style}}">{{f.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+        <sc-for list="{{logShown}}" as="l" hint-placeholder-count="7">
+          <div style="{{l.rowStyle}}">
+            <span style="font: 500 12px 'IBM Plex Mono', monospace; color: #4A5868; width: 64px; flex: none; padding-top: 2px">{{l.t}}</span>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-size: 14px"><b>{{l.title}}</b> <span style="{{l.tagStyle}}">{{l.tag}}</span></div>
+              <div style="font-size: 13px; color: #3E4C5B">{{l.result}}</div>
+              <sc-if value="{{l.hasNew}}" hint-placeholder-val="{{false}}">
+                <div style="font: 500 12px 'IBM Plex Mono', monospace; color: #1E6B34; margin-top: 2px">{{l.newLine}}</div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </section>
+
+      <div style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+        <section style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Журнал резервувань</div>
+          <div style="font-size: 12px; color: #4A5868; margin-top: -4px">Зміни зайнятих слотів між двома перевірками</div>
+          <sc-for list="{{reservations}}" as="r" hint-placeholder-count="5">
+            <div style="display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid #EEF2F7">
+              <span style="font: 500 12px 'IBM Plex Mono', monospace; color: #4A5868; width: 44px; flex: none; padding-top: 2px">{{r.t}}</span>
+              <div style="flex: 1; min-width: 0">
+                <div style="font-size: 14px"><span style="{{r.typeStyle}}">{{r.type}}</span> <b style="font: 500 13px 'IBM Plex Mono', monospace">{{r.slot}}</b></div>
+                <div style="font-size: 12px; color: #4A5868">{{r.detail}}</div>
+              </div>
+            </div>
+          </sc-for>
+        </section>
+        <section style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+            <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Зміни розкладу</div>
+            <a href="#" style="font-size: 13px; font-weight: 700">Завантажити JSONL</a>
+          </div>
+          <sc-for list="{{schedule}}" as="s" hint-placeholder-count="2">
+            <div style="display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid #EEF2F7; font-size: 13px">
+              <span style="font: 500 12px 'IBM Plex Mono', monospace; color: #4A5868; width: 92px; flex: none; padding-top: 1px">{{s.t}}</span>
+              <span style="color: #3E4C5B">{{s.text}}</span>
+            </div>
+          </sc-for>
+        </section>
+      </div>
+    </div>
+   </div>
+  </sc-if>
+
+  <!-- ============ TAB: Налаштування ============ -->
+  <sc-if value="{{tabSettings}}" hint-placeholder-val="{{false}}">
+    <div style="display: flex; flex-direction: column; gap: 16px">
+      <div style="font-size: 13px; color: #4A5868">Зміни зберігаються одразу. Моніторинг підхоплює їх з наступної перевірки.</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+
+        <section style="flex: 1 1 520px; min-width: 0; background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Що шукаємо</div>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Країна
+            <select style="height: 40px; border: 1px solid #C5CFDB; border-radius: 8px; padding: 0 10px; font: 500 14px Manrope, sans-serif; color: #0B1B2B; background: #FFFFFF"><option>США</option><option>Канада</option><option>Польща</option></select>
+          </label>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Консульська установа
+            <select style="height: 40px; border: 1px solid #C5CFDB; border-radius: 8px; padding: 0 10px; font: 500 14px Manrope, sans-serif; color: #0B1B2B; background: #FFFFFF"><option>Генеральне консульство України в Чикаго</option><option>Генеральне консульство України в Нью-Йорку</option></select>
+          </label>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Послуга
+            <select style="height: 40px; border: 1px solid #C5CFDB; border-radius: 8px; padding: 0 10px; font: 500 14px Manrope, sans-serif; color: #0B1B2B; background: #FFFFFF"><option>Оформлення закордонного паспорта (10 хв)</option><option>Оформлення посвідчення на повернення в Україну</option></select>
+          </label>
+          <div style="font: 500 12px 'IBM Plex Mono', monospace; color: #3E4C5B; background: #F4F7FB; border-radius: 8px; padding: 8px 10px">код 1000000522 · GMT−06:00 · слот 10 хв · горизонт 25 тижнів · свята: 25.12</div>
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px">
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Дати слотів: не раніше
+              <input type="date" value="2027-03-15" style="height: 40px; box-sizing: border-box; border: 1px solid #C5CFDB; border-radius: 8px; padding: 0 10px; font: 500 14px 'IBM Plex Mono', monospace">
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">не пізніше
+              <input type="date" value="2027-04-01" style="height: 40px; box-sizing: border-box; border: 1px solid #C5CFDB; border-radius: 8px; padding: 0 10px; font: 500 14px 'IBM Plex Mono', monospace">
+            </label>
+            <button style="height: 40px; padding: 0 14px; border: 1px solid #C5CFDB; border-radius: 8px; background: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer">Очистити</button>
+          </div>
+          <div style="font-size: 12px; color: #4A5868">Діапазон фільтрує сповіщення, «нові» в журналі й слоти для розширення. Календар показує всі.</div>
+        </section>
+
+        <div style="flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+          <section style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+            <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Сесія</div>
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700"><span style="{{sessionDot}}"></span>{{sessionLong}}</div>
+            <div style="height: 6px; background: #E3E8EF; border-radius: 3px"><div style="{{sessionBar}}"></div></div>
+            <div style="font-size: 13px; color: #3E4C5B">Токен приходить з розширення. <a href="#">Ввести вручну</a></div>
+          </section>
+          <section style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+            <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Перевірки</div>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px">
+              <label for="int-min">Кожні</label>
+              <input id="int-min" value="60" style="width: 64px; height: 36px; box-sizing: border-box; border: 1px solid #C5CFDB; border-radius: 8px; text-align: center; font: 500 14px 'IBM Plex Mono', monospace">
+              <label for="int-max">–</label>
+              <input id="int-max" value="180" style="width: 64px; height: 36px; box-sizing: border-box; border: 1px solid #C5CFDB; border-radius: 8px; text-align: center; font: 500 14px 'IBM Plex Mono', monospace">
+              <span>с, випадково · розклад раз на 30 хв</span>
+            </div>
+            <label style="display: flex; gap: 10px; align-items: flex-start; font-size: 14px"><input type="checkbox" checked="checked" style="width: 18px; height: 18px; margin: 1px 0 0; accent-color: #0057B8">Часті перевірки навколо відкриття нового дня: кожні 15–20 с, від 2 хв до до 3 хв після</label>
+          </section>
+        </div>
+
+        <section style="flex: 1 1 520px; min-width: 0; background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Бронювання</div>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Чернетка заявки
+            <input type="url" value="https://e-consul.gov.ua/tasks/…/dateAndTimeVisitInfo" style="height: 40px; box-sizing: border-box; border: 1px solid #C5CFDB; border-radius: 8px; padding: 0 10px; font: 500 13px 'IBM Plex Mono', monospace; color: #0B1B2B">
+          </label>
+          <div style="font-size: 12px; color: #4A5868">Підхоплено розширенням · створено о 08:45 · видалиться завтра о 08:45. Порожнє поле — нова заявка.</div>
+          <label style="display: flex; gap: 10px; align-items: flex-start; font-size: 14px"><input type="checkbox" style="width: 18px; height: 18px; margin: 1px 0 0; accent-color: #0057B8"><span><b>Бронювати автоматично.</b> Розширення вибирає новий слот у чернетці й саме натискає «Підтвердити». Вимкнено — слот вибирається, «Підтвердити» натискаєте ви.</span></label>
+        </section>
+
+        <section style="flex: 1 1 380px; min-width: 0; background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 2px rgba(11,27,43,.08); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Сповіщення</div>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px">
+            <div style="display: flex; align-items: center; gap: 8px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #1E7B34; flex: none"></span>Сповіщення браузера дозволено</div>
+            <div style="display: flex; align-items: center; gap: 8px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #1E7B34; flex: none"></span>Звук увімкнено на цій вкладці</div>
+            <label style="display: flex; gap: 10px; align-items: flex-start"><input type="checkbox" checked="checked" style="width: 18px; height: 18px; margin: 1px 0 0; accent-color: #0057B8">Позначати заголовок вкладки кольоровою міткою: нові слоти, сесія скінчилась</label>
+          </div>
+          <div style="font-size: 12px; font-weight: 700; color: #4A5868; margin-top: 4px">Перевірити</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px">
+            <sc-for list="{{tests}}" as="b" hint-placeholder-count="5">
+              <button style="height: 40px; padding: 0 12px; border: 1px solid #C5CFDB; border-radius: 8px; background: #FFFFFF; color: #0B1B2B; font-weight: 600; font-size: 13px; cursor: pointer">{{b}}</button>
+            </sc-for>
+          </div>
+          <div style="font-size: 12px; color: #4A5868">Тестові слоти розширення ніколи не бронює.</div>
+        </section>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#0057B8","options":["#0057B8","#1F4E9C","#0B6E6E"]},"scenario":{"editor":"enum","default":"Звичайний","options":["Звичайний","Сесія скінчилась","Нові слоти","Установу не вибрано"]},"section":{"editor":"enum","default":"Слоти","options":["Слоти","Моніторинг","Налаштування"]},"extension":{"editor":"boolean","default":true},"$preview":{"width":1280,"height":1560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const accent = this.props.accent ?? '#0057B8';
+    const scenario = this.props.scenario ?? 'Звичайний';
+    const sectionIds = { 'Слоти': 'slots', 'Моніторинг': 'monitor', 'Налаштування': 'settings' };
+    const tab = st.tab ?? sectionIds[this.props.section] ?? 'slots';
+    const logFilter = st.logFilter ?? 'all';
+    const month = st.month ?? 'mar';
+    const day = st.day ?? '2027-03-31';
+    const pad = (n) => String(n).padStart(2, '0');
+    const session = scenario === 'Сесія скінчилась';
+    const empty = scenario === 'Установу не вибрано';
+
+    // Status bar
+    const pill = (bg, fg) => 'font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; background: ' + bg + '; color: ' + fg;
+    const pillStyle = session ? pill('#B42318', '#FFFFFF') : empty ? pill('#E3E8EF', '#3E4C5B') : pill('#E3F4E8', '#1E6B34');
+    const pillText = session ? 'Зупинено: сесія скінчилась' : empty ? 'Не налаштовано' : 'Моніторинг працює';
+    const dot = (c) => 'width: 8px; height: 8px; border-radius: 50%; flex: none; background: ' + c;
+    const running = !session && !empty;
+    const runBtnStyle = 'flex: 1; height: 36px; padding: 0 10px; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; ' +
+      (running ? 'border: 1px solid #C5CFDB; background: #FFFFFF; color: #0B1B2B' : 'border: 1px solid #1E7B34; background: #FFFFFF; color: #1E6B34');
+    const statusDot = dot(session ? '#B42318' : empty ? '#8C99A8' : '#1E7B34');
+
+    // Tabs
+    const tabDefs = [['slots', 'Слоти'], ['monitor', 'Моніторинг'], ['settings', 'Налаштування']];
+    const badges = {
+      monitor: empty ? '' : session ? 'зупинено' : '2 нові',
+      settings: empty ? 'налаштуйте' : ''
+    };
+    const badgeColors = { 'зупинено': ['#FDECEA', '#B42318'], '2 нові': ['#E3F4E8', '#1E6B34'], 'налаштуйте': ['#FFF4D6', '#7A5200'] };
+    const tabs = tabDefs.map(([id, label]) => {
+      const badge = badges[id] || '';
+      const bc = badgeColors[badge];
+      return {
+        label, badge,
+        isSlots: id === 'slots', isMonitor: id === 'monitor', isSettings: id === 'settings',
+        badgeStyle: bc ? 'font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: ' + bc[0] + '; color: ' + bc[1] : 'display: none',
+        pick: () => this.setState({ tab: id }),
+        style: 'height: 44px; width: 100%; padding: 0 12px; border: 0; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 10px; ' +
+          (tab === id ? 'font-weight: 800; color: ' + accent + '; background: #E8F0FA' : 'font-weight: 600; color: #3E4C5B; background: transparent')
+      };
+    });
+    const pageTitle = (tabDefs.find(([id]) => id === tab) || tabDefs[0])[1];
+
+    // Calendar data (Chicago, 09.10.2026; 25-week horizon: last open day 01.04.2027)
+    const SLOTS = 18;
+    const free = { '2027-03-03': 1, '2027-03-17': 2, '2027-03-30': 3, '2027-03-31': 4, '2027-04-01': 9 };
+    const off = { '2027-03-05': 2, '2027-03-12': 18, '2027-03-22': 6, '2027-03-31': 2 };
+    const rangeFrom = '2027-03-15', rangeTo = '2027-04-01', horizon = '2027-04-01';
+    const months = {
+      mar: { y: 2027, m: 3, title: 'Березень 2027', days: 31, start: 0, gen: 'березня' },
+      apr: { y: 2027, m: 4, title: 'Квітень 2027', days: 30, start: 3, gen: 'квітня' }
+    };
+    const dows = ['понеділок', 'вівторок', 'середа', 'четвер', 'пʼятниця', 'субота', 'неділя'];
+    const shortDows = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'нд'];
+    const mo = months[month];
+    const keyOf = (mm, d) => mo.y + '-' + pad(mm) + '-' + pad(d);
+    const order = [5, 8, 13, 16, 3, 10, 1, 14, 7, 11, 0, 4, 9, 12, 2, 6, 15, 17];
+    const timeOf = (i) => pad(9 + Math.floor(i / 6)) + ':' + pad((i % 6) * 10);
+    const layout = (key) => {
+      const f = free[key] || 0, nw = off[key] || 0;
+      const freeSet = new Set(order.slice(0, f));
+      const offSet = new Set();
+      for (let i = SLOTS - 1; i >= 0 && offSet.size < nw; i--) if (!freeSet.has(i)) offSet.add(i);
+      return { f, nw, r: SLOTS - f - nw, freeSet, offSet };
+    };
+
+    const cells = [];
+    for (let i = 0; i < mo.start; i++) cells.push({ isBlank: true });
+    for (let d = 1; d <= mo.days; d++) {
+      const key = keyOf(mo.m, d);
+      const dow = (mo.start + d - 1) % 7;
+      const weekend = dow >= 5;
+      const future = key > horizon;
+      const base = { num: String(d), isBlank: false, isOpen: false, isClosed: false, isFuture: false };
+      if (weekend) { cells.push({ ...base, isClosed: true }); continue; }
+      if (future) {
+        cells.push({ ...base, isFuture: true,
+          note: key === '2027-04-02' ? 'відкриється сб, 10.10 о 10:00' : 'ще не відкрито',
+          style: 'min-height: 74px; border-radius: 8px; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; border: 1px dashed #A9B4C1; background: repeating-linear-gradient(135deg,#F4F7FB 0 6px,#E9EEF4 6px 12px)' });
+        continue;
+      }
+      const L = layout(key);
+      const outRange = key < rangeFrom || key > rangeTo;
+      const selected = key === day;
+      cells.push({ ...base, isOpen: true,
+        tag: key === horizon ? 'межа' : '',
+        badge: L.f > 0 ? String(L.f) : 'немає',
+        badgeStyle: L.f > 0
+          ? 'align-self: flex-start; min-width: 26px; height: 22px; padding: 0 7px; box-sizing: border-box; border-radius: 11px; background: ' + accent + '; color: #FFFFFF; font: 500 12px \'IBM Plex Mono\', monospace; display: inline-flex; align-items: center; justify-content: center'
+          : 'align-self: flex-start; font-size: 11px; color: #8C99A8',
+        barReserved: 'height: 4px; background: #7D8A99; width: ' + Math.round(L.r / SLOTS * 100) + '%',
+        barOff: 'height: 4px; background: #C9D1DB; width: ' + Math.round(L.nw / SLOTS * 100) + '%',
+        pick: () => this.setState({ day: key }),
+        style: 'min-height: 74px; width: 100%; border-radius: 8px; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 6px; cursor: pointer; text-align: left; color: #0B1B2B; background: #FFFFFF; ' +
+          (selected ? 'border: 2px solid ' + accent + '; box-shadow: 0 0 0 3px rgba(0,87,184,.12); ' : 'border: 1px solid #E3E8EF; ') +
+          (key === horizon && !selected ? 'border-right: 2px dashed ' + accent + '; ' : '') +
+          (outRange ? 'opacity: .45' : '')
+      });
+    }
+    while (cells.length % 7) cells.push({ isBlank: true });
+
+    // Day panel
+    const [dy, dm, dd] = day.split('-').map(Number);
+    const dayMonth = dm === 3 ? months.mar : months.apr;
+    const dayDow = (dayMonth.start + dd - 1) % 7;
+    const L = layout(day);
+    const tile = 'height: 32px; border-radius: 6px; font: 500 12px \'IBM Plex Mono\', monospace; display: flex; align-items: center; justify-content: center; box-sizing: border-box; ';
+    const dayTiles = [];
+    for (let i = 0; i < SLOTS; i++) {
+      const t = timeOf(i);
+      if (L.freeSet.has(i)) dayTiles.push({ time: t, hint: 'вільний', style: tile + 'border: 1px solid ' + accent + '; color: ' + accent });
+      else if (L.offSet.has(i)) dayTiles.push({ time: t, hint: 'неробочий', style: tile + 'border: 1px dashed #A9B4C1; color: #9AA6B2; background: #F4F7FB' });
+      else dayTiles.push({ time: t, hint: 'зайнятий', style: tile + 'background: #E3E8EF; color: #6B7785; text-decoration: line-through' });
+    }
+    const offIdx = [...L.offSet].sort((a, b) => a - b);
+    const dayOff = offIdx.length ? timeOf(offIdx[0]) + '–' + timeOf(offIdx[offIdx.length - 1] + 1).replace('12:00', '12:00') : '';
+    const recent = day === '2027-03-31'
+      ? [{ time: '09:30', when: 'зарезервовано сьогодні між 10:41 і 10:43' }, { time: '11:40', when: 'звільнено сьогодні між 10:41 і 10:43 — скасування' }, { time: '10:40', when: 'зарезервовано вчора між 18:03 і 18:05' }]
+      : day === '2027-03-17' ? [{ time: '10:00', when: 'зарезервовано сьогодні між 08:12 і 08:14' }] : [];
+
+    // Nearest free, in range
+    const nearest = Object.keys(free).filter((k) => k >= rangeFrom && k <= rangeTo).sort().map((k) => {
+      const [, km, kd] = k.split('-').map(Number);
+      const kmo = km === 3 ? months.mar : months.apr;
+      const lk = layout(k);
+      return { date: shortDows[(kmo.start + kd - 1) % 7] + ', ' + pad(kd) + '.' + pad(km), times: [...lk.freeSet].sort((a, b) => a - b).map(timeOf).join('  ') };
+    });
+
+    // Monitoring tab
+    const tagStyle = (bg, fg) => 'font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: ' + bg + '; color: ' + fg;
+    const row = 'display: flex; gap: 12px; padding: 10px 8px; border-top: 1px solid #EEF2F7; border-radius: 6px; ';
+    const log = [
+      { t: '10:41:52', title: 'Перевірка #128', tag: 'часта', tagStyle: tagStyle('#EFEAFD', '#4B2FB0'), result: '18 вільних · 696 поза діапазоном дат', hasNew: false, rowStyle: row },
+      { t: '10:41:33', title: 'Перевірка #127', tag: 'часта', tagStyle: tagStyle('#EFEAFD', '#4B2FB0'), result: '18 вільних · 2 нові', hasNew: true, newLine: 'нові: 31.03.2027: 09:50, 11:40', rowStyle: row + 'background: #F1FAF3' },
+      { t: '10:41:40', title: 'Розширення вибрало слот', tag: '', tagStyle: '', result: 'ср, 31.03.2027 о 09:50 у чернетці — натисніть «Підтвердити»', hasNew: false, rowStyle: row },
+      { t: '10:39:10', title: 'Перевірка #126', tag: '', tagStyle: '', result: '16 вільних', hasNew: false, rowStyle: row },
+      { t: '10:36:02', title: 'Перевірка #125', tag: 'помилка', tagStyle: tagStyle('#FDECEA', '#B42318'), result: 'Мережа недоступна — моніторинг триває', hasNew: false, rowStyle: row },
+      { t: '10:33:47', title: 'Перевірка #124', tag: 'вручну', tagStyle: tagStyle('#F4F7FB', '#3E4C5B'), result: '16 вільних · розклад оновлено', hasNew: false, rowStyle: row },
+      { t: '10:30:12', title: 'Перевірка #123', tag: '', tagStyle: '', result: '16 вільних', hasNew: false, rowStyle: row }
+    ];
+    const kinds = ['fast', 'new', 'info', 'plain', 'error', 'manual', 'plain'];
+    log.forEach((l, i) => { l.kind = kinds[i]; });
+    const filterDefs = [['all', 'Усі'], ['new', 'Нові слоти'], ['error', 'Помилки'], ['fast', 'Часті']];
+    const filters = filterDefs.map(([id, label]) => ({
+      label,
+      pick: () => this.setState({ logFilter: id }),
+      style: 'height: 30px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 700; cursor: pointer; ' +
+        (logFilter === id ? 'border: 1px solid ' + accent + '; background: #E8F0FA; color: ' + accent : 'border: 1px solid #C5CFDB; background: #FFFFFF; color: #3E4C5B')
+    }));
+    const logShown = logFilter === 'all' ? log
+      : logFilter === 'fast' ? log.filter((l) => l.tag === 'часта')
+      : log.filter((l) => l.kind === logFilter);
+    const big = (color) => 'font-size: 26px; font-weight: 800; color: ' + color;
+    const stats = [
+      { label: 'Перевірок сьогодні', value: '128', note: '14 частих · 1 помилка', valueStyle: big('#0B1B2B') },
+      { label: 'Нових вільних', value: '6', note: 'останні о 10:41', valueStyle: big('#1E7B34') },
+      { label: 'Резервувань', value: '23', note: '9 — новий день за 38 с', valueStyle: big('#0B1B2B') },
+      { label: 'Скасувань', value: '2', note: 'звільнені слоти', valueStyle: big(accent) }
+    ];
+    const rt = (kind) => kind === 'зарезервовано' ? tagStyle('#E3E8EF', '#3E4C5B') : tagStyle('#E3F4E8', '#1E6B34');
+    const reservations = [
+      { t: '10:43', type: 'зарезервовано', typeStyle: rt('зарезервовано'), slot: '31.03 09:30', detail: 'між 10:41 і 10:43 · консул 556940f3' },
+      { t: '10:43', type: 'звільнено', typeStyle: rt('звільнено'), slot: '31.03 11:40', detail: 'скасування → новий вільний слот' },
+      { t: '10:01', type: 'зарезервовано', typeStyle: rt('зарезервовано'), slot: '01.04 · 9 слотів', detail: 'новий день розібрали між 10:00:20 і 10:00:38' },
+      { t: '08:14', type: 'зарезервовано', typeStyle: rt('зарезервовано'), slot: '17.03 10:00', detail: 'між 08:12 і 08:14' },
+      { t: 'вчора', type: 'зарезервовано', typeStyle: rt('зарезервовано'), slot: '31.03 10:40', detail: 'між 18:03 і 18:05' }
+    ];
+    const schedule = [
+      { t: 'вчора 15:49', text: 'консул 76e01698: +1 неробочий проміжок 16.10.2026 09:00–10:00' },
+      { t: '08.10 15:19', text: 'Базовий знімок розкладу' }
+    ];
+    const tests = ['Сигнал нових слотів', 'Сигнал «сесія скінчилась»', 'Сигнал «слот вибрано» (розширення)', 'Вимкнути звук розширення', 'Тестові слоти в розширення'];
+
+    return {
+      accent,
+      place: empty ? 'Установу не вибрано' : 'Чикаго · Закордонний паспорт',
+      pillStyle, pillText, statusDot,
+      extConnected: this.props.extension ?? true,
+      extMissing: !(this.props.extension ?? true),
+      extText: (this.props.extension ?? true) ? 'Розширення підключено' : 'Розширення не підключено',
+      nextCheck: running ? '0:42' : '—',
+      sessionDot: dot(session ? '#B42318' : '#1E7B34'),
+      sessionText: session ? 'Сесія скінчилась' : 'Сесія до 08:41 завтра',
+      sessionLong: session ? 'Сесія на e-consul скінчилась' : 'Ви увійшли на e-consul · токен ще 21 год 14 хв',
+      sessionBar: 'height: 6px; border-radius: 3px; background: ' + accent + '; width: ' + (session ? '0%' : '88%'),
+      runBtnStyle, runBtnText: running ? 'Зупинити' : 'Запустити',
+      showSession: session, showNew: scenario === 'Нові слоти',
+      tabs, pageTitle, tabSlots: tab === 'slots', tabMonitor: tab === 'monitor', tabSettings: tab === 'settings',
+      goSettings: () => this.setState({ tab: 'settings' }),
+      isEmpty: empty, hasSearch: !empty,
+      monthTitle: mo.title,
+      prevMonth: () => this.setState({ month: 'mar' }),
+      nextMonth: () => this.setState({ month: 'apr' }),
+      cells,
+      dayTitle: dows[dayDow] + ', ' + dd + ' ' + dayMonth.gen + ' ' + dy,
+      daySummary: L.f + ' вільних · ' + L.r + ' зайнятих' + (L.nw ? ' · ' + L.nw + ' неробочих' : ''),
+      dayTiles, dayOff, dayHasOff: L.nw > 0,
+      dayRecent: recent, dayHasRecent: recent.length > 0, dayNoRecent: recent.length === 0,
+      nearest, log, logShown, filters, stats, reservations, schedule, tests
+    };
+  }
+}
+</script>
+</body>
+</html>
