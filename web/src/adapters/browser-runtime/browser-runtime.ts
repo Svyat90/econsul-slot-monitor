@@ -1,5 +1,5 @@
 // Clock, Random and Scheduler over the browser's Date, Math.random and timers.
-import type { Clock, Random, Scheduler, TimerHandle } from '@/application/ports.ts';
+import type { Clock, Ids, Random, Scheduler, TimerHandle } from '@/application/ports.ts';
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 
@@ -15,6 +15,10 @@ export const browserClock: Clock = {
 
 export const browserRandom: Random = {
     next: () => Math.random(),
+};
+
+export const browserIds: Ids = {
+    uuid: () => crypto.randomUUID(),
 };
 
 export const browserScheduler: Scheduler = {

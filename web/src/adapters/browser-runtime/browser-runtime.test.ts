@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { browserClock, browserScheduler } from './browser-runtime.ts';
+import { browserClock, browserIds, browserScheduler } from './browser-runtime.ts';
 
 afterEach(() => vi.useRealTimers());
 
@@ -8,6 +8,12 @@ describe('browser runtime', () => {
         const ms = new Date(2026, 2, 5, 23, 30).getTime();
         expect(browserClock.localDateKey(ms)).toBe('2026-03-05');
         expect(browserClock.browserOffsetMinutes(ms)).toBe(-new Date(ms).getTimezoneOffset());
+    });
+
+    it('ids are v4 UUIDs, different each time', () => {
+        const a = browserIds.uuid();
+        expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+        expect(browserIds.uuid()).not.toBe(a);
     });
 
     it('scheduler fires and clears timeouts and intervals', () => {
