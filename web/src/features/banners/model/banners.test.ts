@@ -23,6 +23,11 @@ describe('sessionBanner', () => {
 });
 
 describe('formatFreshSlots', () => {
+    it('shows at most four days and counts the rest', () => {
+        const keys = ['2027-03-29 09:00', '2027-03-30 09:00', '2027-03-31 09:00', '2027-04-01 09:00', '2027-04-02 09:00', '2027-04-05 09:00'];
+        expect(formatFreshSlots(keys)).toBe('пн 29.03 09:00 · вт 30.03 09:00 · ср 31.03 09:00 · чт 01.04 09:00 · …і ще 2 дн.');
+    });
+
     it('groups times by day with the weekday', () => {
         expect(formatFreshSlots(['2027-03-31 11:40', '2027-03-31 09:50', '2027-04-01 10:00'])).toBe('ср 31.03 09:50, 11:40 · чт 01.04 10:00');
     });

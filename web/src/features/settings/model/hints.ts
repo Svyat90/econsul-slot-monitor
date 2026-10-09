@@ -27,7 +27,7 @@ export function dateRangeHint(range: DateRange, freeKeys: readonly SlotKey[]): H
 export function draftHint(url: string, draft: Draft | null, nowMs: number): Hint {
     const typed = url.trim();
     const at = (ms: number) => new Date(ms).toLocaleString('uk-UA');
-    if (!typed) return { tone: 'normal', text: 'Без чернетки «Забронювати на e-consul» відкриває нову заявку.' };
+    if (!typed) return { tone: 'normal', text: 'Без чернетки «Відкрити чернетку» відкриває нову заявку.' };
     if (!DRAFT_URL_RE.test(typed)) {
         return {
             tone: 'error',
@@ -49,7 +49,7 @@ export function draftHint(url: string, draft: Draft | null, nowMs: number): Hint
     }
     return {
         tone: 'normal',
-        text: 'Чернетку буде відкрито кнопкою «Забронювати на e-consul»' + (same ? ` (збережено ${at(same.savedAt)}; чернетки живуть ~24 год)` : '') + '.',
+        text: 'Чернетку буде відкрито кнопкою «Відкрити чернетку»' + (same ? ` (збережено ${at(same.savedAt)}; чернетки живуть ~24 год)` : '') + '.',
     };
 }
 

@@ -23,6 +23,9 @@ export function sessionBanner(
 const WEEKDAYS = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 
 // ['2027-03-31 09:50', '2027-03-31 11:40'] -> 'ср 31.03 09:50, 11:40'; days separated by ' · '
+// At most MAX_DAYS days, like the notification of slots.html alertSlots(): "…and N more day(s)"
+const MAX_DAYS = 4;
+
 export function formatFreshSlots(keys: readonly string[]): string {
     const days = new Map<string, string[]>();
     for (const key of [...keys].sort()) {
@@ -30,13 +33,15 @@ export function formatFreshSlots(keys: readonly string[]): string {
         if (!date || !time) continue;
         days.set(date, [...(days.get(date) ?? []), time]);
     }
-    return [...days]
+    const shown = [...days].slice(0, MAX_DAYS);
+    const more = days.size - shown.length;
+    return shown
         .map(([date, times]) => {
             const [y = 0, m = 1, d = 1] = date.split('-').map(Number);
             const weekday = WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
             return `${weekday} ${String(d).padStart(2, '0')}.${String(m).padStart(2, '0')} ${times.join(', ')}`;
         })
-        .join(' · ');
+        .join(' · ') + (more > 0 ? ` · …і ще ${more} дн.` : '');
 }
 
 // '2 нові', '1 новий', '5 нових'
