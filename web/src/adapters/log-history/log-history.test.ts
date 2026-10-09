@@ -18,10 +18,12 @@ describe('log history', () => {
         await history.summary({ from: '2026-01-01T00:00:00.000Z', to: '2026-01-02T00:00:00.000Z', institutionCode: 'X' });
         await history.reservations({});
         await history.scheduleChanges({ limit: 10 });
+        await history.extensionEvents({ type: 'selection.selected', limit: 5 });
         expect(fetchFn.mock.calls.map((c) => (c as unknown[])[0])).toEqual([
             '/api/summary?from=2026-01-01T00%3A00%3A00.000Z&to=2026-01-02T00%3A00%3A00.000Z&institutionCode=X',
             '/api/reservation-log',
             '/api/schedule-log?limit=10',
+            '/api/extension-events?type=selection.selected&limit=5',
         ]);
         expect(history.scheduleLogDownloadUrl()).toBe('/api/schedule-log.jsonl');
     });

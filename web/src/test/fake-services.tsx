@@ -86,6 +86,7 @@ export function createFakeServices(options: { monitor?: Partial<MonitorState>; e
         checks: vi.fn<LogHistory['checks']>(async () => emptyPage),
         reservations: vi.fn<LogHistory['reservations']>(async () => emptyPage),
         scheduleChanges: vi.fn<LogHistory['scheduleChanges']>(async () => emptyPage),
+        extensionEvents: vi.fn<LogHistory['extensionEvents']>(async () => emptyPage),
         scheduleLogDownloadUrl: () => '/api/schedule-log.jsonl',
     } satisfies LogHistory;
     const openBooking = vi.fn();

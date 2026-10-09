@@ -23,6 +23,7 @@ export function createLogHistory(fetchFn: typeof fetch = (...args) => fetch(...a
         checks: (query) => get('/api/checks', query),
         reservations: (query) => get('/api/reservation-log', query),
         scheduleChanges: (query) => get('/api/schedule-log', query),
+        extensionEvents: (query) => get('/api/extension-events', query),
         scheduleLogDownloadUrl: () => '/api/schedule-log.jsonl',
     };
 }

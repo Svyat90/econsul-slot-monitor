@@ -32,3 +32,10 @@ export function plural(count: number, one: string, few: string, many: string): s
     if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
     return many;
 }
+
+// "ср, 31.03.2027 о 09:50" of an offset-carrying slot time, read as written (no time zone shift)
+export function slotWhen(slotFrom: string): string {
+    const [date = '', rest = ''] = slotFrom.split('T');
+    const weekday = new Date(`${date}T12:00:00Z`).toLocaleDateString('uk-UA', { weekday: 'short', timeZone: 'UTC' });
+    return `${weekday}, ${formatSlotDate(date)} о ${rest.slice(0, 5)}`;
+}

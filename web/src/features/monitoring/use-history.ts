@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { CheckQuery } from '@contracts/checks.ts';
 import { useAppServices, useMonitorState } from '@/hooks/use-app-services.ts';
+import { mergeLogItems, type LogItem } from './log-items.ts';
 import { HISTORY_LIST_LIMIT as LIST_LIMIT, HISTORY_REFRESH_MS as REFRESH_MS } from '@/hooks/use-reservations.ts';
 
 export type CheckFilter = 'all' | 'new' | 'errors' | 'fast';
@@ -41,13 +42,19 @@ export function useSummary() {
     });
 }
 
-export function useChecks(filter: CheckFilter) {
+// The check log: checks, and under the "Усі" filter also the extension's events beside them
+export function useCheckLog(filter: CheckFilter) {
     const { history, institutionCode, checks } = useHistoryScope();
     return useQuery({
-        queryKey: ['checks', filter, institutionCode, checks],
-        queryFn: async () => {
-            const page = await history.checks({ ...CHECK_FILTERS[filter], institutionCode, limit: LIST_LIMIT });
-            return filter === 'errors' ? page.entries.filter((e) => e.outcome !== 'ok') : page.entries;
+        queryKey: ['check-log', filter, institutionCode, checks],
+        queryFn: async (): Promise<LogItem[]> => {
+            const [page, events] = await Promise.all([
+                history.checks({ ...CHECK_FILTERS[filter], institutionCode, limit: LIST_LIMIT }),
+                // the checks stay visible when the events fail to load
+                filter === 'all' ? history.extensionEvents({ limit: LIST_LIMIT }).catch(() => null) : Promise.resolve(null),
+            ]);
+            const entries = filter === 'errors' ? page.entries.filter((e) => e.outcome !== 'ok') : page.entries;
+            return mergeLogItems(entries, events?.entries ?? []);
         },
         refetchInterval: REFRESH_MS,
     });
