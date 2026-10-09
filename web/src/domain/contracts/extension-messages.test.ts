@@ -55,7 +55,7 @@ describe('appMessageSchema', () => {
     lastResult: null,
     stoppedBy: null,
     institution: 'Генеральне консульство',
-    nextRelease: { at: 1760000000000, opening: true },
+    nextRelease: { at: 1760000000000, opening: '09:00' },
   }
 
   it.each([

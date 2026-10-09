@@ -64,7 +64,7 @@ const monitorSchema = z.looseObject({
   lastResult: z.string().nullable().optional(),
   stoppedBy: z.string().nullable().optional(),
   institution: z.string().nullable(),
-  nextRelease: z.object({ at: z.number(), opening: z.boolean() }).nullable(),
+  nextRelease: z.object({ at: z.number(), opening: z.string() }).nullable(), // opening: consulate time, '09:00'
 })
 
 // App -> extension
