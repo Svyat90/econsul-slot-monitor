@@ -290,6 +290,7 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
 - 2026-10-09 · Етап 2 · S2.T0–S2.T5 виконано: `/next/slots` у браузері — меню й сторінка; усі правила `web/.dependency-cruiser.cjs` і ESLint доведено файлами-порушниками (видалено). Відхилення від макета на етап 6: активний пункт меню підсвічено `--color-fast-bg` (фіолетовий), у макеті — світло-синій.
 - 2026-10-09 · Етап 2 закрито: `architecture-reviewer` — PASS (зауваження: правило `application-is-framework-free` без винятку `@contracts` — виправлено разом із `enforcement.md`); `plan-verifier` — 8 MET, решта — лише те, що він не може перевірити сам (знімок у браузері, файли-порушники); обидва зроблено основною сесією.
 - 2026-10-09 · Етап 3 · S3.T1–S3.T11 виконано; `pnpm --dir web run reconcile` — 54 порівняння (3 фікстури × 3 варіанти зайнятих × 6 моментів), усі збіглися зі `slots.html`. Записані фікстури мають 0 вільних слотів — тому варіанти з частиною зайнятих прибраною. Протокол §8 `extension-plan.md` виправлено: `app:selection` і `ext:draft` мають вкладені `selection` / `draft`.
+- 2026-10-09 · Етап 3 закрито: `architecture-reviewer` — PASS, без знахідок; `plan-verifier` — 16 MET, 0 NOT MET (UNVERIFIABLE: червоний прогін S3.T3 і S3.T9 — агенти написали код раніше тесту; вільні слоти на живих даних — у фікстурах їх немає).
 
 ## Етап 1 — задачі
 
@@ -676,3 +677,161 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
 | `web/src/domain/slots/free-slots*` | S3.T9 |
 | `web/src/domain/monitoring/releases*` | S3.T10 |
 | `web/scripts/reconcile-with-slots-html.ts`, `web/package.json` | S3.T11 |
+
+## Етап 4 — задачі
+
+Загальне (Module: web). Поведінка — `slots.html` (`booking.md` §9 «Моніторинг», «Розширення
+e-Consul Helper»), перенесена дослівно; тексти журналу й сповіщень — українською (інтерфейс
+українською), сенс той самий. Тести не ходять на e-Consul і не бронюють: фейкові порти, фікстури
+`src/domain/__fixtures__/econsul/`.
+
+- **Rules для всіх:**
+  - Use case бачить лише порти (`src/application/ports.ts`), домен і контракти; жодних браузерних глобалів, `react`, адаптерів — onion-architecture §2, §5 «Application»
+  - Адаптер реалізує один порт, не імпортує інших адаптерів, use cases, фіч; спільне — `src/adapters/_shared/` — onion-architecture §5 «Infrastructure»
+  - Токен живе лише в пам'яті монітора; адаптер `econsul-api` кладе його в заголовок `token` лише до `https://my.e-consul.gov.ua`; токен не потрапляє в журнал, `console`, помилки, URL, `localStorage`, тести-знімки — security «In this project»
+  - `postMessage` — лише з цільовим `window.location.origin`; приймач перевіряє `event.source === window`, `event.origin`, `source: 'econsul-ext'` і розбирає контрактом — security «In this project»
+  - Порядок ефектів у перевірці — як у `runCheck()`: запит → розрахунок → новий стан → сповіщення → розширення → журнал → наступна перевірка — onion-architecture §6
+  - Тести use cases — фейкові порти й фейковий `Scheduler`/`Clock`/`Random`; тести адаптерів — jsdom і фейковий `fetch`; компоненти — RTL над фейковим монітором — onion-architecture §8, react-testing-library
+  - Імпорти між кільцями — `@/…`, усередині кільця — відносні з `.ts`
+- **Verify для всіх:** свої тести + `pnpm --dir web run typecheck`, `lint`, `arch:check`.
+
+### Wave 0 — основна сесія
+
+#### S4.T0 — порти й помилки
+- Files: `web/src/application/ports.ts`, `web/src/domain/contracts/errors.ts` (готово)
+- `EconsulApi`, `ServerApi` (етап 4 — лише `recordScheduleChange`), `LocationsSource`,
+  `ExtensionBridge`, `Alerts`, `SettingsStore`, `Clock`, `Random`, `Scheduler`;
+  `SessionExpiredError`, `EconsulUnavailableError`, `EconsulSchemaError`.
+
+### Wave 1 — паралельно
+
+#### S4.T1 — адаптер `econsul-api`
+- Files: `web/src/adapters/econsul-api/econsul-api.ts`, `econsul-api.test.ts` (new)
+- Interface: `createEconsulApi(fetchFn?: typeof fetch): EconsulApi`
+- Тіло запиту, заголовки й URL — дослівно `callExternalReader()` (`service: 'e-queue-register'`, методи й фільтри — як у `runCheck()`, `status: [1, 2, 4, 5]`). 401/403 → `SessionExpiredError`; інший не-2xx → `EconsulUnavailableError(status)`; мережа → `EconsulUnavailableError(null)`; відповідь не проходить `scheduleResponseSchema` / `reservedResponseSchema` → `EconsulSchemaError`. Текст помилки не містить токена.
+- Steps: тести з фейковим `fetch`: тіло й заголовок; 401 і 403; 500; мережа; кривий JSON; токен не в `message` жодної помилки.
+
+#### S4.T2 — адаптер `extension-bridge`
+- Files: `web/src/adapters/extension-bridge/extension-bridge.ts`, `extension-bridge.test.ts` (new)
+- Interface: `createExtensionBridge(win?: Window): ExtensionBridge`
+- `send` → `win.postMessage({ ...message, source: 'econsul-app' }, win.location.origin)`. `subscribe` — слухач `message` з перевірками (див. Rules) і `extMessageSchema.safeParse`; невалідне — мовчки відкидається.
+- Steps: тести jsdom: `ext:hello` доходить; інший `origin`, інше `event.source`, `source: 'econsul-app'`, невідомий `type` — не доходять; `send` ставить `source` і origin; відписка працює.
+
+#### S4.T3 — адаптер `alerts`
+- Files: `web/src/adapters/alerts/alerts.ts`, `alerts.test.ts`, `web/src/adapters/alerts/sounds.ts` (new)
+- Interface: `createAlerts(win?: Window): Alerts`
+- Звуки — дослівно `playTones`, `playSlotSound`, `playSessionSound`, `glassCrash`, `glassTone` (`sounds.ts`, Web Audio, без файлів; «тримати в синхроні з `extension/sounds.js`»). Нотифікації — `showNotification()`: `requireInteraction: true`, `renotify`, `tag` (`slots-found`, `session-expired`), клік → `onClick` або `focus`. `openUrl` — `window.open(url, '_blank', 'noopener')`.
+- Steps: тести з фейковими `Notification` і `AudioContext` у jsdom: дозвіл `unsupported`/`denied`/`granted`; без дозволу нотифікація не створюється, але звук грає; `sessionExpired({ notify: false })` — без нотифікації.
+
+#### S4.T4 — адаптери `settings-store`, `browser-runtime`, `locations-source`, `server-api`
+- Files: `web/src/adapters/settings-store/settings-store.ts`, `settings-store.test.ts`; `web/src/adapters/browser-runtime/browser-runtime.ts`, `browser-runtime.test.ts`; `web/src/adapters/locations-source/locations-source.ts`, `locations-source.test.ts`; `web/src/adapters/server-api/server-api.ts`, `server-api.test.ts` (new)
+- Interface: `createSettingsStore(storage?: Storage): SettingsStore`; `browserClock: Clock`, `browserRandom: Random`, `browserScheduler: Scheduler`; `createLocationsSource(fetchFn?): LocationsSource` (`GET /locations.json`, `locationsSchema`); `createServerApi(fetchFn?): ServerApi` (етап 4: `recordScheduleChange` → `POST /schedule-log`, тіло — `ScheduleLogEntry`, помилки ковтаються)
+- Ключі `localStorage` — ті самі, що в `slots.html` (`slots.selection`, `slots.interval`, `slots.dateRange`, `slots.draft`, `slots.schedule.<code>`), формат — той самий JSON; кожне читання й запис — у `try/catch` (сховище недоступне → типові значення). `browserClock.localDateKey` — як `getDateKey(new Date(ms))`.
+- Steps: тести: значення, записані у форматі `slots.html`, читаються; кривий JSON → типове; `Storage`, що кидає, не ламає; `server-api` не кидає, коли `fetch` падає.
+
+#### S4.T5 — use cases `run-check.ts` і `monitor.ts`
+- Files: `web/src/application/run-check.ts`, `run-check.test.ts`, `web/src/application/monitor.ts`, `monitor.test.ts` (new)
+- Джерело: `runCheck()`, `scheduleNextCheck()`, `checkNow()`, `startMonitoring()`, `stopMonitoring()`, `resetMonitorState()`, `recordScheduleSnapshot()`, `getUpcomingReleases()` (кеш — переобчислення після кожного оновлення розкладу), `alertSlots()`, `alertSession()`, `inDateRange()`; тексти журналу — українською з тим самим змістом (`Перевірка #12 (часта)`, `Відновлено після входу`, `Зупинено: …`).
+- Interface (exported from `monitor.ts`; S4.T6 і S4.T7 будують на ньому):
+  ```ts
+  export type StopCause = 'user' | 'session' | 'other';
+  export type CheckKind = 'scheduled' | 'fast' | 'manual';
+  export type MonitorLogEntry = { at: number; message: string; kind: 'info' | 'found' | 'warn' | 'error' };
+  export type MonitorState = {
+      locations: Locations | null;
+      selection: { institution: Institution; serviceCode: string } | null;
+      hasToken: boolean;
+      running: boolean; checking: boolean; checks: number;
+      nextAt: number; nextKind: 'scheduled' | 'fast';
+      lastResult: string; stoppedBy: StopCause | null;
+      interval: { min: number; max: number }; fastChecks: boolean; dateRange: DateRange;
+      schedule: { rows: ScheduleRow[]; fetchedAt: number } | null;
+      reserved: ReservedSlot[] | null;
+      free: FreeSlots | null;
+      releases: Release[];
+      outOfRange: { dropped: number; total: number; at: number } | null;
+      lastFresh: SlotKey[];
+      log: MonitorLogEntry[]; // newest first, at most 100
+  };
+  export type MonitorEvents = {
+      newSlots: (fresh: SlotKey[], free: FreeSlots) => void;   // after the alert, for app:slots
+      authFailed: (status: number, token: string) => void;      // for app:auth-failed
+      changed: () => void;                                       // after every state change
+  };
+  export interface Monitor {
+      getState(): MonitorState;
+      subscribe(listener: () => void): () => void;              // useSyncExternalStore
+      on<K extends keyof MonitorEvents>(event: K, listener: MonitorEvents[K]): () => void;
+      init(): Promise<void>;                                    // loads locations and saved settings
+      start(options?: { resumed?: boolean }): Promise<void>;
+      stop(reason: string, cause: StopCause): void;
+      checkNow(): Promise<void>;
+      setToken(token: string, source: 'extension' | 'manual'): void; // resumes after 'session' stop
+      sessionLost(reason: string): void;                        // ext:auth loggedIn: false
+      setSelection(institutionCode: string, serviceCode: string): void;
+      setInterval(bounds: { min: number; max: number }): void;
+      setFastChecks(enabled: boolean): void;
+      setDateRange(range: DateRange): void;
+      log(message: string, kind?: MonitorLogEntry['kind']): void;
+      dispose(): void;
+  }
+  export function createMonitor(deps: {
+      econsul: EconsulApi; server: ServerApi; locations: LocationsSource; settings: SettingsStore;
+      alerts: Alerts; clock: Clock; random: Random; scheduler: Scheduler;
+      extensionConnected: () => boolean;   // alertSession(): notification only without the extension
+      openBooking: () => void;             // click on the new-slots notification
+  }): Monitor;
+  ```
+  `run-check.ts` — одна перевірка як функція над станом і портами (`runCheck(context, kind)`), без таймерів; `monitor.ts` — стан, таймери через `Scheduler`, планування через `planNextCheck`, події.
+- Steps (тести з фейковим часом і фейковим `EconsulApi` на фікстурах):
+  1. Перша перевірка: розклад + зайняті; далі розклад — раз на 30 хв (`SCHEDULE_REFRESH_MS`), між ними — лише зайняті.
+  2. Нові слоти: перша перевірка — усі в діапазоні нові; наступна — лише нові; сповіщення й `newSlots` лише коли є нові; поза діапазоном — не нові.
+  3. Вікно частих перевірок: усередині — затримка 15–20 с і `kind: 'fast'`; затримка, що зайшла б у вікно, обрізається.
+  4. 401 → зупинка з `stoppedBy: 'session'`, `sessionExpired`, `authFailed(401, token)`; `setToken` → `Відновлено після входу`, наступна перевірка йде, `knownFree` збережено.
+  5. Зупинка кнопкою (`'user'`) → `setToken` не відновлює.
+  6. 500 → запис у журнал, моніторинг триває.
+  7. Зміна установи → стан скинуто, наступна перевірка знову бере розклад.
+  8. Зміна розкладу → `recordScheduleChange` з `baseline`, потім `changed`; знімок у `SettingsStore`.
+
+### Wave 2 — паралельно
+
+#### S4.T6 — use case `extension-link.ts`
+- Depends on: S4.T5
+- Files: `web/src/application/extension-link.ts`, `extension-link.test.ts` (new)
+- Interface: `type ExtensionState = { connected: boolean; version: string | null; auth: { loggedIn: boolean | null; exp: number | null; reason: string | null } | null; autoBook: boolean; draft: Draft | null }`; `createExtensionLink(deps: { bridge: ExtensionBridge; monitor: Monitor; settings: SettingsStore; alerts: Alerts; clock: Clock; scheduler: Scheduler }): { getState(): ExtensionState; subscribe(l: () => void): () => void; start(): void; dispose(): void; login(): void; setAutoBook(on: boolean): void; testSound(kind: 'selected' | 'mute' | 'slots'): void }`
+- Джерело: `extHello()` (кожні 15 с, тайм-аут 3 с), `reportMonitor()`, `reportSelection()`, `sendSlotsToExtension()` (на `monitor.on('newSlots')`, `consulIpnHash` — перший з `slotConsuls`, без поля, якщо немає), `onExtAuth()`, `onExtToken()` (+ `app:received`), `onExtDraft()` (+ `app:received`, `SettingsStore.saveDraft`), `ext:settings`, `ext:slot-*` → `monitor.log`, `app:auth-failed` на `monitor.on('authFailed')` (`soundPlayed: true`), `app:login`, `testExtension()`.
+- Steps: тести з фейковим мостом і фейковим монітором: перший `ext:hello` → `connected`, `app:hello` + `app:selection` + `app:monitor`; немає відповіді 3 с → `connected: false`; `ext:token` після зупинки через сесію → `monitor.setToken`; `ext:auth { loggedIn: false }` → `monitor.sessionLost`; нові слоти → `app:slots` з діапазоном.
+
+#### S4.T7 — блок стану в меню й composition root
+- Depends on: S4.T5 (S4.T6 — за Interface)
+- Files: `web/src/features/status/StatusBlock.tsx`, `StatusBlock.module.css`, `StatusBlock.test.tsx`, `web/src/features/status/use-monitor.ts`, `web/src/features/status/index.ts` (new); `web/src/app/providers.tsx`, `web/src/app/Layout.tsx`, `web/src/app/Layout.module.css`
+- Rules (додатково):
+  - `useSyncExternalStore` над `monitor.subscribe` / `getState` і так само для `extensionLink`; жодної копії стану в `useState` — frontend-ui-architecture «In this project», react-best-practices
+  - Залежності — через React context з `providers.tsx`; фіча отримує монітор з контексту, не імпортує адаптери — onion-architecture §2 (composition root)
+  - `providers.tsx` — єдине місце, що створює адаптери й use cases, викликає `monitor.init()` і `extensionLink.start()` (один раз, не в `StrictMode`-подвоєнні) — onion-architecture §5 «Composition root»
+  - Відлік до наступної перевірки — тік раз на секунду через `useSyncExternalStore` над годинником, а не `setInterval` у `useEffect` з копією стану — react-best-practices
+  - Стилі — змінні токенів; активний пункт меню — світло-синій за макетом (новий токен `--color-accent-bg` у `Layout.module.css` через `color-mix` від `--color-accent`, без нового літерала)
+- Designs: `web/docs/design/slots.png` (блок стану: «Моніторинг працює», «Наступна перевірка за 0:42», «Сесія до 08:41 завтра» зі смужкою, «✓ Розширення підключено», кнопки «Зупинити» / «Перевірити»; у зупиненому стані — «Запустити»)
+- Steps: RTL з фейковим монітором: зупинено → «Запустити»; клік → `start`; працює → «Зупинити», відлік; перевірка йде → «Перевірити» неактивна; розширення ✓/✗; без установи — підказка «Виберіть установу в налаштуваннях».
+- Acceptance: на `/next/` моніторинг запускається з меню й працює з токеном від розширення.
+
+### Wave 3 — основна сесія
+
+#### S4.T8 — ручна перевірка
+- `pnpm --dir web build`, перезапуск сервера. Вкладку `slots.html` закрити (одночасно — лише один
+  застосунок). На `/next/` з токеном від розширення — моніторинг вибраної установи; результат
+  першої перевірки порівняти з тим, що показує `slots.html` на тих самих даних (через `reconcile`
+  або другою перевіркою на `/`). Запитів — як у звичайного моніторингу.
+
+### Ownership
+
+| Файли | Задача |
+|---|---|
+| `web/src/application/ports.ts`, `web/src/domain/contracts/errors.ts` | S4.T0 |
+| `web/src/adapters/econsul-api/**` | S4.T1 |
+| `web/src/adapters/extension-bridge/**` | S4.T2 |
+| `web/src/adapters/alerts/**` | S4.T3 |
+| `web/src/adapters/{settings-store,browser-runtime,locations-source,server-api}/**` | S4.T4 |
+| `web/src/application/{run-check,monitor}*` | S4.T5 |
+| `web/src/application/extension-link*` | S4.T6 |
+| `web/src/features/status/**`, `web/src/app/{providers.tsx,Layout.tsx,Layout.module.css}` | S4.T7 |
