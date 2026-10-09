@@ -113,6 +113,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .panel .strong { font-size: 14px; }
 .panel .sub { font-size: 13px; }
 .mono { font-family: var(--mono); font-weight: 500; }
+.check-row { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.check-row input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent, #0057B8); flex: none; }
+.check-row > span { display: flex; flex-direction: column; gap: 2px; }
+.check-row .strong { font-size: 14px; }
+.check-row .sub { font-size: 12px; }
+.slot-list { margin-top: 6px; max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.slot-day { font-size: 12px; line-height: 1.5; }
+.slot-times { color: var(--text); font-size: 12px; }
 
 .foot { display: flex; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--divider); }
 .foot button { flex: 1; height: 40px; padding: 0; font-size: 13px; }

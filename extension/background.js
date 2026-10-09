@@ -3,9 +3,11 @@
 // all state lives in chrome.storage: session (memory only, cleared with the browser) for the
 // token and status, local for settings.
 //
-// The extension never books anything: it does not press "Далі", "Підтверджую" or
-// "Записатись в чергу очікування", does not call public-check-and-book-appointments and does
-// not write task documents (PUT /documents). See docs/plans/extension-plan.md, section 3.
+// The extension books only when the person turned on auto-booking (settings.autoBook): then
+// econsul.js presses «Підтвердити» for the selected slot. Otherwise the person presses it.
+// It never presses "Підтверджую" or "Записатись в чергу очікування" and does not call the API
+// to book or to write task documents. It selects a slot by clicks on the site (econsul.js, picker.js): «Далі» on step 3
+// and the slot on step 4; the site saves that itself. See docs/plans/extension-plan.md, section 3.
 
 const APP_ORIGIN = 'http://localhost:3000';
 const ECONSUL_TABS = 'https://e-consul.gov.ua/*';
@@ -19,7 +21,33 @@ const AUTH_CHECK_MIN_MS = 10 * 60 * 1000; // GET auth/me every 10–15 min, rand
 const AUTH_CHECK_MAX_MS = 15 * 60 * 1000;
 const VERIFY_THROTTLE_MS = 10 * 60 * 1000; // re-check a token the API rejected at most this often
 const SELECTED_SOUND = { minMs: 30 * 1000, maxMs: 2 * 60 * 1000 };
-const DEFAULT_SETTINGS = { draftTime: '08:45', paused: false };
+const DEFAULT_SETTINGS = { draftTime: '08:45', paused: false, autoBook: false };
+const SELECT_TIMEOUT_MS = 3 * 60 * 1000;  // a selection without a result by then has failed
+const SELECTED_HOLD_MS = 3 * 60 * 1000;   // new slots do not replace a selected one this soon
+const TAB_READY_MS = 45 * 1000;           // the draft page loads and econsul.js answers
+
+// Why a slot was not selected; shown in the popup and the notification
+const SELECT_ERRORS = {
+    'no-draft': 'Немає чернетки. Відкрийте заявку на e-consul (кроки 1–3).',
+    'tab-not-ready': 'Сторінка чернетки не відповіла.',
+    'wrong-task': 'У вкладці відкрита інша заявка.',
+    'form-not-loaded': 'Форма заявки не завантажилась.',
+    'next-disabled': 'Кнопка «Далі» на кроці 3 неактивна.',
+    'step-stuck': 'Сайт не перейшов до календаря.',
+    'unavailable': 'Сайт пише, що запис зараз недоступний.',
+    'no-time': 'Сайт показує, що вільного часу немає.',
+    'calendar-not-loaded': 'Календар не завантажився.',
+    'not-found': 'Нових слотів у календарі вже немає.',
+    'timeout': 'Вибір слота не завершився вчасно.',
+    // Auto-booking (picker.js, confirm)
+    'not-on-calendar': 'Сторінка пішла з календаря до бронювання.',
+    'slot-not-selected': 'Слот перестав бути вибраним.',
+    'several-selected': 'Вибрано кілька слотів, автоматично не бронюю.',
+    'no-confirm-button': 'Немає активної кнопки «Підтвердити».',
+    'alert': 'Сайт показав повідомлення.',
+    'left-calendar': 'Сайт пішов з календаря без «Дякуємо».',
+    'no-outcome': 'Після «Підтвердити» сайт нічого не показав за 90 с.'
+};
 const VERSION = chrome.runtime.getManifest().version;
 
 // Why the session counts as ended; shown in the notification and the popup
@@ -324,7 +352,7 @@ async function onAppMessage(msg) {
         case 'app:hello': {
             await setApp({ audioReady: !!msg.audioReady });
             const { draft = null } = await chrome.storage.session.get('draft');
-            const replies = [{ type: 'ext:hello', version: VERSION }, authMessage(auth), { type: 'ext:draft', draft: publicDraft(draft) }];
+            const replies = [{ type: 'ext:hello', version: VERSION }, authMessage(auth), { type: 'ext:draft', draft: publicDraft(draft) }, await settingsMessage()];
             if (auth.loggedIn === true && auth.token) replies.push({ type: 'ext:token', token: auth.token, exp: auth.exp });
             return replies;
         }
@@ -353,9 +381,14 @@ async function onAppMessage(msg) {
             if (auth.loggedIn !== false) await updateAuth({ loggedIn: false, reason: 'api' }, { appPlayedSound: !!msg.soundPlayed });
             return [];
         case 'app:slots':
-            // Stage 4 selects the earliest slot on the site. For now only remember the list
             await chrome.storage.session.set({ lastSlots: { receivedAt: Date.now(), slots: msg.slots || [], range: msg.range || {}, test: !!msg.test } });
+            // Not awaited: loading the draft takes up to a minute, other messages must not wait
+            if ((msg.slots || []).length) startSelection(msg.slots, !!msg.test);
             return [{ type: 'ext:slots-received', count: (msg.slots || []).length }];
+        case 'app:settings':
+            // Only what the app shows: the auto-booking checkbox
+            if (msg.patch && typeof msg.patch.autoBook === 'boolean') await saveSettings({ autoBook: msg.patch.autoBook });
+            return [];
         case 'app:login':
             await openWorkTab(LOGIN_URL);
             return [];
@@ -370,6 +403,123 @@ async function onAppMessage(msg) {
             return [];
     }
 }
+
+// ---- Slot selection ----
+// selection: { status: 'running' | 'selected' | 'booking' | 'booked' | 'book-failed' |
+//              'failed' | 'skipped', jobId, taskId, tabId, slot, error, text, tried, test,
+//              autoBook, startedAt, at }
+
+async function setSelection(selection) {
+    await chrome.storage.session.set({ selection });
+    return selection;
+}
+
+// New slots from the app (earliest first, already within the date range): open the draft,
+// go to the calendar and select the earliest one the site shows as free
+async function startSelection(slots, test) {
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    const { selection, draft } = await chrome.storage.session.get(['selection', 'draft']);
+    const now = Date.now();
+    if (settings.paused) return setSelection({ status: 'skipped', error: 'paused', test, at: now });
+    if (selection && ['running', 'booking'].includes(selection.status) && now - selection.startedAt < SELECT_TIMEOUT_MS) return;
+    // The person may be pressing «Підтвердити» right now: do not switch the slot under them
+    if (selection && selection.status === 'selected' && now - selection.at < SELECTED_HOLD_MS) return;
+    if (!draft) return selectionFailed({ status: 'failed', test, startedAt: now }, 'no-draft');
+    // This draft is booked: the site turns it into a sent application
+    if (selection && selection.status === 'booked' && selection.taskId === draft.taskId) return;
+
+    const jobId = crypto.randomUUID();
+    const autoBook = !!settings.autoBook && !test; // test slots are never booked
+    const current = await setSelection({ status: 'running', jobId, taskId: draft.taskId, test, autoBook, startedAt: now, at: now });
+
+    // Load the draft again even if it is open on step 4: the calendar there may be old.
+    // A direct address of step 4 opens step 3, from where econsul.js presses «Далі»
+    let tab = draft.tabId != null && await chrome.tabs.get(draft.tabId).catch(() => null);
+    if (!(tab && tab.url && tab.url.includes(`/tasks/${draft.taskId}`))) tab = null;
+    if (tab) tab = await chrome.tabs.update(tab.id, { active: true, url: draft.url });
+    else tab = await chrome.tabs.create({ url: draft.url, active: true });
+    await chrome.windows.update(tab.windowId, { focused: true });
+    await setSelection({ ...current, tabId: tab.id });
+
+    // Wait until the new page's econsul.js answers for this task
+    await new Promise(r => setTimeout(r, 1500));
+    const end = Date.now() + TAB_READY_MS;
+    let reply = null;
+    while (Date.now() < end) {
+        reply = await chrome.tabs.sendMessage(tab.id, { type: 'ping' }).catch(() => null);
+        if (reply && reply.ok && reply.taskId === draft.taskId) break;
+        reply = null;
+        await new Promise(r => setTimeout(r, 1000));
+    }
+    if (!reply) return selectionFailed({ ...current, tabId: tab.id }, 'tab-not-ready');
+    await chrome.tabs.sendMessage(tab.id, { type: 'select-slot', jobId, taskId: draft.taskId, slots, autoBook }).catch(() => null);
+}
+
+async function selectionFailed(selection, error, tried = []) {
+    await setSelection({ ...selection, status: 'failed', error, tried, at: Date.now() });
+    await sendToApps([{ type: 'ext:slot-failed', error, text: SELECT_ERRORS[error] || error, test: !!selection.test }]);
+    if (selection.test && error === 'not-found') return; // test slots are made up
+    chrome.notifications.create('slot', {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: 'Слот не вибрано',
+        message: SELECT_ERRORS[error] || error,
+        priority: 1
+    });
+}
+
+// From econsul.js: the result of select-slot. booking: auto-booking presses «Підтвердити» next
+async function onSlotResult({ jobId, ok, slot, error, tried, booking }) {
+    const { selection } = await chrome.storage.session.get('selection');
+    if (!selection || selection.jobId !== jobId) return;
+    if (!ok) return selectionFailed(selection, error, tried);
+    if (booking) return setSelection({ ...selection, status: 'booking', slot, tried, at: Date.now() });
+    await setSelection({ ...selection, status: 'selected', slot, tried, at: Date.now() });
+    await playSound('selected', SELECTED_SOUND);
+    const date = slot.date.split('-').reverse().join('.');
+    chrome.notifications.create('slot', {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: `Вибрано слот ${date} о ${slot.time}`,
+        message: 'Натисніть «Підтвердити» на сторінці e-consul, щоб забронювати.',
+        requireInteraction: true,
+        priority: 2
+    });
+    await sendToApps([{ type: 'ext:slot-selected', slot }]);
+}
+
+// From econsul.js: auto-booking pressed «Підтвердити». ok: the site said «Дякуємо»
+async function onBookResult({ jobId, slot, ok, error, text }) {
+    const { selection } = await chrome.storage.session.get('selection');
+    if (!selection || selection.jobId !== jobId) return;
+    const date = slot.date.split('-').reverse().join('.');
+    await setSelection({ ...selection, status: ok ? 'booked' : 'book-failed', slot, error: error || null, text: text || null, at: Date.now() });
+    // Either way the person has to look: the result comes by email, or the slot waits for them
+    await playSound('selected', SELECTED_SOUND);
+    chrome.notifications.create('slot', {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: ok ? `Заброньовано ${date} о ${slot.time}` : `Не вдалося забронювати ${date} о ${slot.time}`,
+        message: ok
+            ? 'Сайт прийняв заявку. Підтвердження прийде на email.'
+            : `${SELECT_ERRORS[error] || error}${text ? ' ' + text.slice(0, 120) : ''} Слот лишився вибраним, можна натиснути «Підтвердити» самому.`,
+        requireInteraction: true,
+        priority: 2
+    });
+    await sendToApps([{ type: ok ? 'ext:slot-booked' : 'ext:slot-selected', slot }]);
+}
+
+async function showSelectionTab() {
+    const { selection } = await chrome.storage.session.get('selection');
+    const tab = selection && selection.tabId != null && await chrome.tabs.get(selection.tabId).catch(() => null);
+    if (!tab) return openDraft();
+    await chrome.tabs.update(tab.id, { active: true });
+    await chrome.windows.update(tab.windowId, { focused: true });
+}
+
+chrome.notifications.onClicked.addListener(id => {
+    if (id === 'slot') { showSelectionTab(); chrome.notifications.clear(id); }
+});
 
 // ---- Sounds (offscreen document) ----
 
@@ -398,16 +548,30 @@ async function stopSounds(force) {
     await chrome.runtime.sendMessage({ target: 'offscreen', type: 'stop', force }).catch(() => null);
 }
 
+// ---- Settings (popup and app) ----
+
+async function saveSettings(patch) {
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    await chrome.storage.local.set({ settings: { ...DEFAULT_SETTINGS, ...settings, ...patch } });
+    await renderBadge();
+    await sendToApps([await settingsMessage()]);
+}
+
+async function settingsMessage() {
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    return { type: 'ext:settings', autoBook: !!settings.autoBook, paused: !!settings.paused };
+}
+
 // ---- Popup ----
 
 async function onPopupMessage(msg) {
     switch (msg.type) {
         case 'popup:state': {
             const auth = await getAuth();
-            const { app = null, lastSlots = null, draft = null, sound = null } = await chrome.storage.session.get(['app', 'lastSlots', 'draft', 'sound']);
+            const { app = null, lastSlots = null, draft = null, sound = null, selection = null } = await chrome.storage.session.get(['app', 'lastSlots', 'draft', 'sound', 'selection']);
             const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
             const { token, ...publicAuth } = auth; // the popup does not need the token itself
-            return { version: VERSION, auth: { ...publicAuth, hasToken: !!token }, app, appConnected: await isAppConnected(), lastSlots, draft, sound, settings };
+            return { version: VERSION, auth: { ...publicAuth, hasToken: !!token }, app, appConnected: await isAppConnected(), lastSlots, draft, sound, selection, selectErrors: SELECT_ERRORS, settings };
         }
         case 'popup:login':
             await openWorkTab(LOGIN_URL);
@@ -423,12 +587,9 @@ async function onPopupMessage(msg) {
         case 'popup:mute':
             await stopSounds(true);
             return {};
-        case 'popup:settings': {
-            const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
-            await chrome.storage.local.set({ settings: { ...settings, ...msg.patch } });
-            await renderBadge();
+        case 'popup:settings':
+            await saveSettings(msg.patch);
             return {};
-        }
         default:
             return {};
     }
@@ -440,11 +601,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.target === 'offscreen') return false; // for offscreen.js
     let handler = null;
     if (message.type === 'offscreen:alarm-ended') {
-        handler = () => chrome.storage.session.set({ sound: { playing: false, endedAt: Date.now(), reason: message.reason } });
+        handler = async () => {
+            await chrome.storage.session.set({ sound: { playing: false, endedAt: Date.now(), reason: message.reason } });
+            const { selection } = await chrome.storage.session.get('selection');
+            if (selection && selection.tabId != null) chrome.tabs.sendMessage(selection.tabId, { type: 'sound-ended', reason: message.reason }).catch(() => {});
+        };
     } else if (sender.tab && sender.url && sender.url.startsWith('https://e-consul.gov.ua/')) {
         if (message.type === 'econsul:token') handler = () => onSiteToken(message.token || null, sender.tab);
         else if (message.type === 'econsul:auth-check') handler = () => onAuthCheck(message);
         else if (message.type === 'econsul:task') handler = () => onSiteTask(message, sender.tab);
+        else if (message.type === 'econsul:slot-result') handler = () => onSlotResult(message);
+        else if (message.type === 'econsul:book-result') handler = () => onBookResult(message);
+        else if (message.type === 'econsul:mute' || message.type === 'econsul:confirm-clicked') handler = () => stopSounds(true);
     } else if (sender.tab && sender.origin === APP_ORIGIN && message.type === 'app') {
         // Only the app's own origin gets the token
         handler = () => onAppMessage(message.msg || {}).then(messages => ({ messages }));

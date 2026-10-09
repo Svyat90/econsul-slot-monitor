@@ -144,12 +144,50 @@ function render() {
         const first = lastSlots.slots[0];
         const more = lastSlots.slots.length > 1 ? ` (+${lastSlots.slots.length - 1})` : '';
         slotsText.hidden = false;
-        slotsText.innerHTML = `${lastSlots.test ? '<b>ТЕСТ.</b> ' : ''}Нові слоти: <span class="mono">${first.date.split('-').reverse().join('.')} ${first.time}</span>${more} · отримано ${dayAndTime(lastSlots.receivedAt)}`;
+        // All slots of the last check, grouped by date (they arrive sorted)
+        const byDate = new Map();
+        for (const slot of lastSlots.slots) {
+            if (!byDate.has(slot.date)) byDate.set(slot.date, []);
+            byDate.get(slot.date).push(slot.time);
+        }
+        const list = [...byDate].map(([date, times]) =>
+            `<div class="slot-day"><span class="mono">${escapeHtml(date.split('-').reverse().join('.'))}</span> <span class="slot-times mono">${times.map(escapeHtml).join(', ')}</span></div>`
+        ).join('');
+        slotsText.innerHTML = `${lastSlots.test ? '<b>ТЕСТ.</b> ' : ''}Нові слоти: <span class="mono">${first.date.split('-').reverse().join('.')} ${first.time}</span>${more} · отримано ${dayAndTime(lastSlots.receivedAt)}` +
+            `<div class="slot-list">${list}</div>`;
     } else {
         slotsText.hidden = true;
     }
 
+    renderSelection(now);
+    if (document.activeElement !== $('autoBook')) $('autoBook').checked = !!settings.autoBook;
     $('pauseBtn').textContent = settings.paused ? 'Відновити' : 'Призупинити';
+}
+
+// What happened to the last slots on the site: selecting, selected or why not
+function renderSelection(now) {
+    const { selection, selectErrors = {} } = state;
+    const el = $('selectionText');
+    if (!selection || now - (selection.at || 0) > 24 * 3600000) { el.hidden = true; return; }
+    el.hidden = false;
+    el.classList.toggle('error', selection.status === 'failed' || selection.status === 'book-failed');
+    const test = selection.test ? '<b>ТЕСТ.</b> ' : '';
+    if (selection.status === 'running') {
+        el.innerHTML = `${test}Вибираю слот у чернетці… (${Math.round((now - selection.startedAt) / 1000)} с)`;
+    } else if (selection.status === 'booking') {
+        el.innerHTML = `Бронюю <span class="mono">${escapeHtml(selection.slot.date.split('-').reverse().join('.'))} ${escapeHtml(selection.slot.time)}</span>: натискаю «Підтвердити»…`;
+    } else if (selection.status === 'booked') {
+        el.innerHTML = `Заброньовано <span class="mono">${escapeHtml(selection.slot.date.split('-').reverse().join('.'))} ${escapeHtml(selection.slot.time)}</span> ${dayAndTime(selection.at)}. Підтвердження прийде на email.`;
+    } else if (selection.status === 'book-failed') {
+        el.innerHTML = `Не забронювалось <span class="mono">${escapeHtml(selection.slot.date.split('-').reverse().join('.'))} ${escapeHtml(selection.slot.time)}</span>: ${escapeHtml(selectErrors[selection.error] || selection.error)}${selection.text ? ' ' + escapeHtml(selection.text.slice(0, 160)) : ''}`;
+    } else if (selection.status === 'selected') {
+        const { date, time } = selection.slot;
+        el.innerHTML = `${test}Вибрано <span class="mono">${escapeHtml(date.split('-').reverse().join('.'))} ${escapeHtml(time)}</span> ${dayAndTime(selection.at)}. Натисніть «Підтвердити» на сайті.`;
+    } else if (selection.status === 'skipped') {
+        el.innerHTML = `${test}Слот не вибрано: пауза.`;
+    } else {
+        el.innerHTML = `${test}Слот не вибрано ${dayAndTime(selection.at)}: ${escapeHtml(selectErrors[selection.error] || selection.error)}`;
+    }
 }
 
 async function refresh() {
@@ -163,6 +201,10 @@ $('loginBtn').addEventListener('click', () => { send('popup:login'); window.clos
 $('muteBtn').addEventListener('click', () => send('popup:mute'));
 $('pauseBtn').addEventListener('click', async () => {
     await send('popup:settings', { patch: { paused: !state.settings.paused } });
+    refresh();
+});
+$('autoBook').addEventListener('change', async event => {
+    await send('popup:settings', { patch: { autoBook: event.target.checked } });
     refresh();
 });
 $('openDraftBtn').addEventListener('click', () => { send('popup:open-draft'); window.close(); });

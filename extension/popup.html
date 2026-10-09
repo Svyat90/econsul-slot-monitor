@@ -64,14 +64,22 @@
             <div id="monitorTitle" class="strong"></div>
             <div id="monitorText" class="sub"></div>
             <div id="slotsText" class="sub" hidden></div>
+            <div id="selectionText" class="sub" hidden></div>
         </div>
+
+        <label class="check-row">
+            <input id="autoBook" type="checkbox">
+            <span>
+                <span class="strong">Бронювати автоматично</span>
+                <span class="sub">Після вибору слота розширення саме натисне «Підтвердити». Вимкнено: натискаєте ви.</span>
+            </span>
+        </label>
     </main>
     <footer class="foot">
         <button id="muteBtn" class="secondary" type="button">Вимкнути звук</button>
         <button id="pauseBtn" class="secondary" type="button">Призупинити</button>
     </footer>
-    <!-- Until stages 3–4 there is nothing to pause: say so instead of a silent toggle -->
-    <div class="foot-note">«Призупинити» зупинятиме автоматичний вибір слота й створення чернетки — їх ще не додано, тож зараз кнопка лише ставить позначку «Пауза».</div>
+    <div class="foot-note">«Призупинити» вимикає автоматичний вибір і бронювання слота в чернетці. Застосунок і далі шукає слоти й сповіщає.</div>
 </div>
 
 <script src="popup.js"></script>
