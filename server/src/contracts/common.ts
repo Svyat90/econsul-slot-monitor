@@ -32,3 +32,5 @@ export const storedFields = { id: z.number().int(), receivedAt: isoDateTime };
 export function pageOf<T extends z.ZodType>(entry: T) {
     return z.object({ entries: z.array(entry), nextCursor: z.number().int().nullable() });
 }
+
+export type Page<T> = { entries: T[]; nextCursor: number | null };
