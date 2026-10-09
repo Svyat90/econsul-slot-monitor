@@ -292,10 +292,10 @@ extension/
 | розширення → застосунок | `ext:hello` | версія розширення |
 | розширення → застосунок | `ext:auth` | `{ loggedIn, exp, reason? }` |
 | розширення → застосунок | `ext:token` | `{ token, exp }` |
-| розширення → застосунок | `ext:draft` | `{ url, taskId, createdAt, expiresAt }` або `null` |
+| розширення → застосунок | `ext:draft` | `{ draft: { url, taskId, createdAt, expiresAt } \| null }` |
 | розширення → застосунок | `ext:booking` | `{ state: 'selecting' \| 'selected' \| 'submitted' \| 'failed', slot?, message? }` |
 | застосунок → розширення | `app:hello` | — |
-| застосунок → розширення | `app:selection` | `{ institutionCode, institutionName, countryName, serviceCode, serviceName }` |
+| застосунок → розширення | `app:selection` | `{ selection: { institutionCode, institutionName, countryName, serviceCode, serviceName } }` |
 | застосунок → розширення | `app:auth-failed` | `{ status }` (401/403 від API) |
 | застосунок → розширення | `app:slots` | `{ slots: [{ date, time, consulIpnHash }], range: { from?, to? }, test? }` |
 
@@ -310,7 +310,7 @@ extension/
 | застосунок → розширення | `app:monitor` | `{ audioReady, monitor: { running, nextAt, nextKind, checking, lastResult, stoppedBy, institution, nextRelease } }` для попапу |
 | застосунок → розширення | `app:auth-failed` | ще поля `soundPlayed` і `token`: якщо застосунок мав інший (старий, вставлений вручну) токен, а сайт має дійсний, розширення просто надсилає `ext:token` |
 | застосунок → розширення | `app:received` | `{ exp }` або `{ draftUrl }` — застосунок прийняв токен / посилання на чернетку; попап показує «передано» |
-| розширення → застосунок | `ext:draft` | поля `{ url, taskId, step, createdAt, expiresAt, foundAt }` (`createdAt` може бути `null`) |
+| розширення → застосунок | `ext:draft` | поля `draft`: `{ url, taskId, step, createdAt, expiresAt, foundAt }` (`createdAt` може бути `null`) |
 | застосунок → розширення | `app:login` | — (посилання «Увійти» в банері) |
 | застосунок → розширення | `app:mute`, `app:test-sound` | `{ sound: 'selected' \| 'glass' }` — тестові кнопки |
 
