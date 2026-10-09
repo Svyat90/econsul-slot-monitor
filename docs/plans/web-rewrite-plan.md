@@ -288,6 +288,7 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
 - 2026-10-09 · Етап 1 · S1.T0–S1.T4 виконано; `logs/schedule-changes.jsonl` імпортовано (5 записів, повторно — 0).
 - 2026-10-09 · Етап 1 закрито: `architecture-reviewer` — PASS; `plan-verifier` — 13 MET, без знахідок у коді; невідмічене (ручна перевірка на `:3000`) зроблено основною сесією: старий `main.go` зупинено, `pnpm --dir server start` на `:3000`, `slots.html` завантажує довідник, `/api/health` → `ok`. Запис зміни розкладу з браузера з'явиться з першою справжньою зміною (маршрут покрито тестами).
 - 2026-10-09 · Етап 2 · S2.T0–S2.T5 виконано: `/next/slots` у браузері — меню й сторінка; усі правила `web/.dependency-cruiser.cjs` і ESLint доведено файлами-порушниками (видалено). Відхилення від макета на етап 6: активний пункт меню підсвічено `--color-fast-bg` (фіолетовий), у макеті — світло-синій.
+- 2026-10-09 · Етап 2 закрито: `architecture-reviewer` — PASS (зауваження: правило `application-is-framework-free` без винятку `@contracts` — виправлено разом із `enforcement.md`); `plan-verifier` — 8 MET, решта — лише те, що він не може перевірити сам (знімок у браузері, файли-порушники); обидва зроблено основною сесією.
 
 ## Етап 1 — задачі
 
@@ -527,3 +528,150 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
 | `web/src/main.tsx`, `web/src/app/{router,Layout,providers}*`, `web/src/app/pages/**` | S2.T2 |
 | `server/src/app.ts`, `app.test.ts`, `platform/config.ts` | S2.T3 |
 | `server/.dependency-cruiser.cjs`, `server/package.json` (скрипт) | S2.T4 |
+
+## Етап 3 — задачі
+
+Загальне для всіх задач етапу (Module: web):
+
+- **Перенос дослівно.** Тіло функції з `slots.html` переноситься без зміни поведінки; глобальні змінні
+  й DOM стають аргументами. Рефакторинг — лише такий, що не змінює результату. Розбіжність з
+  `slots.html` — дефект (окрім явно названих тут).
+- **Час.** Домен не викликає `Date.now()`, `new Date()` без аргументу, `Math.random()`, таймери.
+  Момент — `nowMs: number`; «сьогодні» за часовим поясом браузера — через аргумент
+  `localDateKey: (ms: number) => string` (у `slots.html` це `getDateKey(new Date(ms))`); у тестах —
+  фіксована функція зі зсувом, напр. `utcOffsetDateKey(-5 * 60)` з `src/domain/slots/time.ts`.
+- **Фікстури** — `src/domain/__fixtures__/econsul/*.json` (формат — `web/docs/fixtures.md`;
+  `recordedAtMs` — `nowMs`), параметри установ — `../server/data/locations.json` (імпорт JSON у тесті).
+  Фікстури не змінювати.
+- **Rules для всіх задач:**
+  - Домен — чисті функції без React, `fetch`, `window`, `localStorage`, годинника й випадковості; імпорт лише `domain/**` і `zod` — onion-architecture §2, §5 «Domain»
+  - Тест на записаних відповідях і фіксованому `nowMs`, один щасливий шлях і межовий випадок — onion-architecture §8
+  - Типи з `z.infer`, без `any`; `readonly`-масиви на вході — typescript-expert
+  - Імпорти всередині домену — відносні з `.ts`; між кільцями — `@/`
+  - Код і коментарі англійською, у стилі `slots.html` (коментар пояснює «чому», як у джерелі)
+- **Verify для всіх:** `pnpm --dir web exec vitest run <свої тести>`, `pnpm --dir web run typecheck`,
+  `pnpm --dir web run lint`, `pnpm --dir web run arch:check`.
+- **Constraints для всіх:** алгоритм — `docs/booking.md` §6–7 дослівно; «Слот `[t, t+i)` зайнятий, якщо
+  `t + i > from` і `t < to` для будь-якого блокування»; «Слоти різних консулів незалежні»; горизонт —
+  «час відкриття цього дня за `timeZone` установи раніше, ніж `зараз + numberWeeks тижнів − 1 день`».
+
+### Wave 1 — паралельно
+
+#### S3.T1 — контракти e-Consul і довідника
+- Files: `web/src/domain/contracts/econsul.ts`, `econsul.test.ts`, `locations.ts`, `locations.test.ts` (new)
+- Rules (додатково): схеми відповідей e-Consul — «вільні»: невідомі поля дозволені (`z.looseObject`), бо сайт додає поля без попередження; обов'язкові лише поля, які читає алгоритм — zod; помилки розбору не кидаються з домену — `safeParse` у викликача (етап 4)
+- Interface:
+  - `scheduleRowSchema`, `type ScheduleRow` — поля: `consulIpnHash: string`, `admissionSchedulePeriodDate?: string | null`, `receptionCitizensTime?: { workingDays: string; workingHoursFrom: string; workingHoursTo: string }[]`, `nonWorkingTime?: { notWorkingDateAndHoursFrom: string; notWorkingDateAndHoursTo: string }[]`, `consularInstitutionService?: { code: string | number }[]`
+  - `scheduleResponseSchema` (`{ data: { data: ScheduleRow | null }[] }`), `type ScheduleResponse`
+  - `reservedSlotSchema`, `type ReservedSlot` (`consulIpnHash`, `receptionDateAndTimeFrom`, `receptionDateAndTimeTo`); `reservedResponseSchema` (`{ data: { status?: string; reservedSlots: ReservedSlot[] } }`), `type ReservedResponse`
+  - `locationsSchema`, `type Locations`, `type Institution` (`code`, `name`, `countryCode`, `country`, `timeZone`, `numberWeeks`, `serviceMinutes: Record<string, number>`), `holidays: { all: string[]; byService: Record<string, string[]> }`, `services: Record<string, string>`
+- Steps: тести — три фікстури й `server/data/locations.json` розбираються; рядок без `consulIpnHash` — помилка; зайве поле — не помилка.
+- Acceptance: усі записані відповіді й довідник проходять схеми.
+
+#### S3.T2 — час і дати (`time.ts`)
+- Files: `web/src/domain/slots/time.ts`, `time.test.ts` (new)
+- Interface:
+  - `type DateKey = string` ('YYYY-MM-DD'); `addDays(dateKey, days): DateKey`; `minutesToTime(minutes): string`; `parseTimeFromISO(iso): { hours; minutes; totalMinutes }`; `parseDateFromISO(iso): DateKey`
+  - `ukrainianDayMap: Readonly<Record<string, number>>`; `dayOfWeek(dateKey): number` (як `new Date(dateKey + 'T12:00:00Z').getUTCDay()`)
+  - `utcOffsetDateKey(offsetMinutes: number): (ms: number) => DateKey` — для тестів і для `localDateKey` у фейковому годиннику
+  - `consulateOffset(timeZone: string | undefined, sampleIsos: readonly string[], browserOffsetMinutes: number): string` — дослівно `getConsulateOffset()`: `GMT±HH:MM` установи; інакше зсув з першого ISO; інакше зсув браузера
+- Steps: тести — перехід через кінець місяця/року в `addDays`; `parseTimeFromISO('2026-10-16T10:30:00.00-06:00')` → 630; `consulateOffset('GMT-06:00', …)` → `-06:00`, без `timeZone` — з ISO, без ISO — з `browserOffsetMinutes`.
+
+#### S3.T3 — контракт протоколу розширення
+- Files: `web/src/domain/contracts/extension-messages.ts`, `extension-messages.test.ts` (new)
+- Rules (додатково): дискримінований союз за `type` (`z.discriminatedUnion`); дві схеми — вхідні `ext:*` (`source: 'econsul-ext'`) і вихідні `app:*` (`source: 'econsul-app'`); невідомий `type` — помилка розбору (приймач відкидає) — security «In this project» (App ↔ extension messages)
+- Interface: `extMessageSchema`, `type ExtMessage`, `appMessageSchema`, `type AppMessage`, `type AppSlot = { date: string; time: string; consulIpnHash?: string }`
+- Constraints: усі типи й поля — `extension/plans/extension-plan.md` §8 (усі три таблиці; `ext:booking` замінено на етапі 4 — не включати). Поля, яких таблиця не описує як обов'язкові, — `optional`. Перевірити по `slots.html` (`postToExt`, `onExt*`), які поля реально надсилаються.
+- Steps: тести — кожен тип з §8 розбирається; `ext:token` без `token` — помилка; `source: 'econsul-app'` у вхідних — помилка; невідомий тип — помилка.
+
+#### S3.T4 — діапазон дат і нові слоти (`slots-diff.ts`)
+- Files: `web/src/domain/monitoring/slots-diff.ts`, `slots-diff.test.ts` (new)
+- Interface:
+  - `type SlotKey = string` ('YYYY-MM-DD HH:MM'); `type DateRange = { from: string | null; to: string | null }`
+  - `inDateRange(slotKey, range): boolean` — `inDateRange()`
+  - `diffFreeSlots(input: { free: readonly SlotKey[]; knownFree: ReadonlySet<SlotKey> | null; range: DateRange }): { inRange: SlotKey[]; fresh: SlotKey[]; outside: number; known: Set<SlotKey> }` — блок з `runCheck()` між `getFreeSlotKeys()` і `monitor.knownFree = …` дослівно (`known` — новий `knownFree`, з усіх вільних, не лише в діапазоні)
+  - `formatSlotLines(slotKeys): string[]` — дослівно
+- Steps: тести — перша перевірка (`knownFree: null`) → усі в діапазоні нові; слот поза діапазоном не стає новим після розширення діапазону (`booking.md` §9 «Моніторинг», п. 6); зник і з'явився — знову новий.
+
+### Wave 2 — паралельно
+
+#### S3.T5 — дні календаря (`schedule-days.ts`)
+- Depends on: S3.T1, S3.T2
+- Files: `web/src/domain/slots/schedule-days.ts`, `schedule-days.test.ts` (new)
+- Interface:
+  - `holidaySet(holidays: Locations['holidays'], serviceCode: string): Set<DateKey>` — `getHolidaySet()`
+  - `serviceScheduleRows(rows: readonly ScheduleRow[], serviceCode: string): ScheduleRow[]` — `getServiceScheduleRows()`; `serviceConsulHashes(rows, serviceCode): string[]` — `getServiceConsulHashes()`
+  - `type ScheduleDay = { dateKey: DateKey; consulIpnHash: string; startMinutes: number; endMinutes: number; display: string }`
+  - `type ScheduleInput = { rows: readonly ScheduleRow[]; serviceCode: string; numberWeeks: number; offset: string; holidays: ReadonlySet<DateKey>; localDateKey: (ms: number) => DateKey }`
+  - `buildScheduleDays(input: ScheduleInput, nowMs: number): ScheduleDay[]` — дослівно `buildScheduleDays(nowMs)`
+- Steps: тести на фікстурі Чикаго з `recordedAtMs`: перший день — завтра; кількість днів і останній день; межа горизонту залежить від часу доби (той самий день з `nowMs` за хвилину до й після часу відкриття — `booking.md` §6 п. 3); свято пропущено; Нью-Йорк — два проміжки на день; послуга, якої консул не надає, — днів немає.
+
+#### S3.T6 — зміни розкладу (`schedule-changes.ts`)
+- Depends on: S3.T1
+- Files: `web/src/domain/monitoring/schedule-changes.ts`, `schedule-changes.test.ts` (new)
+- Interface:
+  - `type SnapshotRow = { consul: string; period: string | null; services: string[]; hours: string[]; nonWorking: string[] }`
+  - `scheduleSnapshot(rows: readonly ScheduleRow[]): SnapshotRow[]` (вхід — уже розгорнуті `data`, а не вся відповідь)
+  - `diffSnapshots(prev: readonly SnapshotRow[], next: readonly SnapshotRow[], todayKey: DateKey): string[]` — дослівно, тексти змін англійською як у `slots.html` (їх читає журнал і база)
+- Steps: тести — однакові знімки → `[]`; додано/прибрано рядок розкладу; змінились години; послуги `+`/`-`; минулий неробочий період, що зник, не рахується.
+
+#### S3.T7 — зарезервовані й звільнені слоти (`reserved-diff.ts`, нове — IDEA-004)
+- Depends on: S3.T1
+- Files: `web/src/domain/monitoring/reserved-diff.ts`, `reserved-diff.test.ts` (new)
+- Interface: `diffReserved(prev: readonly ReservedSlot[] | null, next: readonly ReservedSlot[]): { reserved: ReservedSlot[]; released: ReservedSlot[] }` — ключ слота: `consulIpnHash|from|to`; `prev === null` (перша перевірка) → обидва порожні; дублі в одній відповіді враховуються один раз
+- Steps: тести на фікстурі (перша відповідь мінус один слот і плюс вигаданий).
+
+#### S3.T8 — інтервал і вікно частих перевірок (`schedule.ts`)
+- Depends on: —
+- Files: `web/src/domain/monitoring/schedule.ts`, `schedule.test.ts` (new)
+- Interface:
+  - `FAST_CHECKS = { beforeMs: 120000, afterMs: 180000, minSeconds: 15, maxSeconds: 20 } as const`; `MIN_INTERVAL_SECONDS = 10`; `SCHEDULE_REFRESH_MS = 1800000`; `RELEASE_LOOKAHEAD_DAYS = 8`
+  - `type Release = { at: number; opening: string; days: { dateKey: string; display: string }[] }`
+  - `clampIntervalBounds(min: number | undefined, max: number | undefined): { min: number; max: number }` — `readIntervalBounds()` без DOM (типово 60–180)
+  - `fastWindow(releases: readonly Release[], nowMs: number): { active: Release | null; next: Release | null }` — `getFastWindow()`
+  - `planNextCheck(input: { nowMs: number; bounds: { min: number; max: number }; fastChecks: boolean; releases: readonly Release[]; random: () => number }): { delayMs: number; kind: 'scheduled' | 'fast' }` — рішення з `scheduleNextCheck()` дослівно; `random` — порт випадковості (у тесті — фіксовані значення)
+- Steps: тести — звичайна затримка в межах; усередині вікна — 15–20 с і `fast`; затримка, що зайшла б за початок вікна, обрізається до `next.at − 2 хв` (не менше 1 с); `fastChecks: false` → завжди звичайна.
+
+### Wave 3 — паралельно
+
+#### S3.T9 — вільні слоти (`free-slots.ts`)
+- Depends on: S3.T5
+- Files: `web/src/domain/slots/free-slots.ts`, `free-slots.test.ts` (new)
+- Interface:
+  - `type Blocking = { consulIpnHash: string; from: string; to: string }` (ISO)
+  - `collectNonWorking(rows: readonly ScheduleRow[], serviceCode: string): Blocking[]` — `collectNonWorkingSlots()`
+  - `type FreeSlots = { byDate: Record<DateKey, { workingHours: string; windows: { from: string; to: string; durationMinutes: number }[] }>; slotConsuls: Record<SlotKey, string[]>; keys: SlotKey[] }`
+  - `calculateFreeSlots(input: { days: readonly ScheduleDay[]; nonWorking: readonly Blocking[]; reserved: readonly ReservedSlot[]; slotMinutes: number }): FreeSlots` — `calculateBookableWindows()` + `getFreeSlotKeys()` дослівно (`keys` — у порядку `getFreeSlotKeys()`)
+- Steps: тести на трьох фікстурах з `recordedAtMs`: кількість вільних слотів (порахувати один раз і зафіксувати в тесті, перевіривши кілька днів вручну за `booking.md` §7); слот, що перетинає блокування на хвилину, — зайнятий; слот, що не вміщується до кінця прийому, — не вільний; вільний в одного з двох консулів — вільний.
+
+#### S3.T10 — моменти відкриття днів (`releases.ts`)
+- Depends on: S3.T5, S3.T8
+- Files: `web/src/domain/monitoring/releases.ts`, `releases.test.ts` (new)
+- Interface: `upcomingReleases(input: ScheduleInput, nowMs: number): Release[]` — `getUpcomingReleases()` без кешу (кеш — справа застосунку, етап 4): `buildScheduleDays(input, nowMs + RELEASE_LOOKAHEAD_DAYS днів)`, `at = Date.parse(dateKey + 'T' + opening + ':00' + offset) − (numberWeeks × 7 − 1) днів`, відкинуті ті, у кого `at + FAST_CHECKS.afterMs <= nowMs`, згруповані за `at`, без дублів днів
+- Steps: тести на фікстурі Чикаго: перший момент — о годині відкриття за `GMT-06:00`, відкривається день через `numberWeeks × 7 − 1` днів (`booking.md` §9 «Відкриття нових днів»: субота 10.10.2026 10:00 CDT відкриває п'ятницю 02.04.2027, якщо фікстура це покриває); у неділю й понеділок моментів немає; Нью-Йорк — два моменти на день.
+
+### Wave 4 — основна сесія
+
+#### S3.T11 — звірка з `slots.html`
+- Files: `web/scripts/reconcile-with-slots-html.ts` (new), `web/package.json` (`puppeteer-core`, скрипт `reconcile`)
+- Скрипт відкриває `slots.html` з робочого сервера в Chrome користувача (`puppeteer-core`, без
+  завантаження браузера), підставляє фікстуру й `Date.now = () => recordedAtMs`, викликає
+  `buildScheduleDays`, `calculateBookableWindows`, `getFreeSlotKeys`, `getUpcomingReleases` і
+  порівнює з новим доменом на тих самих даних. Запитів до e-Consul немає.
+- Результат: для всіх трьох фікстур — однакові дні, вільні слоти й моменти відкриття.
+
+### Ownership
+
+| Файли | Задача |
+|---|---|
+| `web/src/domain/contracts/econsul*`, `locations*` | S3.T1 |
+| `web/src/domain/slots/time*` | S3.T2 |
+| `web/src/domain/contracts/extension-messages*` | S3.T3 |
+| `web/src/domain/monitoring/slots-diff*` | S3.T4 |
+| `web/src/domain/slots/schedule-days*` | S3.T5 |
+| `web/src/domain/monitoring/schedule-changes*` | S3.T6 |
+| `web/src/domain/monitoring/reserved-diff*` | S3.T7 |
+| `web/src/domain/monitoring/schedule.ts`, `schedule.test.ts` | S3.T8 |
+| `web/src/domain/slots/free-slots*` | S3.T9 |
+| `web/src/domain/monitoring/releases*` | S3.T10 |
+| `web/scripts/reconcile-with-slots-html.ts`, `web/package.json` | S3.T11 |

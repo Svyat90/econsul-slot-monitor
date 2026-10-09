@@ -19,7 +19,7 @@ module.exports = {
             name: 'application-is-framework-free',
             severity: 'error',
             from: { path: '^src/application/' },
-            to: { path: ['node_modules/react/', 'node_modules/react-dom/', '^src/(adapters|app|features)/', '^\\.\\./server/'] },
+            to: { path: ['node_modules/react/', 'node_modules/react-dom/', '^src/(adapters|app|features)/', '^\\.\\./server/(?!src/contracts/)'] },
         },
         {
             name: 'ui-does-not-touch-adapters',
