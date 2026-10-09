@@ -103,6 +103,8 @@ export interface SettingsStore {
     saveDraft(draft: Draft | null): void;
     loadScheduleSnapshot(institutionCode: string): ScheduleSnapshot | null; // 'slots.schedule.<code>'
     saveScheduleSnapshot(institutionCode: string, snapshot: ScheduleSnapshot): void;
+    loadTabTitleMarks(): boolean; // 'slots.tabTitleMarks', true by default
+    saveTabTitleMarks(on: boolean): void;
 }
 
 // ---- Time, randomness, timers (adapters/browser-runtime; fakes in tests) ----
