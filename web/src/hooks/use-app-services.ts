@@ -5,7 +5,8 @@ import type { Clock, Scheduler } from '@/application/ports.ts';
 
 export type ExtensionLink = ReturnType<typeof createExtensionLink>;
 
-// What the UI gets from the composition root (src/app/providers.tsx)
+// What the UI gets from the composition root (src/app/providers.tsx). Shared by every feature:
+// features read the monitor and the extension link here, never from each other.
 export type AppServices = {
     monitor: Monitor;
     extensionLink: ExtensionLink;

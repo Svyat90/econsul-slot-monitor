@@ -1,5 +1,5 @@
 import styles from './StatusBlock.module.css';
-import { useExtensionState, useMonitor, useMonitorState, useNowSeconds } from './use-monitor.ts';
+import { useExtensionState, useMonitor, useMonitorState, useNowSeconds } from '@/hooks/use-app-services.ts';
 
 const SESSION_BAR_MS = 24 * 3600_000; // the site's token lives about a day
 

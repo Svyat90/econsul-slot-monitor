@@ -26,6 +26,7 @@ export interface ExtensionLink {
     login(): void;
     setAutoBook(on: boolean): void;
     testSound(kind: 'selected' | 'mute' | 'slots'): void;
+    userGesture(): void; // a click on the page: unlock audio and report audioReady
 }
 
 export type ExtensionLinkDeps = {
@@ -255,6 +256,11 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
         setAutoBook(on) {
             patch({ autoBook: on });
             bridge.send({ type: 'app:settings', patch: { autoBook: on } });
+        },
+        userGesture() {
+            if (alerts.audioReady()) return;
+            alerts.unlockAudio();
+            scheduler.setTimeout(reportMonitor, 100); // AudioContext.resume() settles asynchronously
         },
         // The extension's "slot selected" signal, mute, and app:slots with two made-up slots
         // (the extension opens the draft and finds neither; never booked)

@@ -135,7 +135,7 @@ function setup(options: { dateRange?: { from: string | null; to: string | null }
 
 
 describe('runCheck', () => {
-    it('first check: schedule and reserved slots, every free slot is new, alert before newSlots, log last', () => {
+    it('first check: schedule and reserved slots, every free slot is new, log lines, then the alert, then newSlots (as runCheck() in slots.html)', () => {
         const t = setup();
         return runCheck(t.ctx, 'scheduled').then((ok) => {
             expect(ok).toBe(true);
@@ -164,6 +164,14 @@ describe('runCheck', () => {
         expect(t.calls).toEqual({ schedule: 2, reserved: 3 });
         expect(t.state().log.some((e) => e.message.startsWith('Перевірка #2 (часта)'))).toBe(true);
         expect(t.state().log.some((e) => e.message.startsWith('Перевірка #3 (ручна)'))).toBe(true);
+    });
+
+    it('an empty schedule is requested again on the next check (slots.html: !scheduleRows.length)', async () => {
+        const t = setup();
+        t.ctx.patch({ schedule: { rows: [], fetchedAt: t.ctx.clock.now() } });
+        t.advance(60000);
+        await runCheck(t.ctx);
+        expect(t.calls.schedule).toBe(1);
     });
 
     it('next check: only the slots that appeared are new; no alert without new ones', async () => {

@@ -5,7 +5,7 @@ import { vi } from 'vitest';
 import type { ExtensionState } from '@/application/extension-link.ts';
 import type { Monitor, MonitorState } from '@/application/monitor.ts';
 import type { Clock, Scheduler } from '@/application/ports.ts';
-import { AppServicesContext, type AppServices } from '@/features/status/index.ts';
+import { AppServicesContext, type AppServices } from '@/hooks/use-app-services.ts';
 
 export const baseMonitorState: MonitorState = {
     locations: null,
@@ -66,6 +66,7 @@ export function createFakeServices(options: { monitor?: Partial<MonitorState>; e
         login: vi.fn(),
         setAutoBook: vi.fn(),
         testSound: vi.fn(),
+        userGesture: vi.fn(),
     };
     const clock: Clock = { now: () => options.now ?? Date.UTC(2026, 9, 9, 12), localDateKey: () => '2026-10-09', browserOffsetMinutes: () => -300 };
     const scheduler: Scheduler = { setTimeout: () => ({ id: 0 }), setInterval: () => ({ id: 0 }), clear: () => {} };

@@ -8,7 +8,8 @@ import { createServerApi } from '@/adapters/server-api/server-api.ts';
 import { createSettingsStore } from '@/adapters/settings-store/settings-store.ts';
 import { createExtensionLink } from '@/application/extension-link.ts';
 import { createMonitor } from '@/application/monitor.ts';
-import { AppServicesContext, type AppServices } from '@/features/status/index.ts';
+import { bookingUrl } from '@/domain/booking/booking-url.ts';
+import { AppServicesContext, type AppServices } from '@/hooks/use-app-services.ts';
 
 // Composition root: the only place that picks adapters for ports and builds the use cases.
 function createServices(): AppServices {
@@ -28,10 +29,7 @@ function createServices(): AppServices {
         random: browserRandom,
         scheduler,
         extensionConnected: () => links.current?.getState().connected ?? false,
-        openBooking: () => {
-            const draft = settings.loadDraft();
-            if (draft) alerts.openUrl(draft.url);
-        },
+        openBooking: () => alerts.openUrl(bookingUrl(settings.loadDraft()?.url ?? null)),
     });
     const extensionLink = createExtensionLink({ bridge, monitor, settings, alerts, clock, scheduler });
     links.current = extensionLink;
@@ -54,6 +52,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
         started = true;
         void value.monitor.init();
         value.extensionLink.start();
+        // A click anywhere unlocks this page's audio, so it can play the session sound itself
+        document.addEventListener('click', () => value.extensionLink.userGesture(), { capture: true });
     }, [value]);
     return <AppServicesContext value={value}>{children}</AppServicesContext>;
 }

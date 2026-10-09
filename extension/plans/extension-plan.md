@@ -307,7 +307,7 @@ extension/
 | розширення → застосунок | `ext:mute` | — (натиснуто «Вимкнути звук») |
 | розширення → застосунок | `ext:slots-received` | `{ count }`, підтвердження `app:slots` |
 | застосунок → розширення | `app:hello` | `{ audioReady }` |
-| застосунок → розширення | `app:monitor` | `{ audioReady, monitor: { running, nextAt, nextKind, checking, lastResult, stoppedBy, institution, nextRelease } }` для попапу |
+| застосунок → розширення | `app:monitor` | `{ audioReady, monitor: { running, nextAt, nextKind, checking, lastResult, stoppedBy, institution, nextRelease: { at, opening: '09:00' } \| null } }` для попапу |
 | застосунок → розширення | `app:auth-failed` | ще поля `soundPlayed` і `token`: якщо застосунок мав інший (старий, вставлений вручну) токен, а сайт має дійсний, розширення просто надсилає `ext:token` |
 | застосунок → розширення | `app:received` | `{ exp }` або `{ draftUrl }` — застосунок прийняв токен / посилання на чернетку; попап показує «передано» |
 | розширення → застосунок | `ext:draft` | поля `draft`: `{ url, taskId, step, createdAt, expiresAt, foundAt }` (`createdAt` може бути `null`) |

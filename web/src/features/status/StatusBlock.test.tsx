@@ -5,7 +5,7 @@ import type { ExtensionState } from '@/application/extension-link.ts';
 import type { Monitor, MonitorState } from '@/application/monitor.ts';
 import type { Clock, Scheduler } from '@/application/ports.ts';
 import { StatusBlock } from './StatusBlock.tsx';
-import { AppServicesContext, type ExtensionLink } from './use-monitor.ts';
+import { AppServicesContext, type ExtensionLink } from '@/hooks/use-app-services.ts';
 
 const NOW = Date.UTC(2026, 9, 9, 12, 0, 0);
 

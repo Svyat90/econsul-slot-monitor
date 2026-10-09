@@ -188,7 +188,7 @@ export async function runCheck(ctx: RunCheckContext, kind: CheckKind = 'schedule
     const stale = () => ctx.getState().selection !== selection;
     try {
         let state = ctx.getState();
-        if (!state.schedule || ctx.clock.now() - state.schedule.fetchedAt > SCHEDULE_REFRESH_MS) {
+        if (!state.schedule?.rows.length || ctx.clock.now() - state.schedule.fetchedAt > SCHEDULE_REFRESH_MS) {
             const response = await ctx.econsul.getSchedule(institution.code, ctx.getToken());
             if (stale()) return true;
             const rows = rowsOf(response);
