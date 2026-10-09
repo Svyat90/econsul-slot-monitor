@@ -1,6 +1,7 @@
 // Ports of the web app (plan §4 «Порти»). Use cases depend on these; adapters implement them;
 // src/app/providers.tsx wires them together.
 import type { CheckEntry, CheckQuery, StoredCheckEntry } from '@contracts/checks.ts';
+import type { ExtensionEventQuery, StoredExtensionEvent } from '@contracts/extension-events.ts';
 import type { RequestLogEntry } from '@contracts/request-log.ts';
 import type { ReservationEvent, ReservationQuery, StoredReservationEvent } from '@contracts/reservation-log.ts';
 import type { ScheduleLogEntry, StoredScheduleLogEntry } from '@contracts/schedule-log.ts';
@@ -46,6 +47,7 @@ export interface LogHistory {
     checks(query: Partial<CheckQuery>): Promise<Page<StoredCheckEntry>>;
     reservations(query: Partial<ReservationQuery>): Promise<Page<StoredReservationEvent>>;
     scheduleChanges(query: Partial<HistoryQuery>): Promise<Page<StoredScheduleLogEntry>>;
+    extensionEvents(query: Partial<ExtensionEventQuery>): Promise<Page<StoredExtensionEvent>>;
     scheduleLogDownloadUrl(): string; // GET /api/schedule-log.jsonl
 }
 
