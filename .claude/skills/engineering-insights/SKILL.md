@@ -1,6 +1,6 @@
 ---
 name: engineering-insights
-description: "Reads and maintains this repo's insights files — <module>/docs/insights.md per module (extension/docs/insights.md, later the web app and server) and docs/insights.md for cross-module findings — non-obvious behaviour of e-consul.gov.ua, Chrome, the extension, the web app, the server and the tools. Use at the start of any task that touches slots.html or the web app, extension/, server/, main.go or testing in Chrome — read the module's file and the root one before answering — and again when a task ends, to add non-obvious findings (traps, dead ends, site quirks, tool quirks) as dated entries. Also use when the user mentions insights, інсайти, learnings, wrap-up or retrospective, asks what was learned, or asks to prune the file."
+description: "Reads and maintains this repo's insights files — <module>/docs/insights.md per module (extension/docs/insights.md, web/docs/insights.md, server/docs/insights.md) and docs/insights.md for cross-module findings — non-obvious behaviour of e-consul.gov.ua, Chrome, the extension, the web app, the server and the tools. Use at the start of any task that touches the web app (web/), extension/, server/ or testing in Chrome — read the module's file and the root one before answering — and again when a task ends, to add non-obvious findings (traps, dead ends, site quirks, tool quirks) as dated entries. Also use when the user mentions insights, інсайти, learnings, wrap-up or retrospective, asks what was learned, or asks to prune the file."
 ---
 
 # Engineering Insights
@@ -22,8 +22,8 @@ when the user asks for a session wrap-up or a retrospective.
 ## The files
 
 Every module keeps its own file at `<module>/docs/insights.md`; the root
-`docs/insights.md` holds what concerns several modules or the app that is not a
-module yet (`slots.html`, `main.go`). All are in Ukrainian like the rest of the
+`docs/insights.md` holds what concerns several modules, plus the legacy `slots.html`
+while it exists. All are in Ukrainian like the rest of the
 docs. Each is split into `##` sections by area; each entry is a `###` heading with
 the date in parentheses, followed by short prose, bullets or a table.
 
@@ -31,7 +31,7 @@ the date in parentheses, followed by short prose, bullets or a table.
 |---|---|
 | `extension/**`, behaviour of e-consul.gov.ua pages under the extension | `extension/docs/insights.md` → `## Розширення Chrome` |
 | testing the extension (puppeteer, stubs, ports) | `extension/docs/insights.md` → `## Тестування` |
-| the web app (`slots.html` today; its module after the rewrite), UI, monitoring | the app module's `docs/insights.md`; until it exists — `docs/insights.md` → `## Застосунок` |
+| the web app (`web/**`), UI, monitoring | `web/docs/insights.md` (create it with the first entry) |
 | `server/**`: Fastify, Drizzle, Postgres, the request log | `server/docs/insights.md` (create it with the module) |
 | e-Consul API responses, the slot algorithm, time zones, day releases | `docs/insights.md` → `## Сайт і API e-Consul` (create on first entry) |
 | the app ↔ extension protocol, app ↔ server contracts | `docs/insights.md` → `## Між модулями` (create on first entry) |

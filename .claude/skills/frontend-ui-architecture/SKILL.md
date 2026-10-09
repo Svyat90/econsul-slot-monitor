@@ -31,8 +31,8 @@ reasoning to fall back on when the convention is silent.
 
 ### In this project
 
-The app is being rewritten from one file (`slots.html`, served by `main.go`) into
-the `web/` module: **Vite + React + TypeScript**, a client-side SPA with a router
+The app was rewritten (2026-10-09) from one file (`slots.html`, served by `main.go`)
+into the `web/` module — `slots.html` stays on `/old` until its removal: **Vite + React + TypeScript**, a client-side SPA with a router
 (IDEA-006 in `docs/brainstorm/ideas.md`). There is **no Next.js**: §7 and
 `references/nextjs-app-router.md` do not apply here — read them only for the
 general placement ideas. Facts that shape the layout:

@@ -1,6 +1,8 @@
 # Enforcing the rings — dependency-cruiser
 
-Not set up yet: the app is being rewritten. Add it in the same change that
+Set up in stage 2 of the rewrite plan: `web/.dependency-cruiser.cjs` (web rings and the extension)
+and `server/.dependency-cruiser.cjs` (server rules); ESLint restrictions in `web/eslint.config.js`.
+The original advice — add it in the same change that
 scaffolds the project, while the codebase has no violations — then there is no
 baseline to maintain.
 

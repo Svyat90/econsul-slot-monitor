@@ -57,7 +57,7 @@ DOM or a browser only to check a calculation.
 > TypeScript** SPA in the `web/` module, served together with the API by the
 > Fastify `server/` module on `localhost:3000`. Paths in this file are relative
 > to `web/` unless they start with `server/` or `extension/`. The folder names
-> are proposed until the rewrite plan in `docs/plans/` confirms them.
+> are confirmed by the rewrite plan (`docs/plans/web-rewrite-plan.md`) and exist in the code.
 
 ```
 composition root   src/app/providers.tsx (deps) · src/main.tsx (router)
@@ -118,7 +118,7 @@ both a use case and the concrete adapter that satisfies its port.
 
 ## 4. Where does X go?
 
-| Code (today in `slots.html`) | Home | Ring |
+| Code (formerly in `slots.html`) | Home | Ring |
 |---|---|---|
 | Shape of `public-calendar-get-actual-consuls-schedule` / `public-get-consuls-reserved-slots` responses | `domain/contracts/econsul.ts` (zod) | contracts |
 | `locations.json` shape, service durations, holidays | `domain/contracts/locations.ts` | contracts |
@@ -137,7 +137,7 @@ both a use case and the concrete adapter that satisfies its port.
 | `localStorage` keys (`slots.selection`, `slots.interval`, draft, date range) | `adapters/settings-store/` | infrastructure |
 | Recording each e-Consul request (method, filters, status, duration, outcome) | `adapters/request-log/` — wraps `EconsulApi`, batches to `POST /api/request-log` | infrastructure |
 | Storing and querying the request log | `server/src/modules/request-log/` (routes → repository) | server, section 11 |
-| Writing the schedule-change log | `server/src/modules/schedule-log/` (today `main.go` → `logs/schedule-changes.jsonl`) | server, section 11 |
+| Writing the schedule-change log | `server/src/modules/schedule-log/` (formerly `main.go` → `logs/schedule-changes.jsonl`) | server, section 11 |
 | Building the deps object, picking fakes for tests | `src/app/providers.tsx` | composition root |
 | Calendar grid, day modal, monitoring log view | `features/<feature>/components/` | presentation |
 

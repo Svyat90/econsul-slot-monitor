@@ -12,7 +12,7 @@ metadata:
 
 The backend is a small local module, `server/` (Fastify 5 + Drizzle + Postgres in Docker),
 next to the web app. Its first job is the **request log**: every request the web app makes to
-e-Consul is recorded in the database. It also takes over everything `main.go` does today: serving the page and
+e-Consul is recorded in the database. It also took over everything `main.go` did: serving the page and
 `locations.json`, and the schedule-change log (now `logs/schedule-changes.jsonl`), plus the
 reservation log (IDEA-004) and the extension's events (IDEA-005). Records are kept forever.
 

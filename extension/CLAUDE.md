@@ -16,7 +16,7 @@
   підказує користувачу натиснути ⟳.
 - Протокол повідомлень із застосунком (`ext:*` / `app:*`) — контракт:
   [plans/extension-plan.md](plans/extension-plan.md) §8. Зміна типу чи полів — у тому самому коміті
-  й у застосунку (`slots.html`).
+  й у застосунку (`web/src/domain/contracts/extension-messages.ts`, `web/src/application/extension-link.ts`).
 - Токен віддається лише вкладкам з origin `http://localhost:3000` (перевірка за `sender.url`) і
   ніколи не логується.
 - Розширення діє на сайті **лише кліками в його інтерфейсі**. «Підтвердити» натискає тільки з

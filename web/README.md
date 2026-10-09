@@ -1,6 +1,6 @@
 # web — застосунок моніторингу слотів
 
-Новий інтерфейс замість `slots.html`: календар вільних слотів, моніторинг установи, журнали і
+Застосунок замість `slots.html`: календар вільних слотів, моніторинг установи, журнали і
 налаштування. Vite + React + TypeScript; сторінку й API віддає сервер з модуля `server/`.
 
 > Застосунок віддається на `http://localhost:3000/`. Старий `slots.html` тимчасово на `/old`
@@ -29,7 +29,11 @@ pnpm dev                        # Vite на :3000, /api → сервер на :3
 |---|---|
 | `src/main.tsx` | Точка входу: стилі, `AppProviders`, маршрутизатор |
 | `src/app/` | Composition root (`providers.tsx`), маршрути (`router.tsx`), макет з меню (`Layout.tsx`), сторінки (`pages/`), стилі й токени (`styles/`) |
-| `src/domain/` | Чисті функції (з етапу 3); `__fixtures__/` — записані відповіді e-Consul |
+| `src/domain/` | Чисті функції: алгоритм слотів, моніторинг, контракти; `__fixtures__/` — записані відповіді e-Consul |
+| `src/application/` | Порти й use cases: монітор, перевірка, зв'язок із розширенням |
+| `src/adapters/` | Браузер: запити до e-Consul, журнал запитів, черга на сервер, міст до розширення, звуки, `localStorage` |
+| `src/features/` | Сторінки й блоки: `slots`, `monitoring`, `settings`, `status`, `banners` |
+| `src/hooks/` | Спільне для фіч: сервіси з composition root, журнал резервувань |
 | `public/fonts/` | Локальні шрифти |
 
 ## Розділи
@@ -49,5 +53,5 @@ pnpm dev                        # Vite на :3000, /api → сервер на :3
 |---|---|
 | [docs/design/README.md](docs/design/README.md) | Макет, знімки екранів, токени дизайну |
 | [docs/fixtures.md](docs/fixtures.md) | Записані відповіді e-Consul для тестів і як записати свіжі |
-| `docs/insights.md` | Неочевидна поведінка (з'явиться з першим інсайтом) |
+| [docs/insights.md](docs/insights.md) | Неочевидна поведінка застосунку, тестів і збірки |
 | `plans/` | Плани саме цього модуля; загальний план переписування — [../docs/plans/web-rewrite-plan.md](../docs/plans/web-rewrite-plan.md) |

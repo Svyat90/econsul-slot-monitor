@@ -4,9 +4,9 @@
 щоб потім аналізувати, як змінюються слоти й розклад. Fastify 5 + Drizzle + Postgres у Docker.
 Замінив `main.go`.
 
-> Стан: етап 5 [плану](../docs/plans/web-rewrite-plan.md) — працюють усі журнали, крім
-> `extension-events` (етап 7). Старі маршрути `slots.html` (`/`, `/locations.json`,
-> `POST /schedule-log`) лишаються до етапу 8. Межі історії — `[from, to)`; база недоступна → `/api`
+> Стан: віддає новий застосунок на `/` і всі журнали. Старий `slots.html` тимчасово на `/old` (з
+> ним — `GET /locations.json` і `POST /schedule-log`), до видалення ([план](../docs/plans/web-rewrite-plan.md),
+> етап 8, S8.T5). Межі історії — `[from, to)`; база недоступна → `/api`
 > відповідає 503.
 
 ## Запуск
@@ -32,7 +32,7 @@ pnpm start            # http://localhost:3000
 
 ## Що робить
 
-- Віддає зібраний `web/` (а до етапу 8 — ще й `slots.html` і `locations.json`).
+- Віддає зібраний `web/` на `/` (невідомі шляхи поза `/api` → `index.html`; `/next/*` → 301 без `/next`), а тимчасово — старий `slots.html` на `/old`.
 - Приймає пачки записів від застосунку й розширення і складає їх у таблиці:
 
 | Таблиця | Що в ній | Пише |
@@ -64,7 +64,7 @@ pnpm start            # http://localhost:3000
 | Шлях | Що це |
 |---|---|
 | `src/server.ts` | Запуск: конфігурація, контейнер, `listen`, коректна зупинка |
-| `src/app.ts` | `buildApp(deps)`: маршрути, помилки (валідація → 422), `slots.html` і довідник |
+| `src/app.ts` | `buildApp(deps)`: маршрути, помилки (валідація → 422, база недоступна → 503), статика `web/dist`, тимчасово `slots.html` на `/old` |
 | `src/platform/` | `config.ts` (порт, база, шляхи), `container.ts` (пул бази й репозиторії) |
 | `src/contracts/` | Zod-схеми API — канонічні, `web/` імпортує їх як `@contracts/*` |
 | `src/modules/<m>/` | `routes.ts` → `repository.ts` (Drizzle) |
