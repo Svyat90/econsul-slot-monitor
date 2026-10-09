@@ -3,8 +3,9 @@
 // plans the checks. Order of effects as in the original: request -> calculation -> new state ->
 // alert -> extension -> log -> next check.
 import type { ReservedSlot, ScheduleResponse, ScheduleRow } from '@/domain/contracts/econsul.ts';
-import { SessionExpiredError } from '@/domain/contracts/errors.ts';
+import { EconsulSchemaError, EconsulUnavailableError, SessionExpiredError } from '@/domain/contracts/errors.ts';
 import type { Institution, Locations } from '@/domain/contracts/locations.ts';
+import { diffReserved } from '@/domain/monitoring/reserved-diff.ts';
 import { diffSnapshots, scheduleSnapshot } from '@/domain/monitoring/schedule-changes.ts';
 import { upcomingReleases } from '@/domain/monitoring/releases.ts';
 import { SCHEDULE_REFRESH_MS, type Release } from '@/domain/monitoring/schedule.ts';
@@ -17,7 +18,9 @@ import {
     type ScheduleInput,
 } from '@/domain/slots/schedule-days.ts';
 import { consulateOffset } from '@/domain/slots/time.ts';
-import type { Alerts, Clock, EconsulApi, ServerApi, SettingsStore } from './ports.ts';
+import type { CheckEntry, NewSlot } from '@contracts/checks.ts';
+import type { RequestOutcome } from '@contracts/common.ts';
+import type { AppSession, Alerts, Clock, EconsulApi, Ids, ServerApi, SettingsStore } from './ports.ts';
 
 export type StopCause = 'user' | 'session' | 'other';
 export type CheckKind = 'scheduled' | 'fast' | 'manual';
@@ -56,6 +59,12 @@ export type RunCheckContext = {
     settings: SettingsStore;
     alerts: Alerts;
     clock: Clock;
+    ids: Ids;
+    session: AppSession;
+    // the reserved slots of the previous successful check of the selected institution; null after
+    // a start or an institution change, so the next check is a baseline
+    getPrevReserved: () => { slots: ReservedSlot[]; at: number } | null;
+    setPrevReserved: (prev: { slots: ReservedSlot[]; at: number }) => void;
     extensionConnected: () => boolean;
     openBooking: () => void;
     getState: () => MonitorState;
@@ -173,6 +182,79 @@ function alertSession(ctx: RunCheckContext, error: SessionExpiredError): void {
     ctx.alerts.setTabTitle(`🔴 Сесія завершилась — ${DEFAULT_TITLE}`);
 }
 
+function outcomeOf(error: unknown): RequestOutcome {
+    if (error instanceof SessionExpiredError) return 'session_expired';
+    if (error instanceof EconsulUnavailableError) return error.status === null ? 'network_error' : 'unavailable';
+    if (error instanceof EconsulSchemaError) return 'schema_error';
+    return 'network_error';
+}
+
+type CheckResult = Pick<CheckEntry, 'outcome' | 'freeCount' | 'newCount' | 'outOfRangeCount' | 'newSlots' | 'errorMessage'>;
+
+// The log write never throws and never slows the check down (ServerApi contract); the guard keeps
+// a faulty adapter from turning a finished check into a failed one.
+function recordCheck(
+    ctx: RunCheckContext,
+    check: { startedMs: number; kind: CheckKind; seq: number; institutionCode: string; serviceCode: string },
+    result: CheckResult,
+): void {
+    try {
+        ctx.server.recordCheck({
+            clientId: ctx.ids.uuid(),
+            startedAt: new Date(check.startedMs).toISOString(),
+            durationMs: Math.max(0, ctx.clock.now() - check.startedMs),
+            kind: check.kind,
+            checkSeq: check.seq,
+            institutionCode: check.institutionCode,
+            serviceCode: check.serviceCode,
+            ...result,
+            tabSessionId: ctx.session.tabSessionId,
+            appVersion: ctx.session.appVersion,
+        });
+    } catch {
+        // dropped: monitoring goes on
+    }
+}
+
+function newSlotsOf(fresh: readonly SlotKey[], free: FreeSlots): NewSlot[] {
+    return fresh.map((key) => ({
+        date: key.slice(0, 10),
+        time: key.slice(11, 16),
+        consulIpnHash: free.slotConsuls[key]?.[0] ?? null,
+    }));
+}
+
+function recordReservations(
+    ctx: RunCheckContext,
+    institutionCode: string,
+    reserved: readonly ReservedSlot[],
+    now: number,
+): void {
+    const prev = ctx.getPrevReserved();
+    ctx.setPrevReserved({ slots: [...reserved], at: now });
+    const diff = diffReserved(prev?.slots ?? null, reserved);
+    if (!prev || (diff.reserved.length === 0 && diff.released.length === 0)) return;
+    const previousCheckAt = new Date(prev.at).toISOString();
+    const detectedAt = new Date(now).toISOString();
+    const events = (kind: 'reserved' | 'released', slots: readonly ReservedSlot[]) =>
+        slots.map((slot) => ({
+            clientId: ctx.ids.uuid(),
+            kind,
+            institutionCode,
+            consulIpnHash: slot.consulIpnHash,
+            slotFrom: slot.receptionDateAndTimeFrom,
+            slotTo: slot.receptionDateAndTimeTo,
+            previousCheckAt,
+            detectedAt,
+            tabSessionId: ctx.session.tabSessionId,
+        }));
+    try {
+        ctx.server.recordReservations([...events('reserved', diff.reserved), ...events('released', diff.released)]);
+    } catch {
+        // dropped: monitoring goes on
+    }
+}
+
 // Returns false if a check is already running or the session ended, true otherwise.
 export async function runCheck(ctx: RunCheckContext, kind: CheckKind = 'scheduled'): Promise<boolean> {
     const before = ctx.getState();
@@ -183,13 +265,16 @@ export async function runCheck(ctx: RunCheckContext, kind: CheckKind = 'schedule
     const checkNumber = before.checks + 1;
     const label =
         `Перевірка #${checkNumber}` + (kind === 'scheduled' ? '' : kind === 'fast' ? ' (часта)' : ' (ручна)');
+    const startedMs = ctx.clock.now();
+    const checkRef = { startedMs, kind, seq: checkNumber, institutionCode: institution.code, serviceCode };
+    const meta = { checkKind: kind, checkSeq: checkNumber };
     ctx.patch({ checking: true, checks: checkNumber, nextAt: 0 });
     // the user may switch the institution while a request is in flight: drop the stale answer
     const stale = () => ctx.getState().selection !== selection;
     try {
         let state = ctx.getState();
         if (!state.schedule?.rows.length || ctx.clock.now() - state.schedule.fetchedAt > SCHEDULE_REFRESH_MS) {
-            const response = await ctx.econsul.getSchedule(institution.code, ctx.getToken());
+            const response = await ctx.econsul.getSchedule(institution.code, ctx.getToken(), meta);
             if (stale()) return true;
             const rows = rowsOf(response);
             ctx.patch({
@@ -204,11 +289,20 @@ export async function runCheck(ctx: RunCheckContext, kind: CheckKind = 'schedule
         if (consulHashes.length === 0) {
             ctx.patch({ lastResult: 'жоден консул не надає цієї послуги' });
             ctx.log(`${label}: жоден консул цієї установи не надає вибрану послугу`, 'warn');
+            recordCheck(ctx, checkRef, {
+                outcome: 'ok',
+                freeCount: 0,
+                newCount: 0,
+                outOfRangeCount: 0,
+                newSlots: [],
+                errorMessage: null,
+            });
             return true;
         }
         const reservedResponse = await ctx.econsul.getReservedSlots(
             { institutionCode: institution.code, consulIpnHash: consulHashes },
             ctx.getToken(),
+            meta,
         );
         if (stale()) return true;
         const reserved = reservedResponse.data.reservedSlots;
@@ -255,7 +349,26 @@ export async function runCheck(ctx: RunCheckContext, kind: CheckKind = 'schedule
             alertSlots(ctx, institution, fresh, inRange.length);
             ctx.emitNewSlots(fresh, free);
         }
+        recordCheck(ctx, checkRef, {
+            outcome: 'ok',
+            freeCount: inRange.length,
+            newCount: fresh.length,
+            outOfRangeCount: outside,
+            newSlots: newSlotsOf(fresh, free),
+            errorMessage: null,
+        });
+        recordReservations(ctx, institution.code, reserved, now);
     } catch (error) {
+        const token = ctx.getToken();
+        const raw = error instanceof Error ? error.message : String(error);
+        recordCheck(ctx, checkRef, {
+            outcome: outcomeOf(error),
+            freeCount: null,
+            newCount: null,
+            outOfRangeCount: null,
+            newSlots: [],
+            errorMessage: (token ? raw.split(token).join('[token]') : raw).slice(0, 500),
+        });
         if (error instanceof SessionExpiredError) {
             ctx.patch({ lastResult: `сесія завершилась (${error.message})` });
             ctx.stop(`Сесія завершилась (${error.message})`, 'session');

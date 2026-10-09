@@ -4,7 +4,8 @@
 import type { FreeSlots } from '@/domain/slots/free-slots.ts';
 import { clampIntervalBounds, FAST_CHECKS, planNextCheck } from '@/domain/monitoring/schedule.ts';
 import type { DateRange, SlotKey } from '@/domain/monitoring/slots-diff.ts';
-import type { Alerts, Clock, EconsulApi, LocationsSource, Random, Scheduler, ServerApi, SettingsStore, TimerHandle } from './ports.ts';
+import type { ReservedSlot } from '@/domain/contracts/econsul.ts';
+import type { Alerts, AppSession, Clock, EconsulApi, Ids, LocationsSource, Random, Scheduler, ServerApi, SettingsStore, TimerHandle } from './ports.ts';
 import {
     DEFAULT_TITLE,
     runCheck,
@@ -48,6 +49,8 @@ export type MonitorDeps = {
     settings: SettingsStore;
     alerts: Alerts;
     clock: Clock;
+    ids: Ids;
+    session: AppSession;
     random: Random;
     scheduler: Scheduler;
     extensionConnected: () => boolean; // alertSession(): notification only without the extension
@@ -61,7 +64,7 @@ const LOG_LIMIT = 100;
 type Handlers = { [K in keyof MonitorEvents]: Set<MonitorEvents[K]> };
 
 export function createMonitor(deps: MonitorDeps): Monitor {
-    const { econsul, server, settings, alerts, clock, random, scheduler } = deps;
+    const { econsul, server, settings, alerts, clock, ids, session, random, scheduler } = deps;
     let state: MonitorState = {
         locations: null,
         selection: null,
@@ -87,6 +90,7 @@ export function createMonitor(deps: MonitorDeps): Monitor {
     // The session token lives only here, in memory: never in the state, the log or the settings.
     let token = '';
     let knownFree: ReadonlySet<SlotKey> | null = null;
+    let prevReserved: { slots: ReservedSlot[]; at: number } | null = null;
     let timer: TimerHandle | null = null;
     let disposed = false;
     const listeners = new Set<() => void>();
@@ -106,6 +110,7 @@ export function createMonitor(deps: MonitorDeps): Monitor {
     // Called when the institution or service changes: the next check starts from scratch
     function resetMonitorState(): void {
         knownFree = null;
+        prevReserved = null;
         patch({
             schedule: null,
             reserved: null,
@@ -130,6 +135,12 @@ export function createMonitor(deps: MonitorDeps): Monitor {
         settings,
         alerts,
         clock,
+        ids,
+        session,
+        getPrevReserved: () => prevReserved,
+        setPrevReserved: (prev) => {
+            prevReserved = prev;
+        },
         extensionConnected: deps.extensionConnected,
         openBooking: deps.openBooking,
         getState: () => state,

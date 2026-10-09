@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { checkEntrySchema, type CheckEntry } from '@contracts/checks.ts';
+import { reservationEventSchema, type ReservationEvent } from '@contracts/reservation-log.ts';
 import locationsJson from '../../../server/data/locations.json';
 import houston from '../domain/__fixtures__/econsul/houston-2026-10-09.json';
 import { reservedResponseSchema, scheduleResponseSchema, type ReservedResponse, type ScheduleResponse } from '@/domain/contracts/econsul.ts';
@@ -14,6 +16,7 @@ import type {
     Clock,
     EconsulApi,
     IntervalBounds,
+    RequestMeta,
     ScheduleSnapshot,
     Scheduler,
     SettingsStore,
@@ -25,6 +28,7 @@ const scheduleResponse = scheduleResponseSchema.parse(houston.schedule);
 const reservedResponse = reservedResponseSchema.parse(houston.reserved);
 const CODE = houston.institutionCode;
 const NOW = houston.recordedAtMs;
+const TAB = '11111111-1111-4111-8111-111111111111';
 const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 // Houston is fully booked in the fixture: free slots appear when reserved slots are removed
@@ -64,15 +68,18 @@ function setup(options: { startAt?: number; random?: number } = {}) {
     };
 
     const calls = { schedule: 0, reserved: 0 };
+    const metas: (RequestMeta | undefined)[] = [];
     const responses = { schedule: scheduleResponse as ScheduleResponse, reserved: reservedWithout(0, 1) };
     let failure: Error | null = null;
     const econsul: EconsulApi = {
-        async getSchedule() {
+        async getSchedule(_code, _token, meta) {
+            metas.push(meta);
             calls.schedule++;
             if (failure) throw failure;
             return responses.schedule;
         },
-        async getReservedSlots() {
+        async getReservedSlots(_request, _token, meta) {
+            metas.push(meta);
             calls.reserved++;
             if (failure) throw failure;
             return responses.reserved;
@@ -108,9 +115,19 @@ function setup(options: { startAt?: number; random?: number } = {}) {
     };
 
     const scheduleChanges: unknown[] = [];
+    const checkEntries: CheckEntry[] = [];
+    const reservationEvents: ReservationEvent[] = [];
+    let uuidCounter = 0;
     const monitor = createMonitor({
         econsul,
-        server: { recordScheduleChange: (e) => void scheduleChanges.push(e) },
+        server: {
+            recordScheduleChange: (e) => void scheduleChanges.push(e),
+            recordRequest: () => undefined,
+            recordCheck: (e) => void checkEntries.push(e),
+            recordReservations: (batch) => void reservationEvents.push(...batch),
+        },
+        ids: { uuid: () => `00000000-0000-4000-8000-${String(++uuidCounter).padStart(12, '0')}` },
+        session: { tabSessionId: TAB, appVersion: '1.0.0' },
         locations: { load: async () => locations },
         settings,
         alerts,
@@ -126,6 +143,9 @@ function setup(options: { startAt?: number; random?: number } = {}) {
         responses,
         alertCalls,
         scheduleChanges,
+        metas,
+        checkEntries,
+        reservationEvents,
         store,
         fire,
         pending: () => timers.map((t) => t.at - nowMs),
@@ -376,5 +396,42 @@ describe('monitor', () => {
         t.monitor.setInterval({ min: 3, max: 5 });
         expect(t.monitor.getState().interval).toEqual({ min: 10, max: 10 });
         expect(t.store.interval).toEqual({ min: 10, max: 10 });
+    });
+
+    it('records each check with its kind and sequence; scheduled and manual checks are told apart', async () => {
+        const t = setup({ random: 0 });
+        await ready(t);
+        await t.monitor.start();
+        await t.fire();
+        await t.monitor.checkNow();
+        const entries = t.checkEntries.map((e) => checkEntrySchema.parse(e));
+        expect(entries.map((e) => [e.kind, e.checkSeq, e.outcome])).toEqual([
+            ['scheduled', 1, 'ok'],
+            ['scheduled', 2, 'ok'],
+            ['manual', 3, 'ok'],
+        ]);
+        expect(t.metas.map((m) => m?.checkSeq)).toEqual([1, 1, 2, 3]);
+        expect(t.metas[0]).toEqual({ checkKind: 'scheduled', checkSeq: 1 });
+        expect(entries[0]!.tabSessionId).toBe(TAB);
+        expect(JSON.stringify(t.checkEntries)).not.toContain('secret-token');
+    });
+
+    it('reservations: none on the first check, one reserved event on the second; a new institution starts a new baseline', async () => {
+        const t = setup({ random: 0 });
+        await ready(t);
+        await t.monitor.start();
+        expect(t.reservationEvents).toEqual([]);
+        t.responses.reserved = reservedWithout(1, 3);
+        await t.fire();
+        const events = t.reservationEvents.map((e) => reservationEventSchema.parse(e));
+        expect(events.map((e) => e.kind).sort()).toEqual(['released', 'reserved']);
+        expect(events[0]).toMatchObject({ institutionCode: CODE, tabSessionId: TAB });
+        t.reservationEvents.length = 0;
+
+        const other = locations.institutions.find((i) => i.code !== CODE)!;
+        t.monitor.setSelection(other.code, '1');
+        t.responses.reserved = reservedWithout(0, 1, 3);
+        await t.fire();
+        expect(t.reservationEvents).toEqual([]);
     });
 });
