@@ -58,7 +58,7 @@ function setup(state: Partial<MonitorState> = {}, ext: Partial<ExtensionState> =
         clear: () => {},
     } as unknown as Scheduler;
     const wrapper = ({ children }: { children: ReactNode }) => (
-        <AppServicesContext value={{ monitor, extensionLink, clock, scheduler }}>{children}</AppServicesContext>
+        <AppServicesContext value={{ monitor, extensionLink, clock, scheduler, history: {} as never }}>{children}</AppServicesContext>
     );
     render(<StatusBlock />, { wrapper });
     return {

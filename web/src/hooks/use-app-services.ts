@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
 import type { ExtensionState, createExtensionLink } from '@/application/extension-link.ts';
 import type { Monitor, MonitorState } from '@/application/monitor.ts';
-import type { Clock, Scheduler } from '@/application/ports.ts';
+import type { Clock, LogHistory, Scheduler } from '@/application/ports.ts';
 
 export type ExtensionLink = ReturnType<typeof createExtensionLink>;
 
@@ -12,6 +12,7 @@ export type AppServices = {
     extensionLink: ExtensionLink;
     clock: Clock;
     scheduler: Scheduler;
+    history: LogHistory;
 };
 
 export const AppServicesContext = createContext<AppServices | null>(null);

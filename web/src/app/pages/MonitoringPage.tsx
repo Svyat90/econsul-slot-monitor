@@ -1,7 +1,5 @@
+import { MonitoringView } from '@/features/monitoring/index.ts';
+
 export function MonitoringPage() {
-    return (
-        <>
-            <h1>Моніторинг</h1>
-        </>
-    );
+    return <MonitoringView />;
 }

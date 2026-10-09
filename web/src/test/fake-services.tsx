@@ -1,10 +1,12 @@
 // Fake app services for component tests: a monitor and an extension link whose state the test
 // sets, with spies for the actions. Never the real adapters (they would touch the network).
-import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useState, type ReactNode } from 'react';
 import { vi } from 'vitest';
 import type { ExtensionState } from '@/application/extension-link.ts';
 import type { Monitor, MonitorState } from '@/application/monitor.ts';
-import type { Clock, Scheduler } from '@/application/ports.ts';
+import type { Summary } from '@contracts/summary.ts';
+import type { Clock, LogHistory, Scheduler } from '@/application/ports.ts';
 import { AppServicesContext, type AppServices } from '@/hooks/use-app-services.ts';
 
 export const baseMonitorState: MonitorState = {
@@ -70,11 +72,21 @@ export function createFakeServices(options: { monitor?: Partial<MonitorState>; e
     };
     const clock: Clock = { now: () => options.now ?? Date.UTC(2026, 9, 9, 12), localDateKey: () => '2026-10-09', browserOffsetMinutes: () => -300 };
     const scheduler: Scheduler = { setTimeout: () => ({ id: 0 }), setInterval: () => ({ id: 0 }), clear: () => {} };
-    const services = { monitor, extensionLink, clock, scheduler } as unknown as AppServices;
+    const emptyPage = { entries: [], nextCursor: null };
+    const emptySummary: Summary = { checks: { total: 0, fast: 0, failed: 0 }, newFree: { total: 0, lastAt: null }, reservations: { reserved: 0, released: 0 } };
+    const history = {
+        summary: vi.fn<LogHistory['summary']>(async () => emptySummary),
+        checks: vi.fn<LogHistory['checks']>(async () => emptyPage),
+        reservations: vi.fn<LogHistory['reservations']>(async () => emptyPage),
+        scheduleChanges: vi.fn<LogHistory['scheduleChanges']>(async () => emptyPage),
+        scheduleLogDownloadUrl: () => '/api/schedule-log.jsonl',
+    } satisfies LogHistory;
+    const services = { monitor, extensionLink, clock, scheduler, history } as unknown as AppServices;
     return {
         services,
         monitor,
         extensionLink,
+        history,
         setMonitorState(patch: Partial<MonitorState>) {
             monitorState = { ...monitorState, ...patch };
             monitorListeners.forEach((l) => l());
@@ -83,6 +95,14 @@ export function createFakeServices(options: { monitor?: Partial<MonitorState>; e
             extensionState = { ...extensionState, ...patch };
             extensionListeners.forEach((l) => l());
         },
-        wrapper: ({ children }: { children: ReactNode }) => <AppServicesContext value={services}>{children}</AppServicesContext>,
+        // A fresh query client per test, without retries, so errors show at once
+        wrapper: function FakeServicesWrapper({ children }: { children: ReactNode }) {
+            const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+            return (
+                <QueryClientProvider client={client}>
+                    <AppServicesContext value={services}>{children}</AppServicesContext>
+                </QueryClientProvider>
+            );
+        },
     };
 }
