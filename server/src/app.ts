@@ -6,6 +6,8 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { hasZodFastifySchemaValidationErrors, serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { ChecksRepository } from './modules/checks/repository.ts';
 import { checksRoutes } from './modules/checks/routes.ts';
+import type { ExtensionEventsRepository } from './modules/extension-events/repository.ts';
+import { extensionEventsRoutes } from './modules/extension-events/routes.ts';
 import type { RequestLogRepository } from './modules/request-log/repository.ts';
 import { requestLogRoutes } from './modules/request-log/routes.ts';
 import type { ReservationLogRepository } from './modules/reservation-log/repository.ts';
@@ -21,6 +23,7 @@ export interface AppDeps {
     scheduleLog: ScheduleLogRepository;
     requestLog: RequestLogRepository;
     checks: ChecksRepository;
+    extensionEvents: ExtensionEventsRepository;
     reservationLog: ReservationLogRepository;
     summary: SummaryRepository;
     pingDb: () => Promise<void>;
@@ -40,7 +43,7 @@ function isDbUnavailable(error: unknown): boolean {
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
-    const { config, scheduleLog, requestLog, checks, reservationLog, summary, pingDb } = deps;
+    const { config, scheduleLog, requestLog, checks, extensionEvents, reservationLog, summary, pingDb } = deps;
     const app = Fastify({
         bodyLimit: BODY_LIMIT,
         logger: deps.logger
@@ -92,6 +95,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await app.register(scheduleLogApiRoutes, { repository: scheduleLog });
     await app.register(requestLogRoutes, { repository: requestLog });
     await app.register(checksRoutes, { repository: checks });
+    await app.register(extensionEventsRoutes, { repository: extensionEvents });
     await app.register(reservationLogRoutes, { repository: reservationLog, prefix: '/api' });
     await app.register(summaryRoutes, { repository: summary, prefix: '/api' });
 

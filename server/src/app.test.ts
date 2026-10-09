@@ -20,6 +20,7 @@ function fakeDeps(patch: Partial<AppDeps> = {}): AppDeps {
         scheduleLog: { insertMany: async (entries) => entries.length, list: async () => emptyPage, listAll: async () => [] },
         requestLog: { insertMany: async (entries) => entries.length, list: async () => emptyPage },
         checks: { insertMany: async (entries) => entries.length, list: async () => emptyPage },
+        extensionEvents: { insertMany: async (entries) => entries.length, list: async () => emptyPage },
         reservationLog: { insertMany: async (entries) => entries.length, list: async () => emptyPage },
         summary: { summary: async () => emptySummary },
         pingDb: async () => {},
@@ -170,7 +171,7 @@ describe('module routes', () => {
         const { app } = await build();
         const from = '2026-10-09T00:00:00.000Z';
         const to = '2026-10-10T00:00:00.000Z';
-        for (const url of ['/api/request-log', '/api/checks', '/api/reservation-log', '/api/schedule-log']) {
+        for (const url of ['/api/request-log', '/api/checks', '/api/extension-events', '/api/reservation-log', '/api/schedule-log']) {
             const res = await app.inject({ url });
             expect(res.statusCode, url).toBe(200);
             expect(res.json()).toEqual(emptyPage);
@@ -182,11 +183,28 @@ describe('module routes', () => {
 
     it('accepts POSTs of every module', async () => {
         const { app } = await build();
-        for (const url of ['/api/request-log', '/api/checks', '/api/reservation-log', '/api/schedule-log']) {
+        for (const url of ['/api/request-log', '/api/checks', '/api/extension-events', '/api/reservation-log', '/api/schedule-log']) {
             // an empty batch is invalid (422), which proves the route is registered and validated
             const res = await app.inject({ method: 'POST', url, payload: { entries: [] } });
             expect(res.statusCode, url).toBe(422);
         }
+    });
+});
+
+describe('extension events', () => {
+    it('answers 422 for a secret-looking payload key', async () => {
+        const { app } = await build();
+        const event = {
+            clientId: '11111111-1111-4111-8111-111111111111',
+            occurredAt: '2026-10-09T10:00:00.000Z',
+            type: 'session.logged-in',
+            jobId: null,
+            payload: { token: 'x' },
+            extensionVersion: '0.4.0',
+            test: false,
+        };
+        const res = await app.inject({ method: 'POST', url: '/api/extension-events', payload: { entries: [event] } });
+        expect(res.statusCode).toBe(422);
     });
 });
 
