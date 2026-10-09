@@ -3,7 +3,34 @@
 Новий інтерфейс замість `slots.html`: календар вільних слотів, моніторинг установи, журнали і
 налаштування. Vite + React + TypeScript; сторінку й API віддає сервер з модуля `server/`.
 
-> Стан: заплановано. Код з'явиться на етапі 2 [плану](../docs/plans/web-rewrite-plan.md).
+> Стан: етап 2 [плану](../docs/plans/web-rewrite-plan.md) — каркас: меню й порожні сторінки на
+> `http://localhost:3000/next/`. Старий `slots.html` лишається на `/` до етапу 8.
+
+## Запуск
+
+```sh
+pnpm install
+pnpm run build                  # web/dist; сервер віддає його на /next/ (після перезапуску сервера)
+pnpm dev                        # Vite на :3000 з /next/, /api → сервер на :3001 (pnpm --dir ../server dev)
+```
+
+Одночасно відкривати лише один застосунок (`/` або `/next/`): обидва говорять із розширенням.
+
+| Команда | Що робить |
+|---|---|
+| `pnpm test` | Vitest + Testing Library (jsdom) |
+| `pnpm run typecheck` | `tsc --noEmit` |
+| `pnpm run lint` | ESLint; у `src/domain/` і `src/application/` заборонені `Date.now()`, `Math.random()`, таймери й браузерні глобали |
+| `pnpm run arch:check` | dependency-cruiser: кільця й межі ([onion-architecture](../.claude/skills/onion-architecture/SKILL.md)) |
+
+## Файли
+
+| Шлях | Що це |
+|---|---|
+| `src/main.tsx` | Точка входу: стилі, `AppProviders`, маршрутизатор |
+| `src/app/` | Composition root (`providers.tsx`), маршрути (`router.tsx`), макет з меню (`Layout.tsx`), сторінки (`pages/`), стилі й токени (`styles/`) |
+| `src/domain/` | Чисті функції (з етапу 3); `__fixtures__/` — записані відповіді e-Consul |
+| `public/fonts/` | Локальні шрифти |
 
 ## Розділи
 

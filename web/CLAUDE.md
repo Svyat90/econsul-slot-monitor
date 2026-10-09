@@ -1,8 +1,8 @@
 # web — карта для агента
 
 Новий застосунок моніторингу слотів: Vite + React + TypeScript (SPA). Замінить `slots.html`.
-**Модуль ще не створено кодом** — його будує [план](../docs/plans/web-rewrite-plan.md); до того тут
-лише документація й дизайн.
+Будується за [планом](../docs/plans/web-rewrite-plan.md) (виконано етапи 0–2:
+каркас, меню, порожні сторінки на `/next/`). Запуск і команди — [README.md](README.md).
 
 ## Перед відповіддю
 
@@ -18,6 +18,11 @@ API, алгоритм слотів) і в `docs/insights.md` модуля й к�
 - Сторінку й API (`/api/*`) віддає Fastify з модуля `server/` на `localhost:3000`; у розробці Vite на
   `:3000` пересилає `/api` на Fastify `:3001`.
 - Інтерфейс — українською, за [дизайном](docs/design/README.md); шрифти лише локальні.
+- Кольори — лише змінні з `src/app/styles/tokens.css`; у CSS шрифти й файли з `public/` — шляхом
+  `/fonts/...` без `/next/`: Vite сам додає `base`.
+- Перед комітом: `pnpm test`, `typecheck`, `lint`, `arch:check`. Правило, що не спрацьовує, доводять
+  тимчасовим файлом-порушником (`.claude/skills/onion-architecture/references/enforcement.md`).
+- TypeScript 6, не 7: лінтерам потрібен JS API компілятора (`server/docs/insights.md`).
 
 ## Читати, коли
 
