@@ -6,9 +6,11 @@
   звук «розбите скло»);
 - підхоплює чернетку заявки з відкритої вкладки `/tasks/{id}/…` і передає посилання застосунку;
 - на `app:slots` вибирає найраніший вільний слот у чернетці, підсвічує «Підтвердити» і вмикає сигнал;
-  з автобронюванням натискає «Підтвердити» саме.
+  з автобронюванням натискає «Підтвердити» саме;
+- пише власні запити до e-Consul (`auth/me`, `tasks/{id}`) і свої події на локальний сервер — навіть коли
+  вкладки застосунку немає.
 
-Версія: див. `manifest.json` (зараз 0.3.3).
+Версія: див. `manifest.json` (зараз 0.4.0).
 
 ## Встановлення
 
@@ -21,7 +23,8 @@
 |---|---|---|
 | `manifest.json` | — | Права: `storage`, `alarms`, `notifications`, `offscreen`, `tabs`, `scripting`; хости e-consul і `localhost:3000` |
 | `background.js` | service worker | Стан (`chrome.storage.session`), будильники, вкладки, нотифікації, значок, маршрутизація повідомлень |
-| `econsul.js` | `https://e-consul.gov.ua/*` | Токен із `localStorage`, перевірка `auth/me`, чернетка, запуск вибору слота, банер |
+| `telemetry.js` | service worker (`importScripts`) | Журнал: черга запитів і подій у `chrome.storage.local`, пачки на `localhost:3000/api/request-log` і `/api/extension-events` |
+| `econsul.js` | `https://e-consul.gov.ua/*` | Токен із `localStorage`, перевірка `auth/me` (час і статус запитів — у журнал), чернетка, запуск вибору слота, банер |
 | `picker.js` | `https://e-consul.gov.ua/*` | Кліки в формі кроків 3–4: «Далі», тиждень, «Показати ще», слот, «Підтвердити» |
 | `app-bridge.js` | `http://localhost:3000/*` | Міст `window.postMessage` ↔ background |
 | `offscreen.html/.js`, `sounds.js` | offscreen document | Звуки без фокуса на сторінці |

@@ -1,7 +1,7 @@
 # План: розширення Chrome для запису на візит
 
 Статус: **етапи 1, 2 і 4 зроблено, етап 3 — частково** (2026-10-09, гілка `feature/chrome-extension`,
-розширення v0.3.3). Складено 2026-10-08 за результатами обговорення. Опис зробленого — [how-it-works.md](../docs/how-it-works.md);
+розширення v0.4.0). Складено 2026-10-08 за результатами обговорення. Опис зробленого — [how-it-works.md](../docs/how-it-works.md);
 неочевидна поведінка — [insights.md](../docs/insights.md).
 
 ### Що зроблено
@@ -268,6 +268,21 @@ extension/
 кліком (`audioReady` в `app:hello`/`app:monitor`), інакше браузер його не відтворить. Якщо 401 отримав
 сам застосунок, він уже програв скло (`app:auth-failed` з `soundPlayed: true`), і розширення мовчить.
 «Вимкнути звук» зупиняє сигнал «слот вибрано» одразу; автоматична зупинка (етап 4) — не раніше 30 с.
+
+### Журнал розширення
+
+Розширення пише на локальний сервер (`telemetry.js`, черга в `chrome.storage.local`
+`telemetryQueue` ≤ 2000, пачки ≤ 100 після кожного запису й на `tick`):
+
+- свої запити до e-Consul (`GET auth/me`, `GET tasks/{id}`) → `POST /api/request-log`,
+  `source: 'extension'`, `service` `auth` / `tasks`, `method` `GET auth/me` / `GET tasks/:id`
+  (без id), `filters: {}`, `institutionCode: null`, `tabSessionId` — UUID запуску service worker;
+- події → `POST /api/extension-events`: `session.logged-in/out`, `draft.found/opened/gone`,
+  `selection.started/stage/selected/failed` (спільний `jobId`), `booking.confirm-clicked/booked/failed`,
+  `app.slots-received`, `user.mute/pause/auto-book/test-sound`.
+
+У записі ніколи немає токена, адреси з ним чи даних заявника; помилки — лише коди `SELECT_ERRORS`.
+Протокол §8 не змінюється: `econsul:request` ходить лише між content script і фоном.
 
 ## 7. Зміни в застосунку (slots.html)
 

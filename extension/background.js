@@ -9,6 +9,8 @@
 // to book or to write task documents. It selects a slot by clicks on the site (econsul.js, picker.js): «Далі» on step 3
 // and the slot on step 4; the site saves that itself. See extension/plans/extension-plan.md, section 3.
 
+importScripts('telemetry.js'); // Telemetry: own requests and events for the local server
+
 const APP_ORIGIN = 'http://localhost:3000';
 const ECONSUL_TABS = 'https://e-consul.gov.ua/*';
 // Without a session the site sends the user to id.e-consul.gov.ua and returns afterwards
@@ -120,6 +122,7 @@ async function updateAuth(update, opts = {}) {
     if (next.loggedIn === false && prev.loggedIn !== false) {
         await onLoggedOut(next, opts);
     } else if (next.loggedIn === true && (prev.loggedIn !== true || next.token !== prev.token)) {
+        if (prev.loggedIn !== true) Telemetry.event('session.logged-in');
         chrome.notifications.clear('login');
         await sendToApps([authMessage(next), { type: 'ext:token', token: next.token, exp: next.exp }]);
     } else {
@@ -135,6 +138,7 @@ function authMessage(auth, extra = {}) {
 // Session ended: badge (already set), notification with "Увійти", banner in the app and the
 // broken-glass sound, played by the app when it can, otherwise by the offscreen document
 async function onLoggedOut(auth, opts) {
+    Telemetry.event('session.logged-out', { reason: auth.reason || null });
     chrome.notifications.create('login', {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
@@ -198,6 +202,15 @@ async function onAuthCheck({ token, ok, status }) {
     else await chrome.storage.session.set({ auth: { ...auth, ...update } }); // network error: try again later
 }
 
+// From econsul.js: how an own request to e-Consul went. Only kind, time and status come in
+// (never the token or the address); the journal gets the record
+async function onSiteRequest({ kind, startedAt, durationMs, status }) {
+    if (kind !== 'auth' && kind !== 'tasks') return;
+    if (!Number.isFinite(startedAt) || !Number.isInteger(durationMs) || durationMs < 0) return;
+    if (!Number.isInteger(status) || (status !== 0 && (status < 100 || status > 599))) return;
+    Telemetry.request({ kind, startedAt, durationMs, status });
+}
+
 // From econsul.js: a tab shows the application taskId (on step `step`). The newest one seen is
 // the draft: shown in the popup and passed to the app as Draft link. info (GET /tasks/{id}):
 // { createdAt, finished, deleted } or { missing }, null when it could not be read.
@@ -205,6 +218,7 @@ async function onSiteTask({ url, taskId, step, info }, tab) {
     const { draft } = await chrome.storage.session.get('draft');
     if (info && (info.missing || info.finished || info.deleted)) {
         if (draft && draft.taskId === taskId) {
+            Telemetry.event('draft.gone', { taskId, reason: info.missing ? 'missing' : info.finished ? 'finished' : 'deleted' });
             await chrome.storage.session.remove('draft');
             await sendToApps([{ type: 'ext:draft', draft: null }]);
         }
@@ -220,6 +234,7 @@ async function onSiteTask({ url, taskId, step, info }, tab) {
         tabId: tab.id
     };
     await chrome.storage.session.set({ draft: next });
+    if (!same) Telemetry.event('draft.found', { taskId, step: step || null });
     if (!same || next.createdAt !== draft.createdAt || next.url !== draft.url) await sendToApps([{ type: 'ext:draft', draft: publicDraft(next) }]);
 }
 
@@ -235,7 +250,9 @@ async function openDraft() {
     const { draft } = await chrome.storage.session.get('draft');
     if (!draft) return;
     const tab = draft.tabId != null && await chrome.tabs.get(draft.tabId).catch(() => null);
-    if (tab && tab.url && tab.url.includes(`/tasks/${draft.taskId}`)) {
+    const reused = !!(tab && tab.url && tab.url.includes(`/tasks/${draft.taskId}`));
+    Telemetry.event('draft.opened', { taskId: draft.taskId, reusedTab: reused });
+    if (reused) {
         await chrome.tabs.update(tab.id, { active: true });
         await chrome.windows.update(tab.windowId, { focused: true });
     } else {
@@ -243,9 +260,20 @@ async function openDraft() {
     }
 }
 
+// A draft the site deletes a day after creation: the journal gets one `draft.gone` when that
+// time has passed (the draft itself stays until the site says it is gone)
+async function checkDraftExpiry() {
+    const { draft, draftGoneLogged } = await chrome.storage.session.get(['draft', 'draftGoneLogged']);
+    if (!draft || !draft.expiresAt || draft.expiresAt > Date.now() || draftGoneLogged === draft.taskId) return;
+    await chrome.storage.session.set({ draftGoneLogged: draft.taskId });
+    Telemetry.event('draft.gone', { taskId: draft.taskId, reason: 'expired' });
+}
+
 // Every minute: an expired token ends the session; every 10–15 min one e-consul tab checks
 // the token with auth/me
 async function onTick() {
+    Telemetry.flush();
+    await checkDraftExpiry();
     const auth = await getAuth();
     if (auth.loggedIn === true && auth.exp && auth.exp <= Date.now()) {
         await updateAuth({ loggedIn: false, reason: 'expired' });
@@ -381,21 +409,27 @@ async function onAppMessage(msg) {
             if (auth.loggedIn !== false) await updateAuth({ loggedIn: false, reason: 'api' }, { appPlayedSound: !!msg.soundPlayed });
             return [];
         case 'app:slots':
+            Telemetry.event('app.slots-received', { count: (msg.slots || []).length, test: !!msg.test }, { test: !!msg.test });
             await chrome.storage.session.set({ lastSlots: { receivedAt: Date.now(), slots: msg.slots || [], range: msg.range || {}, test: !!msg.test } });
             // Not awaited: loading the draft takes up to a minute, other messages must not wait
             if ((msg.slots || []).length) startSelection(msg.slots, !!msg.test);
             return [{ type: 'ext:slots-received', count: (msg.slots || []).length }];
         case 'app:settings':
             // Only what the app shows: the auto-booking checkbox
-            if (msg.patch && typeof msg.patch.autoBook === 'boolean') await saveSettings({ autoBook: msg.patch.autoBook });
+            if (msg.patch && typeof msg.patch.autoBook === 'boolean') {
+                Telemetry.event('user.auto-book', { enabled: msg.patch.autoBook, from: 'app' });
+                await saveSettings({ autoBook: msg.patch.autoBook });
+            }
             return [];
         case 'app:login':
             await openWorkTab(LOGIN_URL);
             return [];
         case 'app:mute':
+            Telemetry.event('user.mute', { from: 'app' });
             await stopSounds(true);
             return [];
         case 'app:test-sound':
+            Telemetry.event('user.test-sound', { sound: msg.sound === 'selected' ? 'selected' : msg.sound === 'glass' ? 'glass' : 'other', from: 'app' });
             if (msg.sound === 'selected') await playSound('selected', SELECTED_SOUND);
             else if (msg.sound === 'glass') await playSound('glass');
             return [];
@@ -440,6 +474,7 @@ async function startSelection(slots, test) {
     else tab = await chrome.tabs.create({ url: draft.url, active: true });
     await chrome.windows.update(tab.windowId, { focused: true });
     await setSelection({ ...current, tabId: tab.id });
+    Telemetry.event('selection.started', { taskId: draft.taskId, slots: slots.length, autoBook }, { jobId, test });
 
     // Wait until the new page's econsul.js answers for this task
     await new Promise(r => setTimeout(r, 1500));
@@ -452,10 +487,16 @@ async function startSelection(slots, test) {
         await new Promise(r => setTimeout(r, 1000));
     }
     if (!reply) return selectionFailed({ ...current, tabId: tab.id }, 'tab-not-ready');
+    Telemetry.event('selection.stage', { stage: 'tab-ready', taskId: draft.taskId, durationMs: Date.now() - now }, { jobId, test });
     await chrome.tabs.sendMessage(tab.id, { type: 'select-slot', jobId, taskId: draft.taskId, slots, autoBook }).catch(() => null);
 }
 
 async function selectionFailed(selection, error, tried = []) {
+    Telemetry.event('selection.failed', {
+        error: String(error).split(':')[0].slice(0, 50), // a code of SELECT_ERRORS, never page text
+        taskId: selection.taskId || null,
+        durationMs: selection.startedAt ? Date.now() - selection.startedAt : null
+    }, { jobId: selection.jobId, test: selection.test });
     await setSelection({ ...selection, status: 'failed', error, tried, at: Date.now() });
     await sendToApps([{ type: 'ext:slot-failed', error, text: SELECT_ERRORS[error] || error, test: !!selection.test }]);
     if (selection.test && error === 'not-found') return; // test slots are made up
@@ -473,6 +514,10 @@ async function onSlotResult({ jobId, ok, slot, error, tried, booking }) {
     const { selection } = await chrome.storage.session.get('selection');
     if (!selection || selection.jobId !== jobId) return;
     if (!ok) return selectionFailed(selection, error, tried);
+    Telemetry.event('selection.selected', {
+        taskId: selection.taskId, date: slot.date, time: slot.time, autoBook: !!booking,
+        durationMs: Date.now() - selection.startedAt
+    }, { jobId, test: selection.test });
     if (booking) return setSelection({ ...selection, status: 'booking', slot, tried, at: Date.now() });
     await setSelection({ ...selection, status: 'selected', slot, tried, at: Date.now() });
     await playSound('selected', SELECTED_SOUND);
@@ -493,6 +538,10 @@ async function onBookResult({ jobId, slot, ok, error, text }) {
     const { selection } = await chrome.storage.session.get('selection');
     if (!selection || selection.jobId !== jobId) return;
     const date = slot.date.split('-').reverse().join('.');
+    Telemetry.event(ok ? 'booking.booked' : 'booking.failed', {
+        taskId: selection.taskId, date: slot.date, time: slot.time,
+        ...(ok ? {} : { error: String(error).split(':')[0].slice(0, 50) })
+    }, { jobId, test: selection.test });
     await setSelection({ ...selection, status: ok ? 'booked' : 'book-failed', slot, error: error || null, text: text || null, at: Date.now() });
     // Either way the person has to look: the result comes by email, or the slot waits for them
     await playSound('selected', SELECTED_SOUND);
@@ -585,9 +634,12 @@ async function onPopupMessage(msg) {
             await chrome.tabs.create({ url: NEW_APPLICATION_URL, active: true });
             return {};
         case 'popup:mute':
+            Telemetry.event('user.mute', { from: 'popup' });
             await stopSounds(true);
             return {};
         case 'popup:settings':
+            if (msg.patch && typeof msg.patch.paused === 'boolean') Telemetry.event('user.pause', { paused: msg.patch.paused, from: 'popup' });
+            if (msg.patch && typeof msg.patch.autoBook === 'boolean') Telemetry.event('user.auto-book', { enabled: msg.patch.autoBook, from: 'popup' });
             await saveSettings(msg.patch);
             return {};
         default:
@@ -612,7 +664,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         else if (message.type === 'econsul:task') handler = () => onSiteTask(message, sender.tab);
         else if (message.type === 'econsul:slot-result') handler = () => onSlotResult(message);
         else if (message.type === 'econsul:book-result') handler = () => onBookResult(message);
-        else if (message.type === 'econsul:mute' || message.type === 'econsul:confirm-clicked') handler = () => stopSounds(true);
+        else if (message.type === 'econsul:request') handler = () => onSiteRequest(message);
+        else if (message.type === 'econsul:confirm-clicked') handler = async () => {
+            const { selection } = await chrome.storage.session.get('selection');
+            Telemetry.event('booking.confirm-clicked', { taskId: selection ? selection.taskId : null }, { jobId: selection && selection.jobId, test: !!(selection && selection.test) });
+            await stopSounds(true);
+        };
+        else if (message.type === 'econsul:mute') handler = () => stopSounds(true);
     } else if (sender.tab && sender.origin === APP_ORIGIN && message.type === 'app') {
         // Only the app's own origin gets the token
         handler = () => onAppMessage(message.msg || {}).then(messages => ({ messages }));

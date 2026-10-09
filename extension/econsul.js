@@ -59,8 +59,15 @@
         if (token) reportTask(); // a task page opened before login
     }
 
+    // Tells the background how an own request went, for the journal: kind, time, status
+    // (0: no response). Never the token or the address.
+    function reportRequest(kind, startedAt, perfStart, status) {
+        send({ type: 'econsul:request', kind, startedAt, durationMs: Math.round(performance.now() - perfStart), status });
+    }
+
     async function checkAuth(token) {
         let ok = false, status = 0;
+        const startedAt = Date.now(), perfStart = performance.now();
         try {
             const response = await fetch(`${API}/auth/me`, { headers: { token }, cache: 'no-store' });
             ok = response.ok;
@@ -68,6 +75,7 @@
         } catch (e) {
             status = 0; // network error: neither logged in nor out
         }
+        reportRequest('auth', startedAt, perfStart, status);
         send({ type: 'econsul:auth-check', token, ok, status });
     }
 
@@ -82,8 +90,12 @@
         let info = null;
         if (token && !checkedTasks.has(taskId)) {
             checkedTasks.add(taskId);
+            const startedAt = Date.now(), perfStart = performance.now();
+            let responded = false;
             try {
                 const response = await fetch(`${API}/tasks/${encodeURIComponent(taskId)}`, { headers: { token }, cache: 'no-store' });
+                responded = true;
+                reportRequest('tasks', startedAt, perfStart, response.status);
                 if (response.status === 404) info = { missing: true };
                 else if (response.ok) {
                     const json = await response.json();
@@ -94,7 +106,10 @@
                         deleted: !!(task.deleted || task.isDeleted)
                     };
                 }
-            } catch (e) { /* network: report without the details */ }
+            } catch (e) {
+                // network: report without the details
+                if (!responded) reportRequest('tasks', startedAt, perfStart, 0);
+            }
         }
         send({ type: 'econsul:task', url: location.origin + location.pathname, taskId, step, info });
     }

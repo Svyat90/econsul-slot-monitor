@@ -1,6 +1,6 @@
 # Як працює розширення e-Consul Helper
 
-Опис зробленого (v0.3.3). Як сайт і застосунок працюють загалом — [booking.md](../../docs/booking.md);
+Опис зробленого (v0.4.0). Як сайт і застосунок працюють загалом — [booking.md](../../docs/booking.md);
 що ще лишилось — [план](../plans/extension-plan.md); неочевидна поведінка — [insights.md](insights.md).
 
 Розширення Chrome у теці `extension/` (Manifest V3). Етапи 1, 2 і 4 [плану](../plans/extension-plan.md):
@@ -70,3 +70,25 @@ content scripts Chrome бере з диска лише тоді, перезав�
 новий токен моніторинг не запускає; `auth/me` 401 → вихід; тестові кнопки; фільтр дат і `app:slots`;
 токен, записаний сайтом через 4 с після завантаження, доходить у програму за ~4 с без тривоги «немає
 токена»; перехід вкладки на `/tasks/{id}/dateAndTimeVisitInfo` → чернетка в попапі й у **Draft link**.
+
+## Журнал розширення
+
+Розширення пише журнал на локальний сервер, навіть коли вкладки застосунку немає (`telemetry.js`,
+підключений через `importScripts` у `background.js`):
+
+- **Запити до e-Consul** — `GET auth/me` і `GET tasks/{id}` з `econsul.js`. Content script міряє
+  статус і тривалість і шле фону `econsul:request` (вид, час, статус; без токена й адреси). Запис іде
+  в `POST /api/request-log` з `source: 'extension'`, `service` `auth` / `tasks`, `method`
+  `GET auth/me` / `GET tasks/:id` (без id), `filters: {}`, `tabSessionId` — UUID запуску service
+  worker, `appVersion` — версія розширення. Результат: 2xx → `ok`, 401/403 → `session_expired`, інший
+  HTTP → `unavailable`, мережа → `network_error` без `httpStatus`.
+- **Події** — `POST /api/extension-events`: вхід/вихід (`session.*`, з причиною), чернетка
+  (`draft.found` / `opened` / `gone`), вибір слота (`selection.started` / `stage` / `selected` /
+  `failed` з `jobId`, кодом помилки й тривалістю), автобронювання (`booking.confirm-clicked` /
+  `booked` / `failed`), `app.slots-received`, дії користувача (`user.mute` / `pause` / `auto-book` /
+  `test-sound`). `payload` — плоска мапа з коротких значень; лише коди помилок (`SELECT_ERRORS`), не
+  тексти сторінки; без токена й даних заявника. `test: true` — для тестових слотів.
+- **Черга.** Service worker засинає, тому записи лежать у `chrome.storage.local` (`telemetryQueue`,
+  до 2000, найстаріші відкидаються) і йдуть пачками до 100 після кожного запису та за будильником
+  `tick`. 2xx — запис прибрано; мережа чи 5xx (сервер не запущено) — лишається до наступної спроби;
+  4xx — пачку викинуто. Збій журналу ніколи не заважає роботі розширення.
