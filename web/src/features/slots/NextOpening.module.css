@@ -1,0 +1,87 @@
+.card {
+    flex: 1 1 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 18px 20px;
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+}
+
+.title {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-label);
+}
+
+.head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 12px;
+}
+
+.moment {
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.consulate {
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
+.line {
+    margin: 0;
+    font-size: 14px;
+    color: var(--color-text-muted);
+}
+
+.line b {
+    color: var(--color-text);
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.countdown {
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--color-bg);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.fast {
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--color-fast-bg);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-fast);
+}
+
+.fastActive {
+    outline: 2px solid var(--color-fast);
+}
+
+.later {
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-label);
+}
+
+.empty {
+    margin: 0;
+    font-size: 14px;
+    color: var(--color-text-muted);
+}
