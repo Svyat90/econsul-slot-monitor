@@ -8,6 +8,7 @@ export interface Config {
     databaseUrl: string;
     repoRoot: string; // slots.html and web/dist are served from here
     locationsPath: string;
+    webDistPath: string; // the only directory @fastify/static may serve
 }
 
 export const DEFAULT_DATABASE_URL = 'postgres://econsul:econsul@127.0.0.1:5433/econsul';
@@ -19,5 +20,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         databaseUrl: env.DATABASE_URL ?? DEFAULT_DATABASE_URL,
         repoRoot,
         locationsPath: fileURLToPath(new URL('../../data/locations.json', import.meta.url)),
+        webDistPath: `${repoRoot}web/dist`,
     };
 }

@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.ts';
 import { loadConfig } from './platform/config.ts';
@@ -35,6 +37,39 @@ describe('static files', () => {
         const res = await app.inject({ url: '/whatever/else' });
         expect(res.statusCode).toBe(200);
         expect(res.body).toBe(slotsHtml);
+    });
+});
+
+describe('/next (web/dist)', () => {
+    const dist = mkdtempSync(join(tmpdir(), 'dist-'));
+    mkdirSync(join(dist, 'assets'));
+    writeFileSync(join(dist, 'index.html'), '<!doctype html><title>new</title>');
+    writeFileSync(join(dist, 'assets', 'a.js'), 'console.log(1)');
+    const buildWith = (webDistPath: string) =>
+        buildApp({ config: { ...config, webDistPath }, scheduleLog: { insertMany: async () => 0 }, pingDb: async () => {} });
+
+    it('serves index.html for /next/ and SPA routes', async () => {
+        const app = await buildWith(dist);
+        for (const url of ['/next/', '/next/slots']) {
+            const res = await app.inject({ url });
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toContain('<title>new</title>');
+        }
+    });
+
+    it('serves real files and 404s a missing one with an extension', async () => {
+        const app = await buildWith(dist);
+        expect((await app.inject({ url: '/next/assets/a.js' })).body).toBe('console.log(1)');
+        expect((await app.inject({ url: '/next/missing.js' })).statusCode).toBe(404);
+    });
+
+    it('answers 404 with a hint without dist, and / still serves slots.html', async () => {
+        const app = await buildWith(join(dist, 'nope'));
+        const res = await app.inject({ url: '/next/' });
+        expect(res.statusCode).toBe(404);
+        expect(res.body).toContain('pnpm --dir web build');
+        const root = await app.inject({ url: '/' });
+        expect(root.body).toBe(readFileSync(`${config.repoRoot}slots.html`, 'utf8'));
     });
 });
 
