@@ -285,6 +285,8 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
 
 - 2026-10-09 · Етап 0 · S0.T1 виконано.
 - 2026-10-09 · Етап 0 закрито: `plan-verifier` — VERIFIED (7/7 MET), `architecture-reviewer` — PASS, без знахідок.
+- 2026-10-09 · Етап 1 · S1.T0–S1.T4 виконано; `logs/schedule-changes.jsonl` імпортовано (5 записів, повторно — 0).
+- 2026-10-09 · Етап 1 закрито: `architecture-reviewer` — PASS; `plan-verifier` — 13 MET, без знахідок у коді; невідмічене (ручна перевірка на `:3000`) зроблено основною сесією: старий `main.go` зупинено, `pnpm --dir server start` на `:3000`, `slots.html` завантажує довідник, `/api/health` → `ok`. Запис зміни розкладу з браузера з'явиться з першою справжньою зміною (маршрут покрито тестами).
 
 ## Етап 1 — задачі
 
@@ -413,3 +415,114 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
 | `server/src/app.ts`, `app.test.ts`, `server.ts`, `platform/container.ts` | S1.T2 |
 | `server/scripts/**` | S1.T3 |
 | документація, `slots.html` | S1.T4 |
+
+## Етап 2 — задачі
+
+### Wave 0 — основна сесія
+
+#### S2.T0 — каркас `web/` та інструменти
+- Module: web (і `server/package.json` — лише dev-залежності)
+- Files (exclusive): `web/package.json`, `web/pnpm-lock.yaml`, `web/pnpm-workspace.yaml`,
+  `web/tsconfig.json`, `web/vite.config.ts` (`base: '/next/'`, alias `@/` і `@contracts/`, проксі
+  `/api` → `:3001`, vitest + jsdom), `web/eslint.config.js` (`no-restricted-globals` /
+  `no-restricted-syntax` для `src/domain/**` і `src/application/**`), `web/.dependency-cruiser.cjs`,
+  `web/index.html`, `web/src/test/setup.ts`, `web/public/fonts/**` (копії `extension/fonts/`),
+  `web/.gitignore`; `server/package.json` (dev: `typescript@^6`, `dependency-cruiser`)
+- Рішення: TypeScript 6 в обох модулях — `typescript-eslint` і `dependency-cruiser` ще не працюють з
+  TypeScript 7 (немає JS API). Правило `web-does-not-import-server` має виняток для
+  `server/src/contracts/` (план §3: `@contracts`).
+
+### Wave 1 — паралельно
+
+#### S2.T1 — токени дизайну й глобальні стилі
+- Module: web
+- Depends on: S2.T0
+- Files (exclusive):
+  - `web/src/app/styles/tokens.css` (new)
+  - `web/src/app/styles/global.css` (new)
+- Rules:
+  - Шрифти лише локальні: `@font-face` на `/next/fonts/*.woff2` (Vite `base`) з тими самими `unicode-range`, що в `extension/popup.css` — security «In this project» (third-party code)
+  - Кольори, радіуси, тіні — CSS custom properties на `:root`, назви `--color-*`, `--radius-*`, `--shadow-*`, `--font-*`; жодних кольорів-літералів поза `tokens.css` — frontend-ui-architecture §3 (constants)
+  - Значення — таблиця «Токени» з `web/docs/design/README.md` дослівно
+- Interface (S2.T2 вживає ці змінні):
+  - `--color-bg` `#EEF2F7`, `--color-surface` `#FFFFFF`, `--color-text` `#0B1B2B`, `--color-text-muted` `#3E4C5B`, `--color-label` `#4A5868`, `--color-accent` `#0057B8`, `--color-border` `#C5CFDB`, `--color-divider` `#E3E8EF`, `--color-success` / `--color-success-bg`, `--color-danger` / `--color-danger-bg`, `--color-fast` / `--color-fast-bg`, `--color-reserved` `#7D8A99`, `--color-nonworking` `#C9D1DB`, `--radius-card` `12px`, `--shadow-card`, `--font-sans` (Manrope), `--font-mono` (IBM Plex Mono)
+- Designs: `web/docs/design/README.md` (Токени), `web/docs/design/slots.png`
+- Steps: 1. `tokens.css`; 2. `global.css`: `@font-face`, `body` (тло, шрифт, колір), підпис розділу `.section-label` (капс, 12 px, `letter-spacing .06em`)
+- Acceptance criteria: `pnpm --dir web build` збирає шрифти в `dist/fonts`; немає запитів на сторонні домени
+- Verify: `pnpm --dir web run build`
+
+#### S2.T2 — маршрутизатор, макет з боковим меню, порожні сторінки
+- Module: web
+- Depends on: S2.T0 (змінні S2.T1 — за Interface, файл імпортується в `main.tsx`)
+- Files (exclusive):
+  - `web/src/main.tsx`
+  - `web/src/app/router.tsx`, `web/src/app/router.test.tsx` (new)
+  - `web/src/app/Layout.tsx`, `web/src/app/Layout.module.css` (new)
+  - `web/src/app/providers.tsx` (new — порожній composition root: `AppProviders` з `children`)
+  - `web/src/app/pages/SlotsPage.tsx`, `MonitoringPage.tsx`, `SettingsPage.tsx` (new)
+- Rules:
+  - `react-router` v8, `createBrowserRouter` з `basename: import.meta.env.BASE_URL` (`/next/`); `/` → перенаправлення на `/slots`; невідомий шлях → `/slots` — frontend-ui-architecture «In this project» (routes)
+  - Сторінки маршрутів і макет живуть у `src/app/`; фіч ще немає — не створювати `src/features/` — frontend-ui-architecture §2
+  - Меню: `NavLink` з активним станом, іконки — inline SVG у компоненті (без бібліотек іконок) — security «In this project» (third-party code)
+  - Блок стану в меню на цьому етапі — статичний заглушковий вміст «Моніторинг зупинено» без кнопок дій; справжній блок — етап 4
+  - Увесь текст інтерфейсу українською; стилі — CSS-модулі на змінних S2.T1, без кольорів-літералів — web/CLAUDE.md
+  - Компоненти — функції, без `React.FC`; без `useEffect` для похідних даних — react-best-practices
+  - Тести RTL: запити за роллю (`getByRole('link', { name: 'Слоти' })`, `getByRole('heading')`), `userEvent` для кліків, `createMemoryRouter` з тими самими маршрутами — react-testing-library
+- Interface:
+  - `routes: RouteObject[]` — exported from `router.tsx` (тести будують на них `createMemoryRouter`)
+  - `AppProviders({ children }: { children: ReactNode })` — exported from `providers.tsx`
+- Designs: `web/docs/design/slots.png`, `monitoring.png`, `settings.png` (бокове меню: логотип «Монітор слотів», блок стану, пункти «Слоти», «Моніторинг», «Налаштування»)
+- Steps:
+  1. Тест: `/` → заголовок «Слоти»; клік «Моніторинг» → заголовок «Моніторинг», пункт меню активний (`aria-current="page"`); `/settings` → «Налаштування»; невідомий шлях → «Слоти».
+  2. Реалізація.
+- Acceptance criteria: `pnpm --dir web build` і в браузері на `/next/` — меню й три порожні сторінки за макетом
+- Verify:
+  - `pnpm --dir web exec vitest run src/app`
+  - `pnpm --dir web run typecheck`, `pnpm --dir web run lint`, `pnpm --dir web run arch:check`
+
+#### S2.T3 — сервер віддає `web/dist` на `/next/`
+- Module: server
+- Depends on: S2.T0
+- Files (exclusive):
+  - `server/src/app.ts`, `server/src/app.test.ts`
+  - `server/src/platform/config.ts`
+- Rules:
+  - `@fastify/static` з `root: config.webDistPath` (`<repoRoot>/web/dist`) і `prefix: '/next/'` — лише тека збірки, ніколи корінь репозиторію — server/CLAUDE.md
+  - SPA: `GET /next/<шлях без крапки>` → `web/dist/index.html`; відсутній файл з розширенням → 404; `/` і решта шляхів, як і досі, → `slots.html` — fastify «In this project» (one origin)
+  - Немає `web/dist` → `/next/` відповідає 404 з підказкою зібрати `web/`, сервер не падає під час старту
+  - Імпорти з `.ts`, без `enum` — fastify rules/typescript.md
+- Interface: `Config.webDistPath: string`
+- Steps: 1. Тест `app.inject()` з тимчасовою текою `dist` (`index.html` + `assets/a.js`): `/next/` і `/next/slots` → `index.html`; `/next/assets/a.js` → файл; `/next/missing.js` → 404; без теки → 404, `/` → `slots.html`. 2. Реалізація.
+- Acceptance criteria: після `pnpm --dir web build` сервер віддає новий застосунок на `/next/`, старий — на `/`
+- Verify: `pnpm --dir server exec vitest run src/app.test.ts`, `pnpm --dir server run typecheck`
+
+#### S2.T4 — правила архітектури сервера
+- Module: server
+- Depends on: S2.T0
+- Files (exclusive): `server/.dependency-cruiser.cjs` (new), `server/package.json` (лише скрипт `arch:check`)
+- Rules (onion-architecture references/enforcement.md, §11):
+  - `server-routes-do-not-touch-the-db`: `src/modules/*/routes.ts` ↛ `src/db/**`, `drizzle-orm`
+  - `server-services-do-not-know-the-orm`: `src/modules/*/service.ts` ↛ `src/db/**`, `drizzle-orm`
+  - `contracts-are-the-core`: `src/contracts/**` ↛ усе, крім себе й `zod`
+  - `server-never-calls-econsul`: жоден модуль `src/**` не імпортує HTTP-клієнтів (`undici`, `node-fetch`, `axios`) — і ESLint тут немає, тож у звіті перелічити `grep -rn "e-consul.gov.ua\|fetch(" server/src` як ручну перевірку
+  - `no-circular`; `tsPreCompilationDeps: true`; pnpm-шляхи пакетів — `node_modules/<pkg>/` без якоря
+- Steps: правила; `pnpm --dir server run arch:check` — чисто; кожне правило доведено тимчасовим файлом-порушником (створити, побачити помилку, видалити) — enforcement.md «Workflow»
+- Verify: `pnpm --dir server run arch:check`
+
+### Wave 2 — основна сесія
+
+#### S2.T5 — перевірка етапу
+- `pnpm --dir web build`, сервер на вільному порту віддає `/next/` і `/`; знімок `/next/slots` у браузері.
+- Правила `web/.dependency-cruiser.cjs` і ESLint доведено файлами-порушниками в `src/domain/`,
+  `src/application/`, `src/features/`; файли видалено.
+- `web/README.md`, `web/CLAUDE.md` — запуск і команди.
+
+### Ownership
+
+| Файл | Задача |
+|---|---|
+| каркас (див. S2.T0) | S2.T0 |
+| `web/src/app/styles/**` | S2.T1 |
+| `web/src/main.tsx`, `web/src/app/{router,Layout,providers}*`, `web/src/app/pages/**` | S2.T2 |
+| `server/src/app.ts`, `app.test.ts`, `platform/config.ts` | S2.T3 |
+| `server/.dependency-cruiser.cjs`, `server/package.json` (скрипт) | S2.T4 |

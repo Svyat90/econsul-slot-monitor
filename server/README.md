@@ -84,5 +84,5 @@ pnpm start            # http://localhost:3000
 | Документ | Про що |
 |---|---|
 | [../docs/plans/web-rewrite-plan.md](../docs/plans/web-rewrite-plan.md) §5 | Таблиці, маршрути, поведінка без бази |
-| `docs/insights.md` | Неочевидна поведінка (з'явиться з першим інсайтом) |
+| [docs/insights.md](docs/insights.md) | Неочевидна поведінка сервера й інструментів |
 | `plans/` | Плани саме цього модуля |
