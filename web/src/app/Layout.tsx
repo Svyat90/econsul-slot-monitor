@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
-import { NavLink, Outlet } from 'react-router';
+import { NavLink, Outlet, useLocation } from 'react-router';
+import { Banners, MonitoringBadge, NoSelection } from '@/features/banners/index.ts';
 import { StatusBlock } from '@/features/status/index.ts';
+import { useMonitorState } from '@/hooks/use-app-services.ts';
 import styles from './Layout.module.css';
 
 const iconProps = {
@@ -49,7 +51,12 @@ const NAV_ITEMS: { to: string; label: string; icon: ReactNode }[] = [
     },
 ];
 
+// Pages that cannot show anything until an institution is selected
+const NEEDS_SELECTION = ['/slots', '/monitoring'];
+
 export function Layout() {
+    const { pathname } = useLocation();
+    const noSelection = useMonitorState().selection === null && NEEDS_SELECTION.includes(pathname);
     return (
         <div className={styles.shell}>
             <aside className={styles.sidebar}>
@@ -72,12 +79,15 @@ export function Layout() {
                         >
                             {item.icon}
                             <span>{item.label}</span>
+                            {' '}
+                            {item.to === '/monitoring' && <MonitoringBadge />}
                         </NavLink>
                     ))}
                 </nav>
             </aside>
             <main className={styles.content}>
-                <Outlet />
+                <Banners />
+                {noSelection ? <NoSelection /> : <Outlet />}
             </main>
         </div>
     );
