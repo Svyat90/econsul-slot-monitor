@@ -7,7 +7,7 @@
 // econsul.js presses «Підтвердити» for the selected slot. Otherwise the person presses it.
 // It never presses "Підтверджую" or "Записатись в чергу очікування" and does not call the API
 // to book or to write task documents. It selects a slot by clicks on the site (econsul.js, picker.js): «Далі» on step 3
-// and the slot on step 4; the site saves that itself. See docs/plans/extension-plan.md, section 3.
+// and the slot on step 4; the site saves that itself. See extension/plans/extension-plan.md, section 3.
 
 const APP_ORIGIN = 'http://localhost:3000';
 const ECONSUL_TABS = 'https://e-consul.gov.ua/*';

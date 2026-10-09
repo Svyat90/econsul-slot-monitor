@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reserved Slots Calendar</title>
-    <!-- Banners of the e-Consul Helper extension follow its design A (docs/design/extension) -->
+    <!-- Banners of the e-Consul Helper extension follow its design A (extension/docs/design) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
     <style>
@@ -2148,7 +2148,7 @@
             renderDateRangeHint();
         })();
 
-        // ---- e-Consul Helper extension (extension/, docs/plans/extension-plan.md) ----
+        // ---- e-Consul Helper extension (extension/, extension/plans/extension-plan.md) ----
         // The extension's content script app-bridge.js talks to this page with window.postMessage:
         // { source: 'econsul-app' | 'econsul-ext', type, ...payload }, this origin only. It brings the
         // session token, the login state and (later) the draft; the page sends new slots, the

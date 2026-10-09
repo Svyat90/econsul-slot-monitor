@@ -3,7 +3,7 @@
 Main.dc.html is the Claude Design source: {{accent}} holes and an <sc-for> slot loop that only the
 canvas runtime renders. This script fills them the way the design's renderVals() does.
 
-Usage: python3 docs/design/extension/build.py
+Usage: python3 extension/docs/design/build.py
 """
 import re
 from pathlib import Path

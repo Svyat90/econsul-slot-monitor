@@ -39,7 +39,7 @@ https://claude.ai/artifact/HBv4jVQsh7tiuFhovZEyrS
 ### Як оновити після правок на полотні
 
 1. Завантажити `project/Main.dc.html` з полотна і покласти замість `Main.dc.html` тут.
-2. `python3 docs/design/extension/build.py` — перезбирає `design-a.html`.
+2. `python3 extension/docs/design/build.py` — перезбирає `design-a.html`.
 3. Відкрити `design-a.html`, порівняти з полотном, оновити `preview.png` і таблицю нижче, якщо
    змінились кольори чи розміри.
 

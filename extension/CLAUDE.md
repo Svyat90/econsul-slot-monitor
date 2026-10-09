@@ -1,0 +1,44 @@
+# extension — карта для агента
+
+«e-Consul Helper» — розширення Chrome (Manifest V3, без збірки, чистий JS). Передає застосунку
+токен сесії e-consul, сповіщає, коли треба увійти, підхоплює чернетку заявки і вибирає знайдений
+слот на кроці 4. Як усе влаштовано — [README.md](README.md).
+
+## Перед відповіддю
+
+Спершу шукайте в `docs/` і `plans/` цього модуля та в [docs/insights.md](docs/insights.md) — там
+уже може бути відповідь. Потім — код.
+
+## Неочевидні правила
+
+- **Після змін `background.js`, content scripts чи `manifest.json` піднімайте `version`** у
+  `manifest.json`: Chrome бере їх з диска лише після ⟳ у `chrome://extensions`, а попап за версією
+  підказує користувачу натиснути ⟳.
+- Протокол повідомлень із застосунком (`ext:*` / `app:*`) — контракт:
+  [plans/extension-plan.md](plans/extension-plan.md) §8. Зміна типу чи полів — у тому самому коміті
+  й у застосунку (`slots.html`).
+- Токен віддається лише вкладкам з origin `http://localhost:3000` (перевірка за `sender.url`) і
+  ніколи не логується.
+- Розширення діє на сайті **лише кліками в його інтерфейсі**. «Підтвердити» натискає тільки з
+  увімкненим автобронюванням; «Підтверджую» і «Записатись в чергу очікування» — ніколи. API
+  бронювання й `PUT /documents` не викликає.
+- React сайту перемальовує DOM: елементи шукати наново після кожної дії, позначки накладати повторно
+  (деталі — [docs/insights.md](docs/insights.md)).
+- Таймери content script у фоновій вкладці пригальмовуються, service worker засинає: усе
+  відкладене — через `chrome.alarms`.
+
+## Не чіпати
+
+- `docs/design/design-a.html` — генерується з `Main.dc.html` (`python3 extension/docs/design/build.py`).
+- `fonts/*.woff2` — локальні копії Google Fonts (див. `fonts/README.md`).
+
+## Читати, коли
+
+- [README.md](README.md) — перед будь-якою зміною: файли, потоки, встановлення.
+- [docs/how-it-works.md](docs/how-it-works.md) — поведінка в деталях: сесія, чернетка, вибір слота.
+- [plans/extension-plan.md](plans/extension-plan.md) — рішення, протокол (§8), етапи, ризики, як
+  тестувати нічого не забронювавши (§12).
+- [docs/design/README.md](docs/design/README.md) — перед змінами попапу чи банерів (дизайн A).
+- [docs/insights.md](docs/insights.md) — перед нетривіальною роботою; після неї — дописати
+  неочевидне скілом `engineering-insights`.
+- [../docs/booking.md](../docs/booking.md) — як працює сайт і API (§2, §14), спільне із застосунком.
