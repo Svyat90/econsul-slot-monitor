@@ -1,7 +1,5 @@
+import { SettingsView } from '@/features/settings/index.ts';
+
 export function SettingsPage() {
-    return (
-        <>
-            <h1>Налаштування</h1>
-        </>
-    );
+    return <SettingsView />;
 }
