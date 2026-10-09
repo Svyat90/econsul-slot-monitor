@@ -89,7 +89,7 @@ server/
                                 schedule-log, summary, locations — routes.ts → repository.ts
 ```
 
-- Два незалежні пакети (pnpm), без workspace, як у dev-digest; спільні контракти — через path
+- Два незалежні пакети (pnpm), без workspace; спільні контракти — через path
   alias, одна версія zod в обох `package.json`.
 - Кільця й правила імпорту — скіл `onion-architecture`; enforcement (`dependency-cruiser` +
   ESLint `no-restricted-globals` для `domain/` і `application/`) вмикається на етапі 2, поки код
@@ -185,7 +185,9 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
 
 ## 7. Етапи
 
-Кожен етап — окремі коміти; після кожного застосунок працює. Поки новий застосунок не готовий,
+Кожен етап — окремі коміти; після кожного застосунок працює. Перед етапом його розбивають на
+задачі (`## Етап N — задачі`, формат — [README.md](README.md)); виконують агенти `implementer`,
+перевіряють `plan-verifier` і `architecture-reviewer` (`.claude/agents/`). Поки новий застосунок не готовий,
 на `/` лишається `slots.html`, а новий відкривається за `/next/` (Vite `base`). **Одночасно
 відкривати лише один із них**: обидва говорять із розширенням.
 
