@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { NavLink, Outlet } from 'react-router';
+import { StatusBlock } from '@/features/status/index.ts';
 import styles from './Layout.module.css';
 
 const iconProps = {
@@ -61,10 +62,7 @@ export function Layout() {
                     </span>
                     <span className={styles.brandName}>Монітор слотів</span>
                 </div>
-                <div className={styles.status}>
-                    <span className={styles.statusDot} aria-hidden="true" />
-                    <span className={styles.statusText}>Моніторинг зупинено</span>
-                </div>
+                <StatusBlock />
                 <nav aria-label="Розділи" className={styles.nav}>
                     {NAV_ITEMS.map((item) => (
                         <NavLink

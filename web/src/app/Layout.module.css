@@ -1,4 +1,6 @@
 .shell {
+    --color-accent-bg: color-mix(in srgb, var(--color-accent) 9%, var(--color-surface));
+
     display: grid;
     grid-template-columns: 228px 1fr;
     min-height: 100vh;
@@ -36,25 +38,6 @@
     color: var(--color-text);
 }
 
-.status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px;
-    border-radius: var(--radius-card);
-    background: var(--color-bg);
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--color-text);
-}
-
-.statusDot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--color-reserved);
-}
-
 .nav {
     display: flex;
     flex-direction: column;
@@ -79,7 +62,7 @@
 
 .active,
 .active:hover {
-    background: var(--color-fast-bg);
+    background: var(--color-accent-bg);
     color: var(--color-accent);
 }
 

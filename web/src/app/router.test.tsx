@@ -1,11 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
+import { createFakeServices } from '@/test/fake-services.tsx';
 import { routes } from './router.tsx';
 
 function renderAt(path: string) {
     const router = createMemoryRouter(routes, { initialEntries: [path] });
-    render(<RouterProvider router={router} />);
+    const { wrapper } = createFakeServices();
+    render(<RouterProvider router={router} />, { wrapper });
 }
 
 describe('routes', () => {
@@ -33,8 +35,8 @@ describe('routes', () => {
         expect(screen.getByRole('heading', { level: 1, name: 'Слоти' })).toBeInTheDocument();
     });
 
-    it('shows the static monitoring status block', () => {
+    it('shows the monitoring status block in the menu', () => {
         renderAt('/');
-        expect(screen.getByText('Моніторинг зупинено')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Запустити' })).toBeInTheDocument();
     });
 });
