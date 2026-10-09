@@ -1,6 +1,6 @@
 # План: переписування застосунку на Vite + React з сервером Fastify
 
-Статус: **погоджено 2026-10-09**, виконання не почато (гілка `feature/web-app-rewrite`).
+Статус: **погоджено 2026-10-09**, етап 0 виконано 2026-10-09 (гілка `feature/web-app-rewrite`).
 Рішення, на яких стоїть план, — [брейншторм](../brainstorm/ideas.md), IDEA-001…006. Дизайн —
 [web/docs/design](../../web/docs/design/README.md). Як працює сайт і поточний застосунок —
 [booking.md](../booking.md).
@@ -18,6 +18,8 @@
 9. [Ризики](#9-ризики)
 10. [Поза межами плану](#10-поза-межами-плану)
 11. [Відкриті питання](#11-відкриті-питання)
+12. [Етап 0 — задачі](#етап-0--задачі)
+13. [Журнал виконання](#журнал-виконання)
 
 ---
 
@@ -242,3 +244,43 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
    і застосунок; на етапі 8 оновлюється під новий застосунок.
 
 Відкритих питань немає.
+
+## Етап 0 — задачі
+
+Погодження плану (2026-10-09) і `promoted` для IDEA-001…006 (коміт 26c270d) вже зроблено; лишився
+каркас документації `server/`. Задача лише з документації, без коду й тестів, — її виконала основна
+сесія, без агента `implementer`.
+
+### Wave 1
+
+#### S0.T1 — каркас документації модуля `server/`
+- Module: server
+- Depends on: —
+- Files (exclusive):
+  - `server/CLAUDE.md` (new)
+  - `server/README.md` (new)
+  - `server/docs/.gitkeep` (new)
+  - `server/plans/.gitkeep` (new)
+  - `CLAUDE.md` (рядок `server/` у таблиці модулів)
+- Rules:
+  - Модуль має `CLAUDE.md`, `README.md`, `docs/`, `plans/` — кореневий `CLAUDE.md`, «Структура модуля»
+  - `CLAUDE.md` — неочевидні правила, що читати й коли; `README.md` — для людей: що робить, файли,
+    зв'язок з іншими модулями, документація
+  - Правила сервера — з §5 плану й розділів «In this project» скілів `fastify-best-practices`,
+    `drizzle-orm-patterns`, `postgresql-table-design`, `security`; нічого нового не вигадувати
+  - Документація українською
+- Acceptance criteria:
+  - `server/` має чотири елементи; кореневий `CLAUDE.md` посилається на `server/CLAUDE.md`
+  - `server/CLAUDE.md` каже, що сервер не ходить на e-Consul і не приймає токен
+- Verify:
+  - `ls -a server server/docs server/plans`
+
+### Ownership
+
+| Файл | Задача |
+|---|---|
+| `server/CLAUDE.md`, `server/README.md`, `server/docs/.gitkeep`, `server/plans/.gitkeep`, `CLAUDE.md` | S0.T1 |
+
+## Журнал виконання
+
+- 2026-10-09 · Етап 0 · S0.T1 виконано.

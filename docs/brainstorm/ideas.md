@@ -12,7 +12,7 @@ last_updated: 2026-10-09
 - In progress: план `docs/plans/web-rewrite-plan.md` погоджено 2026-10-09; IDEA-001…006 → promoted.
   Виконання — у новій сесії.
 - Open questions: none
-- Next steps: записати фікстури (`web/docs/fixtures.md`); етап 0–1 плану.
+- Next steps: етап 1 плану (фікстури записано, етап 0 виконано 2026-10-09).
 
 ## Index
 

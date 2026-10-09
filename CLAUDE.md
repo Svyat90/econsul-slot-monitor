@@ -11,7 +11,7 @@ e-consul.gov.ua, стежить за ними й передає знайдене
 | `extension/` | Розширення Chrome «e-Consul Helper» (MV3) — [extension/CLAUDE.md](extension/CLAUDE.md) |
 | `slots.html`, `main.go`, `locations.json` (корінь) | Поточний застосунок; ще не модуль — переписується в гілці `feature/web-app-rewrite` |
 | `web/` (заплановано, поки лише документація й дизайн) | Новий застосунок: Vite + React + TypeScript (SPA) — [web/CLAUDE.md](web/CLAUDE.md) |
-| `server/` (заплановано) | Fastify + Drizzle + Postgres у Docker: віддає `web/` і API `/api/*` на `localhost:3000`; журнали запитів, резервувань, змін розкладу й подій розширення (зберігаються назавжди) |
+| `server/` (заплановано, поки лише документація) | Fastify + Drizzle + Postgres у Docker: віддає `web/` і API `/api/*` на `localhost:3000`; журнали запитів, резервувань, змін розкладу й подій розширення (зберігаються назавжди) — [server/CLAUDE.md](server/CLAUDE.md) |
 
 Рішення щодо переписування — у `docs/brainstorm/ideas.md` (IDEA-001…006), план — `docs/plans/web-rewrite-plan.md`.
 
