@@ -13,6 +13,7 @@ export type AppServices = {
     clock: Clock;
     scheduler: Scheduler;
     history: LogHistory;
+    openBooking: () => void; // the prepared draft, otherwise a new application, in a new tab
 };
 
 export const AppServicesContext = createContext<AppServices | null>(null);

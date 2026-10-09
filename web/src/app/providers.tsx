@@ -29,6 +29,7 @@ function createServices(): Services {
     const links: { current: ReturnType<typeof createExtensionLink> | null } = { current: null };
     const serverApi = createServerApi({ scheduler });
     const session = { tabSessionId: browserIds.uuid(), appVersion: APP_VERSION };
+    const openBooking = () => alerts.openUrl(bookingUrl(settings.loadDraft()?.url ?? null));
     const monitor = createMonitor({
         econsul: withRequestLog(createEconsulApi(), { server: serverApi, clock, ids: browserIds, session }),
         server: serverApi,
@@ -41,11 +42,11 @@ function createServices(): Services {
         random: browserRandom,
         scheduler,
         extensionConnected: () => links.current?.getState().connected ?? false,
-        openBooking: () => alerts.openUrl(bookingUrl(settings.loadDraft()?.url ?? null)),
+        openBooking,
     });
     const extensionLink = createExtensionLink({ bridge, monitor, settings, alerts, clock, scheduler });
     links.current = extensionLink;
-    return { app: { monitor, extensionLink, clock, scheduler, history: createLogHistory() }, flush: serverApi.flush };
+    return { app: { monitor, extensionLink, clock, scheduler, history: createLogHistory(), openBooking }, flush: serverApi.flush };
 }
 
 // One set of services and one start for the page's lifetime, also under StrictMode's double effects

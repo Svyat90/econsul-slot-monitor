@@ -1,7 +1,5 @@
+import { SlotsView } from '@/features/slots/index.ts';
+
 export function SlotsPage() {
-    return (
-        <>
-            <h1>Слоти</h1>
-        </>
-    );
+    return <SlotsView />;
 }

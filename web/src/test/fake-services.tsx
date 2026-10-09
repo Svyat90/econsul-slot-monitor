@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 import type { ExtensionState } from '@/application/extension-link.ts';
 import type { Monitor, MonitorState } from '@/application/monitor.ts';
 import type { Summary } from '@contracts/summary.ts';
-import type { Clock, LogHistory, Scheduler } from '@/application/ports.ts';
+import type { Clock, LogHistory, NotificationPermissionState, Scheduler } from '@/application/ports.ts';
 import { AppServicesContext, type AppServices } from '@/hooks/use-app-services.ts';
 
 export const baseMonitorState: MonitorState = {
@@ -30,6 +30,7 @@ export const baseMonitorState: MonitorState = {
     outOfRange: null,
     lastFresh: [],
     log: [],
+    tabTitleMarks: true,
 };
 
 export const baseExtensionState: ExtensionState = { connected: false, version: null, auth: null, autoBook: false, draft: null };
@@ -57,6 +58,11 @@ export function createFakeServices(options: { monitor?: Partial<MonitorState>; e
         setInterval: vi.fn(),
         setFastChecks: vi.fn(),
         setDateRange: vi.fn(),
+        setTabTitleMarks: vi.fn(),
+        notificationPermission: vi.fn((): NotificationPermissionState => 'default'),
+        requestNotifications: vi.fn(async (): Promise<NotificationPermissionState> => 'default'),
+        audioReady: vi.fn(() => false),
+        testAlert: vi.fn(async () => {}),
         log: vi.fn(),
         dispose: vi.fn(),
     } satisfies Monitor;
@@ -67,6 +73,7 @@ export function createFakeServices(options: { monitor?: Partial<MonitorState>; e
         dispose: vi.fn(),
         login: vi.fn(),
         setAutoBook: vi.fn(),
+        setDraftUrl: vi.fn(),
         testSound: vi.fn(),
         userGesture: vi.fn(),
     };
@@ -81,12 +88,14 @@ export function createFakeServices(options: { monitor?: Partial<MonitorState>; e
         scheduleChanges: vi.fn<LogHistory['scheduleChanges']>(async () => emptyPage),
         scheduleLogDownloadUrl: () => '/api/schedule-log.jsonl',
     } satisfies LogHistory;
-    const services = { monitor, extensionLink, clock, scheduler, history } as unknown as AppServices;
+    const openBooking = vi.fn();
+    const services = { monitor, extensionLink, clock, scheduler, history, openBooking } as unknown as AppServices;
     return {
         services,
         monitor,
         extensionLink,
         history,
+        openBooking,
         setMonitorState(patch: Partial<MonitorState>) {
             monitorState = { ...monitorState, ...patch };
             monitorListeners.forEach((l) => l());
