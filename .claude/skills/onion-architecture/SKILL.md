@@ -245,7 +245,7 @@ branch on `error.message` text or on HTTP status outside the `econsul-api` adapt
 
 | Ring | Test | Needs |
 |---|---|---|
-| Domain | unit tests with recorded responses (`slots.json`, `slots_not_working.json`, `locations.json`, move them to `src/domain/__fixtures__/`) and a fixed `nowMs` | nothing — no DOM, no network |
+| Domain | unit tests with recorded responses (`src/domain/__fixtures__/econsul/`, parameters from `server/data/locations.json`) and a fixed `nowMs` | nothing — no DOM, no network |
 | Application | unit tests with fake ports and a fake `Scheduler`/`Clock` | nothing |
 | Infrastructure | adapter tests with a stubbed `fetch` / `window` | jsdom at most |
 | Presentation | React Testing Library over a fake monitor store | jsdom |
