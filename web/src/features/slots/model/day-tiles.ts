@@ -197,3 +197,12 @@ export function draftHint(draft: DraftLike | null, nowMs: number): string {
     if (nowMs >= deletesAt) return `Чернетка: ${created} · сайт, імовірно, уже видалив її`;
     return `Чернетка: ${created} · видалиться ${dayAndClock(deletesAt, nowMs)}`;
 }
+
+const DAY_TITLE_WEEKDAYS = ['неділя', 'понеділок', 'вівторок', 'середа', 'четвер', "п'ятниця", 'субота'];
+const DAY_TITLE_MONTHS = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
+
+// "середа, 31 березня 2027"
+export function dayTitle(dateKey: string): string {
+    const weekday = new Date(`${dateKey}T12:00:00Z`).getUTCDay();
+    return `${DAY_TITLE_WEEKDAYS[weekday]}, ${Number(dateKey.slice(8, 10))} ${DAY_TITLE_MONTHS[Number(dateKey.slice(5, 7)) - 1]} ${dateKey.slice(0, 4)}`;
+}

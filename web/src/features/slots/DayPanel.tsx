@@ -1,14 +1,5 @@
 import styles from './DayPanel.module.css';
-import { daySummary, type DayModel, type RecentReservation } from './model/day-tiles.ts';
-
-const WEEKDAYS = ['неділя', 'понеділок', 'вівторок', 'середа', 'четвер', "п'ятниця", 'субота'];
-const MONTHS = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
-
-// "середа, 31 березня 2027"
-export function dayTitle(dateKey: string): string {
-    const weekday = new Date(`${dateKey}T12:00:00Z`).getUTCDay();
-    return `${WEEKDAYS[weekday]}, ${Number(dateKey.slice(8, 10))} ${MONTHS[Number(dateKey.slice(5, 7)) - 1]} ${dateKey.slice(0, 4)}`;
-}
+import { daySummary, dayTitle, type DayModel, type RecentReservation } from './model/day-tiles.ts';
 
 const TILE_HINT = { free: 'вільний', reserved: 'зайнятий', nonworking: 'неробочий' } as const;
 

@@ -4,7 +4,7 @@ import chicago from '@/domain/__fixtures__/econsul/chicago-2026-10-09.json';
 import type { ReservedSlot, ScheduleRow } from '@/domain/contracts/econsul.ts';
 import { locationsSchema } from '@/domain/contracts/locations.ts';
 import { utcOffsetDateKey } from '@/domain/slots/time.ts';
-import { buildDayModels, daySummary, draftHint, recentForDay, type DayModelsInput } from './day-tiles.ts';
+import { buildDayModels, daySummary, dayTitle, draftHint, recentForDay, type DayModelsInput } from './day-tiles.ts';
 
 const locations = locationsSchema.parse(locationsJson);
 const institution = locations.institutions.find((i) => i.code === chicago.institutionCode)!;
@@ -70,5 +70,11 @@ describe('draftHint', () => {
         const savedAt = new Date(2026, 9, 7, 8, 45).getTime();
         expect(draftHint({ url: 'u', savedAt }, nowMs)).toContain('уже видалив');
         expect(draftHint(null, nowMs)).toContain('Чернетки немає');
+    });
+});
+
+describe('dayTitle', () => {
+    it('spells the weekday, day, month and year in Ukrainian', () => {
+        expect(dayTitle('2027-03-31')).toBe('середа, 31 березня 2027');
     });
 });

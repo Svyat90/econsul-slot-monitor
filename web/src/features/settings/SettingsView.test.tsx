@@ -75,7 +75,7 @@ describe('SettingsView', () => {
 
     it('sets and clears the date range', async () => {
         const { user, monitor } = setup({ monitor: { dateRange: { from: '2027-03-15', to: '2027-04-01' } } });
-        fireDate(screen.getByLabelText('Не раніше'), '2027-03-20');
+        fireDate(screen.getByLabelText('Дати слотів: не раніше'), '2027-03-20');
         expect(monitor.setDateRange).toHaveBeenLastCalledWith({ from: '2027-03-20', to: '2027-04-01' });
         await user.click(screen.getByRole('button', { name: 'Очистити' }));
         expect(monitor.setDateRange).toHaveBeenLastCalledWith({ from: null, to: null });

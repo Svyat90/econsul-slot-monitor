@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Calendar } from './Calendar.tsx';
 import { DayPanel } from './DayPanel.tsx';
@@ -8,28 +7,13 @@ import { buildDayModels, draftHint, recentForDay } from './model/day-tiles.ts';
 import { buildMonthGrid, defaultDay, shiftMonth, summaryText } from './model/month-grid.ts';
 import styles from './SlotsView.module.css';
 import { useAppServices, useExtensionState, useMonitorState } from '@/hooks/use-app-services.ts';
-
-const REFRESH_MS = 15_000;
-const LIST_LIMIT = 50;
-
-// The reservation log of the institution; refetched after every check, as on the Monitoring page
-function useInstitutionReservations() {
-    const { history } = useAppServices();
-    const { selection, checks } = useMonitorState();
-    const institutionCode = selection?.institution.code;
-    return useQuery({
-        queryKey: ['reservations', institutionCode, checks],
-        queryFn: async () => (await history.reservations({ institutionCode, limit: LIST_LIMIT })).entries,
-        refetchInterval: REFRESH_MS,
-        enabled: institutionCode !== undefined,
-    });
-}
+import { useReservations } from '@/hooks/use-reservations.ts';
 
 export function SlotsView() {
     const { clock, openBooking } = useAppServices();
     const state = useMonitorState();
     const { draft } = useExtensionState();
-    const { data: reservations } = useInstitutionReservations();
+    const { data: reservations } = useReservations();
     const { selection, schedule, locations, reserved, dateRange } = state;
     const nowMs = clock.now();
     const nowMinute = Math.floor(nowMs / 60_000);

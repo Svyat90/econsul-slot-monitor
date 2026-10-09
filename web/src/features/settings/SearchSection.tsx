@@ -60,7 +60,7 @@ export function SearchSection() {
             {institution && <div className={styles.params}>{locationParams(locations, institution, serviceCode)}</div>}
             <div className={styles.dates}>
                 <label className={styles.field}>
-                    <span className={styles.label}>Не раніше</span>
+                    <span className={styles.label}>Дати слотів: не раніше</span>
                     <input
                         type="date"
                         className={styles.control}
@@ -69,7 +69,7 @@ export function SearchSection() {
                     />
                 </label>
                 <label className={styles.field}>
-                    <span className={styles.label}>Не пізніше</span>
+                    <span className={styles.label}>не пізніше</span>
                     <input
                         type="date"
                         className={styles.control}

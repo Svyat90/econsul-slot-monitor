@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { CheckQuery } from '@contracts/checks.ts';
 import { useAppServices, useMonitorState } from '@/hooks/use-app-services.ts';
+import { HISTORY_LIST_LIMIT as LIST_LIMIT, HISTORY_REFRESH_MS as REFRESH_MS } from '@/hooks/use-reservations.ts';
 
 export type CheckFilter = 'all' | 'new' | 'errors' | 'fast';
 
@@ -11,7 +12,6 @@ const CHECK_FILTERS: Record<CheckFilter, Partial<CheckQuery>> = {
     fast: { kind: 'fast' },
 };
 
-const LIST_LIMIT = 50;
 
 // Local midnight of the clock's day to the next one: the server does not guess a time zone
 function dayBounds(nowMs: number): { from: string; to: string } {
@@ -25,7 +25,6 @@ function dayBounds(nowMs: number): { from: string; to: string } {
 // Server data lives in the query cache; the monitor's check counter in every key refetches the
 // logs after each check. A check's entries reach the server only after it ends and the batch queue
 // flushes (up to 5 s later), so the logs also refresh every REFRESH_MS.
-const REFRESH_MS = 15_000;
 function useHistoryScope() {
     const { history, clock } = useAppServices();
     const { selection, checks } = useMonitorState();
@@ -50,15 +49,6 @@ export function useChecks(filter: CheckFilter) {
             const page = await history.checks({ ...CHECK_FILTERS[filter], institutionCode, limit: LIST_LIMIT });
             return filter === 'errors' ? page.entries.filter((e) => e.outcome !== 'ok') : page.entries;
         },
-        refetchInterval: REFRESH_MS,
-    });
-}
-
-export function useReservations() {
-    const { history, institutionCode, checks } = useHistoryScope();
-    return useQuery({
-        queryKey: ['reservations', institutionCode, checks],
-        queryFn: async () => (await history.reservations({ institutionCode, limit: LIST_LIMIT })).entries,
         refetchInterval: REFRESH_MS,
     });
 }

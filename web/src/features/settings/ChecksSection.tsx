@@ -20,8 +20,9 @@ export function ChecksSection() {
         <Section title="Перевірки">
             <div className={styles.interval}>
                 <label className={styles.inline}>
-                    <span>Кожні, від</span>
+                    <span>Кожні</span>
                     <input
+                        aria-label="Кожні, від"
                         type="number"
                         min={10}
                         className={`${styles.control} ${styles.number}`}
@@ -31,8 +32,9 @@ export function ChecksSection() {
                     />
                 </label>
                 <label className={styles.inline}>
-                    <span>до</span>
+                    <span aria-hidden="true">–</span>
                     <input
+                        aria-label="до"
                         type="number"
                         min={10}
                         className={`${styles.control} ${styles.number}`}

@@ -307,6 +307,11 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
   - Не виправлялось: рядки подій розширення в журналі перевірок («Розширення вибрало слот») — з'являться з подіями розширення на етапі 7; примітка «9 — новий день за 38 с» на картці резервувань — даних для неї в контракті зведення немає.
 - 2026-10-09 · Етап 5 закрито основною сесією після F2.x. Відкрите разом із етапом 4: жива перевірка на `/next/` з розширенням користувача (записи в таблицях, вимкнення сервера, `pg_dump`).
 - 2026-10-09 · Етап 6 · S6.T0–S6.T5 виконано; інтеграція основною сесією (фікстура маршрутів з повною установою, `openBooking`/`tabTitleMarks` у тестах). S6.T6: headless Chrome — «Налаштування» без даних і «Слоти» на фікстурі Чикаго (усі запити до e-Consul перехоплені й підмінені фікстурою, `POST /api/*` перехоплені, до сайту й у робочу базу — нічого): календар, панель дня, наступне відкриття, найближчі вільні збігаються зі `slots.png`. Знайдено й виправлено: банер нових слотів показував усі 931 слот — тепер ≤ 4 днів і «…і ще N дн.» (як сповіщення `slots.html`); підказка чернетки посилалась на стару кнопку «Забронювати на e-consul».
+- 2026-10-09 · Етап 6 · раунд перевірки 1: `architecture-reviewer` — PASS (2 MINOR); `plan-verifier` — 11 MET, 2 PARTIAL, 1 UNVERIFIABLE (знімки — зроблено основною сесією в S6.T6). Виправлення (основна сесія):
+  - F3.1 — запит журналу резервувань — один хук `src/hooks/use-reservations.ts` для «Слотів» і «Моніторингу» (один ключ і форма кешу).
+  - F3.2 — `dayTitle` перенесено з компонента в `features/slots/model/day-tiles.ts`, з тестом.
+  - F3.3 — підписи як на `settings.png`: «Кожні [60] – [180]», «Дати слотів: не раніше / не пізніше».
+- 2026-10-09 · Етап 6 закрито після F3.x (302 тести, typecheck, lint, arch:check).
 
 ## Етап 1 — задачі
 
@@ -1027,3 +1032,55 @@ e-Consul Helper»), перенесена дослівно; тексти журн
 | решта `web/src/features/slots/**`, `SlotsPage.tsx`, `hooks/use-app-services.ts`, `providers.tsx`, `test/fake-services.tsx` | S6.T3 |
 | `web/src/features/settings/**`, `SettingsPage.tsx` | S6.T4 |
 | `web/src/features/banners/**`, `Layout.tsx`, `Layout.module.css`, `router.test.tsx` | S6.T5 |
+
+## Етап 7 — задачі
+
+Загальне. Контракт подій — `server/src/contracts/extension-events.ts` (S7.T0): тип події з
+переліку `extensionEventTypes`, `jobId` для воронки вибору слота, пласкі `payload` без ключів,
+схожих на секрет, `test` для тестових `app:slots`. Запити розширення до e-Consul (`GET auth/me`,
+`GET tasks/{id}` з `econsul.js`) пишуться в той самий `POST /api/request-log` з `source: 'extension'`,
+`service: 'auth'` / `'tasks'`, `method: 'GET auth/me'` / `'GET tasks/:id'` (без id), `filters: {}`,
+`institutionCode: null`, `tabSessionId` — UUID запуску service worker, `appVersion` — версія розширення.
+
+### Wave 0 — основна сесія
+
+#### S7.T0 — контракт подій розширення; порт історії
+- Files: `server/src/contracts/extension-events.ts` (new), `web/src/application/ports.ts` (`LogHistory.extensionEvents(query): Promise<Page<StoredExtensionEvent>>`)
+
+### Wave 1 — паралельно
+
+#### S7.T1 — модуль `extension-events` і підключення
+- Module: server · Files: `server/src/modules/extension-events/{repository.ts,repository.it.test.ts,routes.ts,routes.test.ts}` (new), `server/src/app.ts`, `server/src/app.test.ts`, `server/src/platform/container.ts`
+- Rules: як «Rules для задач `server`» етапу 5 (CRUD, одна вставка з `onConflictDoNothing`, `[from, to)`, повні шляхи `/api/extension-events`, зайвий ключ і ключ `token` у `payload` → 422)
+- Interface: `createExtensionEventsRepository(db)` (`insertMany(events: ExtensionEvent[])`, `list(query: ExtensionEventQuery)`); `extensionEventsRoutes` — `POST /api/extension-events`, `GET /api/extension-events` (`type`, `jobId`, `from`, `to`, курсор)
+- Steps: тести репозиторію (вставка/повтор, фільтри) і маршрутів (204; `payload.token` → 422; невідомий `type` → 422); `app.test.ts` — маршрут зареєстровано.
+
+#### S7.T2 — розширення пише свої запити й події
+- Module: extension · Files: `extension/telemetry.js` (new), `extension/background.js`, `extension/econsul.js`, `extension/manifest.json` (`version` 0.3.3 → 0.4.0), `extension/docs/how-it-works.md`, `extension/plans/extension-plan.md` (§6 «Журнал»), `extension/README.md`
+- Rules:
+  - Service worker засинає: черга записів — у `chrome.storage.local` (`telemetryQueue`, ≤ 2000, найстаріші відкидаються), відправка пачками ≤ 100 після кожної події й за будильником `tick` (уже щохвилини); 204 → прибрати; мережа/5xx → лишити; 4xx → викинути пачку — extension/CLAUDE.md («усе відкладене — через `chrome.alarms`»), security
+  - Нових дозволів не треба: `http://localhost:3000/*` уже в `host_permissions` — security «In this project» (Extension permissions)
+  - Токен, URL з токеном, дані заявника — ніколи в записі; `taskId` — не в `method`, лише як `payload.taskId`, якщо треба; тексти помилок — коди з `SELECT_ERRORS`, а не тексти сторінки — security
+  - Протокол із застосунком не змінюється (§8); `importScripts('telemetry.js')` у `background.js` (service worker не модуль)
+  - Після змін `background.js`/content scripts — `version` у `manifest.json` — extension/CLAUDE.md
+- Події (точки в `background.js`): вхід/вихід (`updateAuth`, `onLoggedOut` з `reason`), чернетка (`onSiteTask` → `draft.found` з `step`; `openDraft` → `draft.opened`; минула доба → `draft.gone`), воронка (`startSelection` → `selection.started` з `jobId`, кількістю слотів, `test`; етапи з `econsul:slot-result` → `selection.stage`/`selection.selected`/`selection.failed` з кодом помилки й тривалістю), автобронювання (`econsul:confirm-clicked` → `booking.confirm-clicked`; `onBookResult` → `booking.booked`/`booking.failed`), `app:slots` → `app.slots-received` (`count`, `test`), дії користувача (`user.mute`, `user.pause`, `user.auto-book`, `user.test-sound`). Запити: `econsul.js` вимірює `GET auth/me` і `GET tasks/{id}` (статус, тривалість, результат) і надсилає фону повідомлення `econsul:request` без токена; фон кладе запис у чергу.
+- Verify: `node --check extension/*.js`; вручну (користувач): ⟳ розширення в `chrome://extensions`, відкрити e-consul — у `GET /api/request-log?source=extension` і `GET /api/extension-events` з'являються записи; з закритою вкладкою застосунку — теж.
+
+#### S7.T3 — події розширення на сторінці «Моніторинг»
+- Module: web · Files: `web/src/adapters/log-history/{log-history.ts,log-history.test.ts}`, `web/src/features/monitoring/**`, `web/src/test/fake-services.tsx`
+- Журнал перевірок показує й події розширення поруч із перевірками за часом (як «Розширення вибрало слот» на `monitoring.png`): `selection.selected` → «Розширення вибрало слот · <дата> о <час> у чернетці — натисніть «Підтвердити»», `selection.failed`, `booking.booked`, `session.logged-out`; фільтри «Усі» — разом, решта — лише перевірки; тестові події — з позначкою «тест».
+- Steps: RTL — злиття за часом; фільтр «Нові слоти» ховає події; тестова подія позначена.
+
+### Wave 2 — основна сесія
+
+#### S7.T4 — перевірка
+- Збірка, перезапуск сервера; `POST /api/extension-events` з ключем `token` у `payload` → 422 (`app.inject` у тестах, не в робочу базу); після ⟳ розширення в користувача — записи в `extension_events` і `econsul_requests` (`source = 'extension'`), зокрема з закритою вкладкою застосунку; `pg_dump` без токена.
+
+### Ownership
+
+| Файли | Задача |
+|---|---|
+| `server/src/contracts/extension-events.ts`, `web/src/application/ports.ts` | S7.T0 |
+| `server/src/modules/extension-events/**`, `server/src/app.ts`, `app.test.ts`, `platform/container.ts` | S7.T1 |
+| `extension/**` (перелічені файли) | S7.T2 |
+| `web/src/adapters/log-history/**`, `web/src/features/monitoring/**`, `web/src/test/fake-services.tsx` | S7.T3 |

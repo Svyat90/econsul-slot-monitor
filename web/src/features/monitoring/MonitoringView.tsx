@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import styles from './MonitoringView.module.css';
 import { formatClock, formatDateTime, formatSlotDate, formatTime, plural, slotLabel } from './format.ts';
-import { useChecks, useReservations, useScheduleChanges, useSummary, type CheckFilter } from './use-history.ts';
+import { useReservations } from '@/hooks/use-reservations.ts';
+import { useChecks, useScheduleChanges, useSummary, type CheckFilter } from './use-history.ts';
 import { useAppServices, useMonitorState } from '@/hooks/use-app-services.ts';
 
 const FILTERS: { id: CheckFilter; label: string }[] = [
