@@ -1,0 +1,27 @@
+/* Design tokens: web/docs/design/README.md (Токени). The only file with colour literals. */
+:root {
+    --color-bg: #EEF2F7;
+    --color-surface: #FFFFFF;
+    --color-text: #0B1B2B;
+    --color-text-muted: #3E4C5B;
+    --color-label: #4A5868;
+    --color-accent: #0057B8;
+    --color-border: #C5CFDB;
+    --color-divider: #E3E8EF;
+    --color-success: #1E7B34;
+    --color-success-bg: #E3F4E8;
+    --color-danger: #B42318;
+    --color-danger-bg: #FDECEA;
+    --color-fast: #4B2FB0;
+    --color-fast-bg: #EFEAFD;
+    --color-reserved: #7D8A99;
+    --color-nonworking: #C9D1DB;
+    --color-nonworking-tile: #E3E8EF;
+
+    --radius-card: 12px;
+
+    --shadow-card: 0 1px 2px rgba(11, 27, 43, .08);
+
+    --font-sans: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
