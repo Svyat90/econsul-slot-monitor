@@ -9,26 +9,26 @@ last_updated: 2026-10-09
 
 ## Current focus
 
-- In progress: переписування `slots.html` — IDEA-001…004 узгоджено; лог резервувань іде в базу
-  разом із журналом запитів (IDEA-005).
-- Open questions: погодження плану `docs/plans/web-rewrite-plan.md`.
-- Next steps: після погодження плану — IDEA-001…006 → `promoted` з посиланням на план; етап 1.
+- In progress: план `docs/plans/web-rewrite-plan.md` погоджено 2026-10-09; IDEA-001…006 → promoted.
+  Виконання — у новій сесії.
+- Open questions: none
+- Next steps: записати фікстури (`web/docs/fixtures.md`); етап 0–1 плану.
 
 ## Index
 
 | ID | Title | Status | Priority | Reversibility |
 |---|---|---|---|---|
-| IDEA-001 | Три вкладки, постійна смуга стану, глобальні банери | exploring | Must | two-way |
-| IDEA-002 | Що лишити й що прибрати з `slots.html` | exploring | Must | two-way |
-| IDEA-003 | Стиль дизайну A розширення, інтерфейс українською | exploring | Must | two-way |
-| IDEA-004 | Лог нових резервувань (і звільнень) слотів | exploring | Should | one-way |
-| IDEA-005 | Журнал усіх запитів до e-Consul у базі даних | exploring | Should | one-way |
-| IDEA-006 | Стек застосунку: Vite + React, Fastify віддає все на :3000 | exploring | Must | two-way |
+| IDEA-001 | Три вкладки, постійна смуга стану, глобальні банери | promoted | Must | two-way |
+| IDEA-002 | Що лишити й що прибрати з `slots.html` | promoted | Must | two-way |
+| IDEA-003 | Стиль дизайну A розширення, інтерфейс українською | promoted | Must | two-way |
+| IDEA-004 | Лог нових резервувань (і звільнень) слотів | promoted | Should | one-way |
+| IDEA-005 | Журнал усіх запитів до e-Consul у базі даних | promoted | Should | one-way |
+| IDEA-006 | Стек застосунку: Vite + React, Fastify віддає все на :3000 | promoted | Must | two-way |
 
 ## Ideas
 
 ### IDEA-001: Три вкладки, постійна смуга стану, глобальні банери
-- Status: exploring
+- Status: promoted
 - Priority: Must
 - Reversibility: two-way
 - Depends on: none
@@ -78,9 +78,11 @@ last_updated: 2026-10-09
 звук, мітка в заголовку вкладки) разом із тестовими кнопками.
 2026-10-09: підтверджено користувачем. Блок стану в меню — дрібніший текст (кожен рядок в один
 рядок), біля «Розширення підключено» — галочка або хрестик.
+2026-10-09: promoted — план погоджено, джерело правди тепер `docs/plans/web-rewrite-plan.md`.
+
 
 ### IDEA-002: Що лишити й що прибрати з `slots.html`
-- Status: exploring
+- Status: promoted
 - Priority: Must
 - Reversibility: two-way
 - Depends on: IDEA-001
@@ -112,9 +114,11 @@ last_updated: 2026-10-09
 переїжджають у фікстури тестів.
 
 **Нотатки.**
+2026-10-09: promoted — план погоджено, джерело правди тепер `docs/plans/web-rewrite-plan.md`.
+
 
 ### IDEA-003: Стиль дизайну A розширення, інтерфейс українською
-- Status: exploring
+- Status: promoted
 - Priority: Must
 - Reversibility: two-way
 - Depends on: none
@@ -142,9 +146,11 @@ last_updated: 2026-10-09
 **Припущення / відкриті питання.** none
 
 **Нотатки.**
+2026-10-09: promoted — план погоджено, джерело правди тепер `docs/plans/web-rewrite-plan.md`.
+
 
 ### IDEA-004: Лог нових резервувань (і звільнень) слотів
-- Status: exploring
+- Status: promoted
 - Priority: Should
 - Reversibility: one-way
 - Depends on: IDEA-002, IDEA-005
@@ -174,9 +180,11 @@ last_updated: 2026-10-09
 **Припущення / відкриті питання.** Таблиця й схема — разом з IDEA-005.
 
 **Нотатки.**
+2026-10-09: promoted — план погоджено, джерело правди тепер `docs/plans/web-rewrite-plan.md`.
+
 
 ### IDEA-005: Журнал усіх запитів до e-Consul у базі даних
-- Status: exploring
+- Status: promoted
 - Priority: Should
 - Reversibility: one-way
 - Depends on: none
@@ -208,9 +216,11 @@ handlers, SQLite) ще не порівнювались.
 причинами й тривалістю етапів, автобронювання, дії користувача. Background шле пачками, спершу
 складає в `chrome.storage.local` (service worker засинає). Не логуються токен, дані заявника, вміст
 документа заявки.
+2026-10-09: promoted — план погоджено, джерело правди тепер `docs/plans/web-rewrite-plan.md`.
+
 
 ### IDEA-006: Стек застосунку: Vite + React, Fastify віддає все на :3000
-- Status: exploring
+- Status: promoted
 - Priority: Must
 - Reversibility: two-way
 - Depends on: IDEA-001, IDEA-005
@@ -239,11 +249,13 @@ e-Consul лише з браузера, моніторинг живе у вкла
 контракти) і розробницький режим (Vite на :3000 з проксі `/api` на Fastify) — у плані.
 
 **Нотатки.**
+2026-10-09: promoted — план погоджено, джерело правди тепер `docs/plans/web-rewrite-plan.md`.
 
 ## Changelog
 
 Лише дописування, нові зверху. Формат: `YYYY-MM-DD · IDEA-NNN · що змінилось`.
 
+- 2026-10-09 · IDEA-001…006 · promoted: план docs/plans/web-rewrite-plan.md погоджено
 - 2026-10-09 · IDEA-006 · складено чернетку плану docs/plans/web-rewrite-plan.md
 - 2026-10-09 · IDEA-006 · рішення: Vite + React, Fastify віддає застосунок і API на :3000
 - 2026-10-09 · IDEA-005 · розширення логує запити й події (таблиця extension_events)

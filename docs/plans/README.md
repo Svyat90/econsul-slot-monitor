@@ -6,7 +6,7 @@
 
 | План | Статус |
 |---|---|
-| [web-rewrite-plan.md](web-rewrite-plan.md) | чернетка — чекає погодження |
+| [web-rewrite-plan.md](web-rewrite-plan.md) | погоджено 2026-10-09, виконання не почато |
 
 ## Як план виконується
 
