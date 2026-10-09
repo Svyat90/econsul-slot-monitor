@@ -23,7 +23,9 @@ function dayBounds(nowMs: number): { from: string; to: string } {
 }
 
 // Server data lives in the query cache; the monitor's check counter in every key refetches the
-// logs after each check.
+// logs after each check. A check's entries reach the server only after it ends and the batch queue
+// flushes (up to 5 s later), so the logs also refresh every REFRESH_MS.
+const REFRESH_MS = 15_000;
 function useHistoryScope() {
     const { history, clock } = useAppServices();
     const { selection, checks } = useMonitorState();
@@ -36,6 +38,7 @@ export function useSummary() {
     return useQuery({
         queryKey: ['summary', from, to, institutionCode, checks],
         queryFn: () => history.summary({ from, to, institutionCode }),
+        refetchInterval: REFRESH_MS,
     });
 }
 
@@ -47,6 +50,7 @@ export function useChecks(filter: CheckFilter) {
             const page = await history.checks({ ...CHECK_FILTERS[filter], institutionCode, limit: LIST_LIMIT });
             return filter === 'errors' ? page.entries.filter((e) => e.outcome !== 'ok') : page.entries;
         },
+        refetchInterval: REFRESH_MS,
     });
 }
 
@@ -55,6 +59,7 @@ export function useReservations() {
     return useQuery({
         queryKey: ['reservations', institutionCode, checks],
         queryFn: async () => (await history.reservations({ institutionCode, limit: LIST_LIMIT })).entries,
+        refetchInterval: REFRESH_MS,
     });
 }
 
@@ -63,5 +68,6 @@ export function useScheduleChanges() {
     return useQuery({
         queryKey: ['schedule-changes', institutionCode, checks],
         queryFn: async () => (await history.scheduleChanges({ institutionCode, limit: LIST_LIMIT })).entries,
+        refetchInterval: REFRESH_MS,
     });
 }

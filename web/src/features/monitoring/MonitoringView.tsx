@@ -128,7 +128,7 @@ function ReservationLog() {
                                     <strong className={styles.mono}>{slotLabel(event.slotFrom)}</strong>
                                 </div>
                                 <div className={styles.muted}>
-                                    між {formatClock(event.previousCheckAt)} і {formatClock(event.detectedAt)}
+                                    між {formatClock(event.previousCheckAt)} і {formatClock(event.detectedAt)} · консул {event.consulIpnHash.slice(0, 8)}
                                 </div>
                             </div>
                         </li>

@@ -14,8 +14,8 @@ import { createMonitor } from '@/application/monitor.ts';
 import { bookingUrl } from '@/domain/booking/booking-url.ts';
 import { AppServicesContext, type AppServices } from '@/hooks/use-app-services.ts';
 
-// Shown in every log entry; keep in step with package.json `version`
-const APP_VERSION = '0.1.0';
+// Written into every log entry; vite.config.ts takes it from package.json `version`
+const APP_VERSION: string = import.meta.env.VITE_APP_VERSION ?? 'dev';
 
 // Composition root: the only place that picks adapters for ports and builds the use cases.
 type Services = { app: AppServices; flush: () => Promise<void> };

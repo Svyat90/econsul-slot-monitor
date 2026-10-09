@@ -300,6 +300,12 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
   - Назву тесту порядку ефектів узгоджено з кодом (журнал — перед сповіщенням, як у `runCheck()`).
 - 2026-10-09 · Етап 4 закрито основною сесією після F1.x (усі тести, typecheck, lint, arch:check). Відкрите: жива перевірка моніторингу на `/next/` з розширенням користувача — потребує Chrome користувача (Claude in Chrome відключено в цій сесії).
 - 2026-10-09 · Етап 5 · S5.T0–S5.T10 виконано. Межі історії уніфіковано до `[from, to)` (S5.T9 + основна сесія для `request-log`). Тести після S5.T10: спільний фейк сервісів дає `QueryClientProvider`. S5.T11: збірка, сервер перезапущено; усі `/api/*` відповідають, запис із `token` → 422; сторінка «Моніторинг» у headless Chrome — без помилок, лише запити до `/api`; `pg_dump` робочої бази — 0 збігів токена. Записи з живого моніторингу — після запуску користувачем на `/next/`.
+- 2026-10-09 · Етап 5 · раунд перевірки 1: `architecture-reviewer` — PASS; `plan-verifier` — 15 MET, 3 PARTIAL, 3 UNVERIFIABLE (живий моніторинг з розширенням, вимкнення сервера під час моніторингу, `pg_dump` після живої сесії). Виправлення (основна сесія):
+  - F2.1 — журнали на «Моніторингу» оновлюються ще й кожні 15 с: записи перевірки доходять на сервер після неї й після відправки черги (до 5 с).
+  - F2.2 — `appVersion` з `web/package.json` `version` через `define` у `vite.config.ts`.
+  - F2.3 — у журналі резервувань показано консула (`консул 556940f3`), як на знімку.
+  - Не виправлялось: рядки подій розширення в журналі перевірок («Розширення вибрало слот») — з'являться з подіями розширення на етапі 7; примітка «9 — новий день за 38 с» на картці резервувань — даних для неї в контракті зведення немає.
+- 2026-10-09 · Етап 5 закрито основною сесією після F2.x. Відкрите разом із етапом 4: жива перевірка на `/next/` з розширенням користувача (записи в таблицях, вимкнення сервера, `pg_dump`).
 
 ## Етап 1 — задачі
 
@@ -946,3 +952,77 @@ e-Consul Helper»), перенесена дослівно; тексти журн
 | `web/src/application/{run-check,monitor}*` | S5.T8 |
 | `server/src/app.ts`, `app.test.ts`, `platform/container.ts` | S5.T9 |
 | `web/src/features/monitoring/**`, `MonitoringPage.tsx`, `providers.tsx`, `hooks/use-app-services.ts`, `test/fake-services.tsx` | S5.T10 |
+
+## Етап 6 — задачі
+
+Загальне (Module: web). Сторінки — за знімками `web/docs/design/{slots,settings}.png` і
+`Main.dc.html` (там же сценарії «Tweaks»: звичайний, сесія скінчилась, нові слоти, установу не
+вибрано; розширення підключене чи ні). Дані — зі стану монітора й розширення (`useMonitorState`,
+`useExtensionState` з `src/hooks/use-app-services.ts`) і з `LogHistory` (TanStack Query, як на
+сторінці «Моніторинг»). Фічі не імпортують одна одну; спільне — `src/hooks/`, `src/components/`
+(нове, для дрібних спільних елементів: картка, підпис розділу, кнопка).
+
+- **Rules для всіх:**
+  - Розрахунки для показу (сітка місяця, плитки дня, «найближчі вільні», текст підказки чернетки) — чисті функції в `features/<f>/model/*.ts` з тестами; компоненти лише показують — frontend-ui-architecture §4
+  - Компоненти — функції без `React.FC`; без `useEffect` для похідних даних; стан фільтрів і вибраного дня — `useState` у компоненті, дані — лише з монітора/запитів — react-best-practices
+  - Стилі — CSS-модулі на змінних `tokens.css`, без кольорів-літералів; тексти — українською як на знімках — web/CLAUDE.md
+  - Тести RTL — запити за роллю/текстом, `userEvent`, фейкові сервіси (`src/test/fake-services.tsx`) — react-testing-library
+  - Дії, що змінюють налаштування, йдуть через методи монітора / зв'язку з розширенням (порти), а не в `localStorage` напряму — onion-architecture §2
+- **Verify:** свої тести + typecheck, lint, arch:check.
+
+### Wave 0 — основна сесія
+
+#### S6.T0 — порт налаштувань: мітка заголовка вкладки
+- Files: `web/src/application/ports.ts` (`SettingsStore.loadTabTitleMarks(): boolean` (типово `true`) / `saveTabTitleMarks(on)`, ключ `slots.tabTitleMarks`)
+
+### Wave 1 — паралельно
+
+#### S6.T1 — use cases для налаштувань
+- Files: `web/src/application/{monitor.ts,monitor.test.ts,run-check.ts,run-check.test.ts,extension-link.ts,extension-link.test.ts}`, `web/src/adapters/settings-store/{settings-store.ts,settings-store.test.ts}`
+- Interface (додатково; S6.T4 будує на ньому):
+  - `MonitorState.tabTitleMarks: boolean`; `Monitor.setTabTitleMarks(on: boolean): void` — збережено в `SettingsStore`; коли вимкнено — заголовок вкладки не змінюється (`run-check`, `extension-link`, `start`)
+  - `Monitor.notificationPermission(): NotificationPermissionState`, `Monitor.requestNotifications(): Promise<NotificationPermissionState>`, `Monitor.audioReady(): boolean`
+  - `Monitor.testAlert(kind: 'slots' | 'session'): Promise<void>` — дослівно `testAlert()` (`unlockAudio`, запит дозволу, `alertSlots` з двома вигаданими слотами `2027-03-31 09:50`, `10:10` / `alertSession`, повернення заголовка через 5 с)
+  - `ExtensionLink.setDraftUrl(url: string): void` — дослівно `saveDraftUrl()` (порожнє → видалити; новий URL → `{ url, savedAt: now }`), оновлює `ExtensionState.draft`; `ExtensionState.draft` при старті — з `SettingsStore`
+- Steps: тести — `setTabTitleMarks(false)` → нові слоти не змінюють заголовок; `testAlert('slots')` → сповіщення з двома слотами; `setDraftUrl` — збереження й очищення.
+
+#### S6.T2 — «Слоти»: наступне відкриття й найближчі вільні
+- Files: `web/src/features/slots/{NextOpening.tsx,NextOpening.module.css,NextOpening.test.tsx,NearestFree.tsx,NearestFree.module.css,NearestFree.test.tsx}`, `web/src/features/slots/model/{releases-view.ts,releases-view.test.ts,nearest-free.ts,nearest-free.test.ts}` (new)
+- «Наступне відкриття»: момент (день тижня, дата, час браузера), час консульства з `GMT±`, який день відкривається і скільки слотів, відлік (`useNowSeconds`), «Часті перевірки HH:MM–HH:MM» (вікно `FAST_CHECKS`), «Далі: …» (ще 2 моменти); дані — `state.releases` + `fastWindow`. «Найближчі вільні»: до 4 днів із вільними слотами в діапазоні дат (`inDateRange`), час — моно, «у діапазоні DD.MM–DD.MM», кнопка «Відкрити чернетку» → `openBooking()` з `AppServices` (поле додає S6.T3)
+- Interface: `AppServices.openBooking: () => void` (додає S6.T3)
+- Порожні стани: розклад ще не завантажено; немає вільних у діапазоні.
+
+#### S6.T3 — «Слоти»: календар, панель дня, сторінка
+- Files: `web/src/features/slots/{Calendar.tsx,Calendar.module.css,Calendar.test.tsx,DayPanel.tsx,DayPanel.module.css,DayPanel.test.tsx,SlotsView.tsx,SlotsView.module.css,index.ts}`, `web/src/features/slots/model/{month-grid.ts,month-grid.test.ts,day-tiles.ts,day-tiles.test.ts}` (new), `web/src/app/pages/SlotsPage.tsx`, `web/src/hooks/use-app-services.ts`, `web/src/app/providers.tsx`, `web/src/test/fake-services.tsx`
+- Календар місяця (пн–нд): у клітинці — число вільних (синій кружок) або «немає», смужка зайнятих/неробочих (частка від усіх слотів дня), приглушені дні поза діапазоном дат, дні за межею горизонту — «ще не відкрито» (пунктир), вихідні без прийому — без клітинки-картки; навігація місяцями; легенда; підсумок «Вільних у діапазоні: N · поза діапазоном: N · зайнятих: N · неробочих проміжків: N · відкриті дні DD.MM.YYYY–DD.MM.YYYY». Панель дня: заголовок дати, «Прийом HH:MM–HH:MM · N вільних · N зайнятих · N неробочих», плитки слотів (вільний — синя рамка, зайнятий — сірий закреслений, неробочий — пунктир), «Неробочий час: …», «Нещодавні резервування» (з `LogHistory.reservations` для установи, слоти цього дня), «Відкрити чернетку», підказка про чернетку з `ExtensionState.draft`.
+- `model/day-tiles.ts` — плитки дня з тих самих даних, що й розрахунок вільних (`buildScheduleDays`, `collectNonWorking`, зайняті з `state.reserved`, перетин — як у `calculateFreeSlots`).
+- Interface: `AppServices.openBooking: () => void` (у `providers.tsx` — `alerts.openUrl(bookingUrl(settings.loadDraft()?.url ?? null))`, як `openBooking` монітора)
+
+#### S6.T4 — «Налаштування»
+- Depends on: S6.T1 (за Interface)
+- Files: `web/src/features/settings/**` (new), `web/src/app/pages/SettingsPage.tsx`
+- Секції за знімком: «Що шукаємо» (країна → установа → послуга з `state.locations`, як `fillCountries/fillInstitutions/fillServices`; рядок параметрів як `renderLocationParams`; дати «не раніше / не пізніше» + «Очистити»; підказка про діапазон як `renderDateRangeHint`), «Сесія» (стан входу й «токен ще N год M хв» зі смужкою; «Ввести вручну» → поле токена → `monitor.setToken(token, 'manual')`; поле `type="password"`, значення не показується після введення), «Перевірки» (межі інтервалу, мін. 10 с; «Часті перевірки…»), «Бронювання» (посилання на чернетку → `extensionLink.setDraftUrl`; підказка як `renderDraftHint`; «Бронювати автоматично» → `extensionLink.setAutoBook`, неактивне без розширення), «Сповіщення» (дозвіл браузера, звук на вкладці, мітка заголовка, тестові кнопки → `monitor.testAlert`, `extensionLink.testSound`; підпис «Тестові слоти розширення ніколи не бронює»).
+- Steps: RTL: зміна установи → `setSelection`; інтервал → `setInterval` з обмеженням ≥ 10; дати → `setDateRange`; «Очистити»; ручний токен; чернетка; автобронювання вимкнене без розширення.
+
+#### S6.T5 — глобальні банери, порожній стан, бейдж меню
+- Files: `web/src/features/banners/**` (new), `web/src/app/Layout.tsx`, `web/src/app/Layout.module.css`, `web/src/app/router.test.tsx`
+- Банери над сторінкою (як у `renderExtStatus` і сценаріях «Tweaks»): «Увійдіть на e-consul. Моніторинг продовжиться сам.» / «… Токен прийде сюди сам.» з «Увійти» (`extensionLink.login()`); «Сесія скінчиться о HH:MM…» (менше 30 хв); «Нові слоти: …» з «Відкрити чернетку» (`openBooking`) і закриттям. Порожній стан на «Слотах» і «Моніторингу», коли установу не вибрано: «Виберіть установу в налаштуваннях» з посиланням. Бейдж «N нові» біля «Моніторинг» — кількість `state.lastFresh`.
+- Steps: RTL-тести на кожен сценарій «Tweaks» (звичайний, сесія скінчилась, нові слоти, установу не вибрано; розширення є/немає).
+
+### Wave 2 — основна сесія
+
+#### S6.T6 — порівняння зі знімками
+- Збірка, headless Chrome: `/next/slots` і `/next/settings` на фікстурі (через фейковий стан неможливо в
+  робочій збірці — тому на живому стані без токена плюс RTL-сценарії); знімки екрана порівняти зі
+  `slots.png`, `settings.png`; відхилення — задачі F.
+
+### Ownership
+
+| Файли | Задача |
+|---|---|
+| `web/src/application/ports.ts` | S6.T0 |
+| `web/src/application/{monitor,run-check,extension-link}*`, `web/src/adapters/settings-store/**` | S6.T1 |
+| `web/src/features/slots/{NextOpening,NearestFree}*`, `features/slots/model/{releases-view,nearest-free}*` | S6.T2 |
+| решта `web/src/features/slots/**`, `SlotsPage.tsx`, `hooks/use-app-services.ts`, `providers.tsx`, `test/fake-services.tsx` | S6.T3 |
+| `web/src/features/settings/**`, `SettingsPage.tsx` | S6.T4 |
+| `web/src/features/banners/**`, `Layout.tsx`, `Layout.module.css`, `router.test.tsx` | S6.T5 |
