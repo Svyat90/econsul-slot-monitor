@@ -1,0 +1,35 @@
+{
+  "name": "econsul-server",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "dev": "PORT=3001 node --watch src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run --exclude '**/*.it.test.ts'",
+    "test:it": "vitest run '.it.test.ts'",
+    "db:up": "docker compose up -d --wait",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "import:schedule-log": "node scripts/import-schedule-log.ts"
+  },
+  "dependencies": {
+    "@fastify/static": "~10.1.5",
+    "drizzle-orm": "^0.45.4",
+    "fastify": "^5.12.5",
+    "fastify-type-provider-zod": "^7.0.0",
+    "pg": "^8.23.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

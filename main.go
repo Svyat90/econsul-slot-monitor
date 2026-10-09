@@ -54,7 +54,7 @@ func appendScheduleLog(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// Locations directory used by slots.html to fill the country/institution/service dropdowns
 	http.HandleFunc("/locations.json", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./locations.json")
+		http.ServeFile(w, r, "./server/data/locations.json")
 	})
 
 	http.HandleFunc("/schedule-log", appendScheduleLog)

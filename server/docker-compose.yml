@@ -1,0 +1,21 @@
+# Postgres for the server's logs. The volume keeps the records forever: never `down -v`.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: econsul
+      POSTGRES_PASSWORD: econsul
+      POSTGRES_DB: econsul
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - econsul-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U econsul -d econsul"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  econsul-pgdata:

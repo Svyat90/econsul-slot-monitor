@@ -285,3 +285,131 @@ Fastify слухає `127.0.0.1:3000`, віддає `web/dist` (усі неві�
 
 - 2026-10-09 · Етап 0 · S0.T1 виконано.
 - 2026-10-09 · Етап 0 закрито: `plan-verifier` — VERIFIED (7/7 MET), `architecture-reviewer` — PASS, без знахідок.
+
+## Етап 1 — задачі
+
+### Wave 0 — основна сесія (спільний стан: встановлення, Docker, міграції)
+
+#### S1.T0 — каркас `server/`
+- Module: server
+- Files (exclusive): `server/package.json`, `server/pnpm-lock.yaml`, `server/pnpm-workspace.yaml`
+  (лише `allowBuilds: esbuild`), `server/tsconfig.json`, `server/.gitignore`,
+  `server/docker-compose.yml`, `server/drizzle.config.ts`, `server/vitest.config.ts`,
+  `server/src/db/**` (схема всіх п'яти таблиць, `client.ts`, міграція `0000_*`),
+  `server/src/platform/config.ts`, `server/src/test/**` (окрема база `econsul_test`),
+  `server/data/locations.json` (перенесено з кореня), `main.go` (шлях до довідника)
+- Результат: `pnpm --dir server run typecheck` чистий; `db:up` + `db:migrate` створюють 5 таблиць.
+  Порт Postgres — `127.0.0.1:5433`. Інтеграційні тести (`*.it.test.ts`) пишуть лише в `econsul_test`
+  (`createTestDb()` з `src/test/db.ts`, `truncate(...)` у `beforeEach`).
+
+### Wave 1
+
+#### S1.T1 — модуль `schedule-log`: контракт, репозиторій, старий маршрут `POST /schedule-log`
+- Module: server
+- Depends on: S1.T0
+- Files (exclusive):
+  - `server/src/contracts/schedule-log.ts` (new)
+  - `server/src/modules/schedule-log/client-id.ts`, `client-id.test.ts` (new)
+  - `server/src/modules/schedule-log/repository.ts`, `repository.it.test.ts` (new)
+  - `server/src/modules/schedule-log/routes.ts`, `routes.test.ts` (new)
+- Rules:
+  - Сервер ніколи не ходить на e-Consul і не приймає токен; тіло — zod `.strict()`, невідомий ключ відхиляється — security «In this project», fastify «In this project»
+  - CRUD-модуль: `routes.ts` → `repository.ts`, без `service.ts`; Drizzle лише в `repository.ts`; маршрут валідує, викликає один метод, повертає 204 — onion-architecture §11
+  - Пачка — одна вставка `insert(...).values(rows).onConflictDoNothing({ target: scheduleChanges.clientId })`; кількість вставлених — з `.returning({ id })` — drizzle-orm-patterns «In this project»
+  - Репозиторій приймає й повертає типи контракту, не рядки таблиці; дати — `Date` для `timestamptz` — drizzle-orm-patterns «In this project»
+  - Записи не змінюються й не видаляються: лише INSERT — postgresql-table-design «In this project»
+  - Імпорти з розширенням `.ts` (Node type stripping, `erasableSyntaxOnly`): без `enum`, `namespace`, parameter properties — fastify rules/typescript.md
+  - Маршрут — плагін з `FastifyPluginAsyncZod` (`fastify-type-provider-zod` v7), схема в `schema: { body }`; компілятори валідації реєструє `app.ts` (S1.T2), у тестах маршруту — сам тест — fastify rules/schemas.md
+  - Тест маршруту — `app.inject()` з фейковим репозиторієм; тест репозиторію — `*.it.test.ts` проти `econsul_test` — onion-architecture §11
+- Interface:
+  - `scheduleLogEntrySchema` (zod, `.strict()`) і `type ScheduleLogEntry` — exported from `contracts/schedule-log.ts`. Поля — рядок старого `logs/schedule-changes.jsonl`: `time` (ISO), `institutionCode`, `institution`, `type: 'baseline' | 'changed'`, `previousCheckAt?` (ISO), `changes: string[]`
+  - `scheduleLogClientId(entry: ScheduleLogEntry): string` — UUID з SHA-256 канонічного JSON запису (ті самі поля в фіксованому порядку → той самий UUID)
+  - `interface ScheduleLogRepository { insertMany(entries: ScheduleLogEntry[]): Promise<number> }` і `createScheduleLogRepository(db: Db): ScheduleLogRepository` — повертає кількість реально вставлених
+  - `scheduleLogLegacyRoutes: FastifyPluginAsyncZod<{ repository: ScheduleLogRepository }>` — `POST /schedule-log`, тіло — один `ScheduleLogEntry` → 204
+- Steps:
+  1. Тест: однаковий запис → однаковий UUID; інший `time` → інший UUID; формат UUID.
+  2. Тест репозиторію: вставка двох записів → 2; повторна вставка тих самих → 0; `changed` з `previousCheckAt` зберігається.
+  3. Тест маршруту: валідне тіло → 204 і виклик репозиторію; зайвий ключ `token` → 4xx і репозиторій не викликано.
+- Acceptance criteria:
+  - `slots.html` може надсилати той самий `POST /schedule-log`, що й до `main.go`; запис потрапляє в `schedule_changes`
+  - повторне надсилання того самого запису не створює дубля
+- Verify:
+  - `pnpm --dir server exec vitest run src/modules/schedule-log`
+  - `pnpm --dir server run typecheck`
+- Constraints:
+  - Тіло старого запиту (`slots.html`, `saveScheduleLogEntry`): `{ time, institutionCode, institution, type, changes }` плюс `previousCheckAt` для `changed`; `main.go` приймав до 1 МБ
+
+### Wave 2 — паралельно
+
+#### S1.T2 — застосунок Fastify: `app.ts`, `server.ts`, контейнер
+- Module: server
+- Depends on: S1.T1
+- Files (exclusive):
+  - `server/src/app.ts`, `server/src/app.test.ts` (new)
+  - `server/src/server.ts` (new)
+  - `server/src/platform/container.ts` (new)
+- Rules:
+  - Слухає лише `127.0.0.1` (з `Config`); CORS-плагіна немає — fastify «In this project»
+  - Pino `redact: ['req.headers.token', 'req.headers.authorization']` — fastify «In this project»
+  - `setValidatorCompiler`/`setSerializerCompiler` з `fastify-type-provider-zod`; помилка валідації тіла → 422 `{ error, issues }`; інша помилка → 500 без стеку й деталей — fastify rules/error-handling.md
+  - `bodyLimit` 1 МБ (як `main.go`) — security «In this project» (schedule-log endpoint)
+  - Залежності передаються в `buildApp` ззовні; `app.ts` не створює пул бази — composition root у `server.ts` + `platform/container.ts` — onion-architecture §11
+  - `server.ts`: graceful shutdown на SIGINT/SIGTERM (закрити app, потім пул) — fastify rules/deployment.md
+  - Імпорти з `.ts`, без `enum` — fastify rules/typescript.md
+- Interface:
+  - `buildApp(deps: AppDeps): Promise<FastifyInstance>`, `interface AppDeps { config: Config; scheduleLog: ScheduleLogRepository; pingDb: () => Promise<void>; logger?: boolean }`
+  - `createContainer(config: Config): { scheduleLog: ScheduleLogRepository; pingDb: () => Promise<void>; close: () => Promise<void> }`
+- Steps:
+  1. Тести `app.inject()` з фейками: `GET /` → `slots.html` (text/html); `GET /locations.json` → JSON довідника; `GET /будь-що-інше` (не `/api`) → `slots.html`, як у `main.go`; `GET /api/health` → 200 `{ status: 'ok', db: 'ok' }`, а коли `pingDb` кидає → 503 `{ status: 'degraded', db: 'down' }`; `POST /schedule-log` з невідомим ключем → 422; невідомий `/api/...` → 404 JSON.
+  2. Реалізація; `server.ts` — `loadConfig()`, `createContainer`, `buildApp`, `listen`.
+- Acceptance criteria:
+  - `pnpm --dir server start` віддає на `http://localhost:3000` те саме, що `main.go`: `slots.html`, `/locations.json`, `POST /schedule-log`
+  - Postgres вимкнено → сторінка однаково відкривається, `/api/health` каже `db: 'down'`
+- Verify:
+  - `pnpm --dir server exec vitest run src/app.test.ts`
+  - `pnpm --dir server run typecheck`
+- Constraints:
+  - `main.go`: `/locations.json` → файл довідника, `POST /schedule-log` → журнал, будь-який інший шлях → `slots.html` — `docs/booking.md` §9
+  - Шляхи: `config.repoRoot` (корінь репозиторію, там `slots.html`), `config.locationsPath`
+
+#### S1.T3 — імпорт `logs/schedule-changes.jsonl`
+- Module: server
+- Depends on: S1.T1
+- Files (exclusive):
+  - `server/scripts/schedule-log-jsonl.ts`, `server/scripts/schedule-log-jsonl.test.ts` (new)
+  - `server/scripts/import-schedule-log.ts` (new)
+- Rules:
+  - Скрипт — composition root: `loadConfig()`, `createDb`, `createScheduleLogRepository`; розбір — чиста функція без файлів і бази — onion-architecture §11
+  - Кожен рядок перевіряється `scheduleLogEntrySchema`; поганий рядок не зупиняє імпорт, а потрапляє у звіт з номером рядка — zod
+  - Повторний запуск нічого не дублює (той самий `client_id`) — drizzle-orm-patterns «In this project»
+  - Імпорти з `.ts`, без `enum` — fastify rules/typescript.md
+- Interface:
+  - `parseScheduleLogJsonl(text: string): { entries: ScheduleLogEntry[]; errors: { line: number; message: string }[] }`
+- Steps:
+  1. Тест розбору: порожні рядки пропускаються; невалідний JSON і запис із зайвим ключем → `errors` з номером рядка; валідні → `entries`.
+  2. `import-schedule-log.ts [шлях]` (типово `<repoRoot>/logs/schedule-changes.jsonl`): друкує «прочитано / вставлено / вже було / помилки».
+- Acceptance criteria:
+  - `pnpm --dir server run import:schedule-log` переносить усі рядки файлу в `schedule_changes`; другий запуск вставляє 0
+- Verify:
+  - `pnpm --dir server exec vitest run scripts`
+  - `pnpm --dir server run typecheck`
+- Constraints:
+  - Сам імпорт у робочу базу запускає основна сесія, не агент (спільний стан)
+
+### Wave 3 — основна сесія
+
+#### S1.T4 — документація й запуск
+- Files: `docs/booking.md` §9, `README.md`, `server/README.md`, `server/CLAUDE.md`, `slots.html`
+  (лише підказка «go run main.go» → нова команда), `docs/plans/web-rewrite-plan.md`
+- Ручна перевірка: `slots.html` з `localhost:3000` працює як раніше; зміна розкладу з'являється в
+  `schedule_changes`.
+
+### Ownership
+
+| Файл | Задача |
+|---|---|
+| каркас (див. S1.T0) | S1.T0 |
+| `server/src/contracts/schedule-log.ts`, `server/src/modules/schedule-log/**` | S1.T1 |
+| `server/src/app.ts`, `app.test.ts`, `server.ts`, `platform/container.ts` | S1.T2 |
+| `server/scripts/**` | S1.T3 |
+| документація, `slots.html` | S1.T4 |
