@@ -54,7 +54,7 @@ describe('ReservationLogRepository', () => {
         expect(second.nextCursor).toBeNull();
     });
 
-    it('filters by kind, institution and detectedAt range [from, to]', async () => {
+    it('filters by kind, institution and detectedAt range [from, to)', async () => {
         await repository.insertMany([
             event(1),
             event(2, { kind: 'released' }),
@@ -65,7 +65,7 @@ describe('ReservationLogRepository', () => {
         const ranged = await repository.list({
             limit: 100,
             from: '2026-10-09T11:02:00.000Z',
-            to: '2026-10-09T11:02:00.000Z',
+            to: '2026-10-09T11:03:00.000Z',
         });
         expect(ranged.entries.map((e) => e.clientId)).toEqual([event(2).clientId]);
     });

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, lte, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { requestLogPageSchema, RequestLogEntry, RequestLogQuery, StoredRequestLogEntry } from '../../contracts/request-log.ts';
 import type { Db } from '../../db/client.ts';
@@ -28,7 +28,7 @@ export function createRequestLogRepository(db: Db): RequestLogRepository {
         async list(query) {
             const conditions: (SQL | undefined)[] = [
                 query.from ? gte(econsulRequests.startedAt, new Date(query.from)) : undefined,
-                query.to ? lte(econsulRequests.startedAt, new Date(query.to)) : undefined,
+                query.to ? lt(econsulRequests.startedAt, new Date(query.to)) : undefined,
                 query.institutionCode ? eq(econsulRequests.institutionCode, query.institutionCode) : undefined,
                 query.method ? eq(econsulRequests.method, query.method) : undefined,
                 query.outcome ? eq(econsulRequests.outcome, query.outcome) : undefined,

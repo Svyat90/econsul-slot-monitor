@@ -74,11 +74,11 @@ describe('ScheduleLogRepository', () => {
             expect(rest.nextCursor).toBeNull();
         });
 
-        it('filters by institution and time range [from, to]', async () => {
+        it('filters by institution and time range [from, to)', async () => {
             await repository.insertMany(entries);
             const byInstitution = await repository.list({ limit: 10, institutionCode: 'CHI' });
             expect(byInstitution.entries.map((e) => e.changes[0])).toEqual(['change 3', 'change 1']);
-            const byTime = await repository.list({ limit: 10, from: entries[1]!.time, to: entries[2]!.time });
+            const byTime = await repository.list({ limit: 10, from: entries[1]!.time, to: entries[3]!.time });
             expect(byTime.entries.map((e) => e.changes[0])).toEqual(['change 2', 'change 1']);
         });
 

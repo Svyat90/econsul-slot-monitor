@@ -2,14 +2,34 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { buildApp } from './app.ts';
+import { type AppDeps, buildApp } from './app.ts';
 import { loadConfig } from './platform/config.ts';
 
 const config = loadConfig();
 
+const emptyPage = { entries: [], nextCursor: null };
+const emptySummary = {
+    checks: { total: 0, fast: 0, failed: 0 },
+    newFree: { total: 0, lastAt: null },
+    reservations: { reserved: 0, released: 0 },
+};
+
+function fakeDeps(patch: Partial<AppDeps> = {}): AppDeps {
+    return {
+        config,
+        scheduleLog: { insertMany: async (entries) => entries.length, list: async () => emptyPage, listAll: async () => [] },
+        requestLog: { insertMany: async (entries) => entries.length, list: async () => emptyPage },
+        checks: { insertMany: async (entries) => entries.length, list: async () => emptyPage },
+        reservationLog: { insertMany: async (entries) => entries.length, list: async () => emptyPage },
+        summary: { summary: async () => emptySummary },
+        pingDb: async () => {},
+        ...patch,
+    };
+}
+
 async function build(pingDb: () => Promise<void> = async () => {}) {
     const insertMany = vi.fn(async (entries: unknown[]) => entries.length);
-    const app = await buildApp({ config, scheduleLog: { insertMany }, pingDb });
+    const app = await buildApp(fakeDeps({ pingDb, scheduleLog: { ...fakeDeps().scheduleLog, insertMany } }));
     return { app, insertMany };
 }
 
@@ -46,7 +66,7 @@ describe('/next (web/dist)', () => {
     writeFileSync(join(dist, 'index.html'), '<!doctype html><title>new</title>');
     writeFileSync(join(dist, 'assets', 'a.js'), 'console.log(1)');
     const buildWith = (webDistPath: string) =>
-        buildApp({ config: { ...config, webDistPath }, scheduleLog: { insertMany: async () => 0 }, pingDb: async () => {} });
+        buildApp(fakeDeps({ config: { ...config, webDistPath } }));
 
     it('serves index.html for /next/ and SPA routes', async () => {
         const app = await buildWith(dist);
@@ -123,17 +143,72 @@ describe('POST /schedule-log', () => {
     });
 
     it('answers 500 without details when the repository throws', async () => {
-        const app = await buildApp({
-            config,
+        const app = await buildApp(fakeDeps({
             scheduleLog: {
+                ...fakeDeps().scheduleLog,
                 insertMany: async () => {
                     throw new Error('secret db detail');
                 },
             },
-            pingDb: async () => {},
-        });
+        }));
         const res = await app.inject({ method: 'POST', url: '/schedule-log', payload: entry });
         expect(res.statusCode).toBe(500);
         expect(res.body).not.toContain('secret db detail');
+    });
+});
+
+describe('module routes', () => {
+    it('serves the locations file at /api/locations', async () => {
+        const { app } = await build();
+        const res = await app.inject({ url: '/api/locations' });
+        expect(res.statusCode).toBe(200);
+        expect(res.headers['content-type']).toContain('application/json');
+        expect(res.body).toBe(readFileSync(config.locationsPath, 'utf8'));
+    });
+
+    it('answers the GET routes of every module under /api', async () => {
+        const { app } = await build();
+        const from = '2026-10-09T00:00:00.000Z';
+        const to = '2026-10-10T00:00:00.000Z';
+        for (const url of ['/api/request-log', '/api/checks', '/api/reservation-log', '/api/schedule-log']) {
+            const res = await app.inject({ url });
+            expect(res.statusCode, url).toBe(200);
+            expect(res.json()).toEqual(emptyPage);
+        }
+        const summary = await app.inject({ url: `/api/summary?from=${from}&to=${to}` });
+        expect(summary.statusCode).toBe(200);
+        expect((await app.inject({ url: '/api/schedule-log.jsonl' })).statusCode).toBe(200);
+    });
+
+    it('accepts POSTs of every module', async () => {
+        const { app } = await build();
+        for (const url of ['/api/request-log', '/api/checks', '/api/reservation-log', '/api/schedule-log']) {
+            // an empty batch is invalid (422), which proves the route is registered and validated
+            const res = await app.inject({ method: 'POST', url, payload: { entries: [] } });
+            expect(res.statusCode, url).toBe(422);
+        }
+    });
+});
+
+describe('database down', () => {
+    const down = (code: string, wrapped = false) => {
+        const driver = Object.assign(new Error('down'), { code });
+        return wrapped ? Object.assign(new Error('Failed query'), { cause: driver }) : driver;
+    };
+
+    it.each([['ECONNREFUSED'], ['57P01'], ['08006']])('answers 503 for /api when the repository fails with %s', async (code) => {
+        const app = await buildApp(fakeDeps({
+            checks: { ...fakeDeps().checks, list: async () => { throw down(code, true); } },
+        }));
+        const res = await app.inject({ url: '/api/checks' });
+        expect(res.statusCode).toBe(503);
+        expect(res.json()).toEqual({ error: 'Database unavailable' });
+    });
+
+    it('keeps 500 for other database errors', async () => {
+        const app = await buildApp(fakeDeps({
+            checks: { ...fakeDeps().checks, list: async () => { throw down('23505'); } },
+        }));
+        expect((await app.inject({ url: '/api/checks' })).statusCode).toBe(500);
     });
 });

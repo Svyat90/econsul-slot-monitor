@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lt, lte, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lt, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { HistoryQuery } from '../../contracts/common.ts';
 import type { ScheduleLogEntry, scheduleLogPageSchema } from '../../contracts/schedule-log.ts';
@@ -55,7 +55,7 @@ export function createScheduleLogRepository(db: Db): ScheduleLogRepository {
             const conditions: SQL[] = [];
             if (query.institutionCode) conditions.push(eq(scheduleChanges.institutionCode, query.institutionCode));
             if (query.from) conditions.push(gte(scheduleChanges.checkedAt, new Date(query.from)));
-            if (query.to) conditions.push(lte(scheduleChanges.checkedAt, new Date(query.to)));
+            if (query.to) conditions.push(lt(scheduleChanges.checkedAt, new Date(query.to)));
             if (query.before !== undefined) conditions.push(lt(scheduleChanges.id, query.before));
             const rows = await db
                 .select()

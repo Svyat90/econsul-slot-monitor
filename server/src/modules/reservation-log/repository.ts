@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, lte, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, type SQL } from 'drizzle-orm';
 import type { ReservationEvent, ReservationQuery, StoredReservationEvent } from '../../contracts/reservation-log.ts';
 import type { Db } from '../../db/client.ts';
 import { reservationEvents } from '../../db/schema/index.ts';
@@ -11,7 +11,7 @@ export interface ReservationPage {
 export interface ReservationLogRepository {
     // Returns how many events were really inserted (repeats are skipped).
     insertMany(events: ReservationEvent[]): Promise<number>;
-    // Newest first; `from`/`to` bound `detectedAt`.
+    // Newest first; `detectedAt` in [from, to).
     list(query: ReservationQuery): Promise<ReservationPage>;
 }
 
@@ -43,7 +43,7 @@ export function createReservationLogRepository(db: Db): ReservationLogRepository
             if (query.kind) conditions.push(eq(reservationEvents.kind, query.kind));
             if (query.institutionCode) conditions.push(eq(reservationEvents.institutionCode, query.institutionCode));
             if (query.from) conditions.push(gte(reservationEvents.detectedAt, new Date(query.from)));
-            if (query.to) conditions.push(lte(reservationEvents.detectedAt, new Date(query.to)));
+            if (query.to) conditions.push(lt(reservationEvents.detectedAt, new Date(query.to)));
             if (query.before) conditions.push(lt(reservationEvents.id, query.before));
             const rows = await db
                 .select()
