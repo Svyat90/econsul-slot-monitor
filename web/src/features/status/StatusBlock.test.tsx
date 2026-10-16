@@ -15,6 +15,7 @@ const baseState: MonitorState = {
     hasToken: true,
     running: false,
     checking: false,
+        currentCheck: null,
     checks: 0,
     nextAt: 0,
     nextKind: 'scheduled',
@@ -35,7 +36,7 @@ const baseState: MonitorState = {
 
 function setup(state: Partial<MonitorState> = {}, ext: Partial<ExtensionState> = {}) {
     let monitorState: MonitorState = { ...baseState, ...state };
-    const extState: ExtensionState = { connected: true, version: '1', auth: null, autoBook: false, draft: null, ...ext };
+    const extState: ExtensionState = { connected: true, version: '1', auth: null, autoBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5, draft: null, draftJob: null, alarm: null, ...ext };
     const listeners = new Set<() => void>();
     let tick: (() => void) | null = null;
     let now = NOW;
@@ -126,5 +127,15 @@ describe('StatusBlock', () => {
         setup({ selection: null });
         expect(screen.getByText('Виберіть установу в налаштуваннях')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Запустити' })).toBeDisabled();
+    });
+
+    it('asks to connect the extension when there is no token', () => {
+        setup({ hasToken: false });
+        expect(screen.getByText('Спершу підключіть розширення й увійдіть в e-Consul')).toBeInTheDocument();
+    });
+
+    it('has no token hint when the token is there', () => {
+        setup();
+        expect(screen.queryByText(/Спершу підключіть розширення/)).not.toBeInTheDocument();
     });
 });

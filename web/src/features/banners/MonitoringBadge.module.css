@@ -1,9 +1,13 @@
 .badge {
     margin-left: auto;
-    padding: 2px 8px;
+    min-width: 20px;
+    padding: 1px 6px;
     border-radius: 999px;
-    background: var(--color-success-bg);
-    color: var(--color-success);
+    background: var(--color-danger);
+    color: #fff;
     font-size: 12px;
     font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    white-space: nowrap;
 }

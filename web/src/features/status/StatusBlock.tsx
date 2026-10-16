@@ -72,6 +72,9 @@ export function StatusBlock() {
                 <span>{extension.connected ? 'Розширення підключено' : 'Розширення не підключено'}</span>
             </div>
             {noSelection && <div className={styles.hint}>Виберіть установу в налаштуваннях</div>}
+            {!noSelection && !state.running && !state.hasToken && (
+                <div className={styles.hint}>Спершу підключіть розширення й увійдіть в e-Consul</div>
+            )}
             <div className={styles.actions}>
                 {state.running ? (
                     <>
