@@ -72,6 +72,42 @@ describe('server api batches', () => {
         expect(bodyOf(reservation as unknown[]).entries).toHaveLength(2);
     });
 
+    it('notifies listeners once a check batch has reached the server, not for the request log', async () => {
+        const fetchFn = vi.fn(async () => ok());
+        const api = createServerApi({ fetchFn: fetchFn as never, scheduler: fakeScheduler().scheduler });
+        const sent = vi.fn();
+        const off = api.onSent(sent);
+        api.recordRequest(requestEntry(1));
+        await api.flush();
+        expect(sent).not.toHaveBeenCalled();
+        api.recordCheck({ clientId: 'c' } as never);
+        await api.flush();
+        expect(sent).toHaveBeenCalledTimes(1);
+        off();
+        api.recordCheck({ clientId: 'd' } as never);
+        await api.flush();
+        expect(sent).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not notify while the server is down', async () => {
+        const fetchFn = vi.fn(async () => new Response(null, { status: 503 }));
+        const api = createServerApi({ fetchFn: fetchFn as never, scheduler: fakeScheduler().scheduler });
+        const sent = vi.fn();
+        api.onSent(sent);
+        api.recordCheck({ clientId: 'c' } as never);
+        await api.flush();
+        expect(sent).not.toHaveBeenCalled();
+    });
+
+    it('sends a check at once, without waiting for the flush timer', async () => {
+        const fetchFn = vi.fn(async () => ok());
+        const api = createServerApi({ fetchFn: fetchFn as never, scheduler: fakeScheduler().scheduler });
+        api.recordCheck({ clientId: 'c' } as never);
+        await Promise.resolve();
+        expect(fetchFn).toHaveBeenCalledTimes(1);
+        expect((fetchFn.mock.calls[0] as unknown as [string])[0]).toBe('/api/checks');
+    });
+
     it('flushes at once when 20 entries are queued', () => {
         const fetchFn = vi.fn(async () => ok());
         const api = createServerApi({ fetchFn: fetchFn as never, scheduler: fakeScheduler().scheduler });
@@ -100,7 +136,7 @@ describe('server api batches', () => {
             .mockResolvedValue(ok());
         const { scheduler, live } = fakeScheduler();
         const api = createServerApi({ fetchFn: fetchFn as never, scheduler, flushMs: 5000 });
-        api.recordCheck({ clientId: 'c' } as never);
+        api.recordReservations([{ clientId: 'c' } as never]);
         live()[0]!.callback();
         await api.flush(); // flush() joins the in-flight send
         expect(live().at(-1)!.delayMs).toBe(10000);
@@ -117,7 +153,7 @@ describe('server api batches', () => {
         const fetchFn = vi.fn(async () => new Response(null, { status: 503 }));
         const { scheduler, live } = fakeScheduler();
         const api = createServerApi({ fetchFn: fetchFn as never, scheduler, flushMs: 5000 });
-        api.recordCheck({ clientId: 'c' } as never);
+        api.recordReservations([{ clientId: 'c' } as never]);
         for (let i = 0; i < 6; i++) {
             live().at(-1)!.callback();
             await api.flush();
@@ -129,7 +165,7 @@ describe('server api batches', () => {
         const fetchFn = vi.fn(async () => ok());
         const api = createServerApi({ fetchFn: fetchFn as never, scheduler: fakeScheduler().scheduler, maxQueued: 3, flushMs: 5000 });
         // keep the queue from flushing by failing the immediate flush at 20? maxQueued 3 < 20, so none starts
-        for (let i = 1; i <= 5; i++) api.recordCheck({ clientId: String(i) } as never);
+        for (let i = 1; i <= 5; i++) api.recordReservations([{ clientId: String(i) } as never]);
         await api.flush();
         expect(bodyOf(fetchFn.mock.calls[0] as unknown as unknown[]).entries).toEqual([{ clientId: '3' }, { clientId: '4' }, { clientId: '5' }]);
     });
@@ -151,5 +187,28 @@ describe('server api batches', () => {
         const api = createServerApi({ fetchFn: throwing as never, scheduler: fakeScheduler().scheduler });
         expect(() => api.recordScheduleChange(scheduleEntry)).not.toThrow();
         await expect(api.flush()).resolves.toBeUndefined();
+    });
+
+    it('sends a calendar snapshot at once, three to a POST, and keeps only the newest five while the server is down', async () => {
+        const snapshot = (n: number) => ({ clientId: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}` }) as never;
+        const fetchFn = vi.fn(async () => ok());
+        const { scheduler } = fakeScheduler();
+        const api = createServerApi({ fetchFn: fetchFn as never, scheduler });
+        api.recordCalendar(snapshot(1));
+        await api.flush();
+        expect(fetchFn).toHaveBeenCalledTimes(1);
+        expect((fetchFn.mock.calls[0] as unknown[])[0]).toBe('/api/calendar-snapshots');
+        expect(bodyOf(fetchFn.mock.calls[0] as unknown[]).entries).toHaveLength(1);
+
+        const down = vi.fn(async () => new Response(null, { status: 503 }));
+        const offline = createServerApi({ fetchFn: down as never, scheduler: fakeScheduler().scheduler });
+        for (let n = 1; n <= 8; n++) offline.recordCalendar(snapshot(n));
+        await offline.flush(); // the first attempt carried what was queued at that moment
+        await offline.flush(); // the retry: the newest five, three to a POST
+        const calls = down.mock.calls.map((c) => bodyOf(c as unknown[]).entries as { clientId: string }[]);
+        expect(Math.max(...calls.map((entries) => entries.length))).toBe(3); // the batch limit of this log
+        const last = calls.at(-1)!;
+        // only the newest five (4–8) stay queued: 1–3 were dropped
+        expect(last.map((e) => e.clientId.slice(-1))).toEqual(['4', '5', '6']);
     });
 });

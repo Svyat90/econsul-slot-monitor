@@ -25,5 +25,6 @@ export function createLogHistory(fetchFn: typeof fetch = (...args) => fetch(...a
         scheduleChanges: (query) => get('/api/schedule-log', query),
         extensionEvents: (query) => get('/api/extension-events', query),
         scheduleLogDownloadUrl: () => '/api/schedule-log.jsonl',
+        calendar: (scope) => get('/api/calendar-snapshots/latest', scope),
     };
 }

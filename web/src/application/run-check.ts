@@ -8,7 +8,8 @@ import type { Institution, Locations } from '@/domain/contracts/locations.ts';
 import { diffReserved } from '@/domain/monitoring/reserved-diff.ts';
 import { diffSnapshots, scheduleSnapshot } from '@/domain/monitoring/schedule-changes.ts';
 import { upcomingReleases } from '@/domain/monitoring/releases.ts';
-import { SCHEDULE_REFRESH_MS, type Release } from '@/domain/monitoring/schedule.ts';
+import { FAST_CHECKS, SCHEDULE_REFRESH_MS, type Release } from '@/domain/monitoring/schedule.ts';
+import { compactReserved, contentHash } from '@/domain/slots/calendar-snapshot.ts';
 import { diffFreeSlots, formatSlotLines, type DateRange, type SlotKey } from '@/domain/monitoring/slots-diff.ts';
 import { calculateFreeSlots, collectNonWorking, type FreeSlots } from '@/domain/slots/free-slots.ts';
 import {
@@ -33,6 +34,8 @@ export type MonitorState = {
     hasToken: boolean;
     running: boolean;
     checking: boolean;
+    // the check in flight: the Monitoring page shows it at once, before its entry exists
+    currentCheck: { seq: number; kind: CheckKind; startedAt: number } | null;
     checks: number;
     nextAt: number;
     nextKind: 'scheduled' | 'fast';
@@ -64,6 +67,9 @@ export type RunCheckContext = {
     session: AppSession;
     // the reserved slots of the previous successful check of the selected institution; null after
     // a start or an institution change, so the next check is a baseline
+    // the calendar last sent to the server (scope + hashes): only a change is sent again
+    getCalendarSent: () => string | null;
+    setCalendarSent: (key: string) => void;
     getPrevReserved: () => { slots: ReservedSlot[]; at: number } | null;
     setPrevReserved: (prev: { slots: ReservedSlot[]; at: number }) => void;
     extensionConnected: () => boolean;
@@ -222,6 +228,38 @@ function recordCheck(
     }
 }
 
+// The calendar the Slots page draws, for the server: sent when the schedule or the reserved
+// slots differ from what was sent last. The server keeps the history and the newest copy, so the
+// page can show it without the monitor running
+function recordCalendar(
+    ctx: RunCheckContext,
+    scope: { institutionCode: string; serviceCode: string },
+    rows: readonly ScheduleRow[],
+    reserved: readonly ReservedSlot[],
+    observedMs: number,
+): void {
+    try {
+        const scheduleHash = contentHash(rows);
+        const compact = compactReserved(reserved);
+        const reservedHash = contentHash(compact);
+        const key = `${scope.institutionCode}|${scope.serviceCode}|${scheduleHash}|${reservedHash}`;
+        if (ctx.getCalendarSent() === key) return;
+        ctx.setCalendarSent(key);
+        ctx.server.recordCalendar({
+            clientId: ctx.ids.uuid(),
+            observedAt: new Date(observedMs).toISOString(),
+            ...scope,
+            scheduleHash,
+            reservedHash,
+            schedule: rows as unknown as Record<string, unknown>[],
+            reserved: compact,
+            appVersion: ctx.session.appVersion,
+        });
+    } catch {
+        // dropped: monitoring goes on
+    }
+}
+
 function newSlotsOf(fresh: readonly SlotKey[], free: FreeSlots): NewSlot[] {
     return fresh.map((key) => ({
         date: key.slice(0, 10),
@@ -261,6 +299,37 @@ function recordReservations(
     }
 }
 
+// While the monitor is idle the extension still needs the next opening for its reminder alarm
+// («log in / start the monitor before the location opens»), and releases come from the schedule.
+// One schedule request (or none, when the rows are fresh), no slot check. Errors stay silent:
+// a lost session is reported by the extension, the next real check shows the rest
+export async function refreshSchedule(ctx: RunCheckContext): Promise<void> {
+    const state = ctx.getState();
+    const { selection, locations } = state;
+    if (!selection || !locations || !ctx.getToken() || state.running || state.checking) return;
+    const now = ctx.clock.now();
+    const rows = state.schedule?.rows ?? [];
+    const rowsFresh = rows.length > 0 && state.schedule !== null && now - state.schedule.fetchedAt <= SCHEDULE_REFRESH_MS;
+    if (rowsFresh && state.releases.some((release) => release.at + FAST_CHECKS.afterMs > now)) return;
+    if (rowsFresh) {
+        ctx.patch({ releases: computeReleases(selection, locations, rows, ctx.clock) });
+        return;
+    }
+    try {
+        const response = await ctx.econsul.getSchedule(selection.institution.code, ctx.getToken(), { checkKind: null, checkSeq: null });
+        const current = ctx.getState();
+        if (current.selection !== selection || current.running) return; // switched meanwhile, or a check took over
+        const fetched = rowsOf(response);
+        ctx.patch({
+            schedule: { rows: fetched, fetchedAt: ctx.clock.now() },
+            releases: computeReleases(selection, locations, fetched, ctx.clock),
+        });
+        recordScheduleSnapshot(ctx, selection.institution, fetched);
+    } catch {
+        // see above
+    }
+}
+
 // Returns false if a check is already running or the session ended, true otherwise.
 export async function runCheck(ctx: RunCheckContext, kind: CheckKind = 'scheduled'): Promise<boolean> {
     const before = ctx.getState();
@@ -274,7 +343,7 @@ export async function runCheck(ctx: RunCheckContext, kind: CheckKind = 'schedule
     const startedMs = ctx.clock.now();
     const checkRef = { startedMs, kind, seq: checkNumber, institutionCode: institution.code, serviceCode };
     const meta = { checkKind: kind, checkSeq: checkNumber };
-    ctx.patch({ checking: true, checks: checkNumber, nextAt: 0 });
+    ctx.patch({ checking: true, currentCheck: { seq: checkNumber, kind, startedAt: startedMs }, checks: checkNumber, nextAt: 0 });
     // the user may switch the institution while a request is in flight: drop the stale answer
     const stale = () => ctx.getState().selection !== selection;
     try {
@@ -363,6 +432,7 @@ export async function runCheck(ctx: RunCheckContext, kind: CheckKind = 'schedule
             newSlots: newSlotsOf(fresh, free),
             errorMessage: null,
         });
+        recordCalendar(ctx, { institutionCode: institution.code, serviceCode }, scheduleRows, reserved, now);
         recordReservations(ctx, institution.code, reserved, now);
     } catch (error) {
         const token = ctx.getToken();
@@ -386,7 +456,7 @@ export async function runCheck(ctx: RunCheckContext, kind: CheckKind = 'schedule
         ctx.patch({ lastResult: `помилка: ${message}` });
         ctx.log(`${label}: помилка: ${message}`, 'error');
     } finally {
-        ctx.patch({ checking: false });
+        ctx.patch({ checking: false, currentCheck: null });
     }
     return true;
 }

@@ -26,28 +26,61 @@ export type ServerApiDeps = {
 
 type Queue = {
     path: string;
+    batchMax: number; // entries per POST: a calendar snapshot is ~100 KB, the body limit is 1 MB
+    maxQueued: number;
     items: unknown[];
     delayMs: number;
     timer: TimerHandle | null;
     sending: Promise<void> | null;
 };
 
-export function createServerApi(deps: ServerApiDeps = {}): ServerApi & { flush(): Promise<void> } {
+export type ServerApiHandle = ServerApi & {
+    flush(): Promise<void>;
+    // Called after a batch of checks, reservations or schedule changes reached the server: the
+    // history GET endpoints now return those entries. Returns the unsubscribe function.
+    onSent(listener: () => void): () => void;
+};
+
+export function createServerApi(deps: ServerApiDeps = {}): ServerApiHandle {
     const fetchFn: typeof fetch = deps.fetchFn ?? ((...args) => fetch(...args));
     const scheduler = deps.scheduler ?? timerScheduler;
     const flushMs = deps.flushMs ?? 5000;
     const maxQueued = deps.maxQueued ?? 2000;
 
-    const makeQueue = (path: string): Queue => ({ path, items: [], delayMs: flushMs, timer: null, sending: null });
+    const makeQueue = (path: string, options: { batchMax?: number; maxQueued?: number } = {}): Queue => ({
+        path,
+        batchMax: options.batchMax ?? BATCH_MAX,
+        maxQueued: options.maxQueued ?? maxQueued,
+        items: [],
+        delayMs: flushMs,
+        timer: null,
+        sending: null,
+    });
     const scheduleChanges = makeQueue('/api/schedule-log');
     const requests = makeQueue('/api/request-log');
     const checks = makeQueue('/api/checks');
     const reservations = makeQueue('/api/reservation-log');
-    const queues = [scheduleChanges, requests, checks, reservations];
+    // snapshots are heavy: three per POST, and only the newest few are kept while the server is down
+    const calendars = makeQueue('/api/calendar-snapshots', { batchMax: 3, maxQueued: 5 });
+    const queues = [scheduleChanges, requests, checks, reservations, calendars];
+    const sentListeners = new Set<() => void>();
+    // the request log is not shown on the Monitoring page, so its batches do not notify
+    const notifying = new Set<Queue>([scheduleChanges, checks, reservations, calendars]);
+
+    function notifySent(queue: Queue): void {
+        if (!notifying.has(queue)) return;
+        for (const listener of sentListeners) {
+            try {
+                listener();
+            } catch {
+                /* a listener never breaks the log queue */
+            }
+        }
+    }
 
     // true: sent (or dropped for good), keep going; false: keep the batch and retry later
     async function sendBatch(queue: Queue): Promise<boolean> {
-        const batch = queue.items.slice(0, BATCH_MAX);
+        const batch = queue.items.slice(0, queue.batchMax);
         let status: number;
         try {
             const response = await fetchFn(queue.path, {
@@ -65,6 +98,7 @@ export function createServerApi(deps: ServerApiDeps = {}): ServerApi & { flush()
             console.warn(`server log ${queue.path}: batch of ${batch.length} rejected (${status}), dropped`);
         }
         queue.items.splice(0, batch.length);
+        if (status < 400) notifySent(queue);
         return true;
     }
 
@@ -78,6 +112,9 @@ export function createServerApi(deps: ServerApiDeps = {}): ServerApi & { flush()
 
     function drain(queue: Queue): Promise<void> {
         if (queue.sending) return queue.sending;
+        // an empty queue must not run the async body: its `finally` would clear `sending` before
+        // the promise is assigned below, leaving a settled promise that blocks every later send
+        if (queue.items.length === 0) return Promise.resolve();
         if (queue.timer) {
             scheduler.clear(queue.timer);
             queue.timer = null;
@@ -101,11 +138,11 @@ export function createServerApi(deps: ServerApiDeps = {}): ServerApi & { flush()
         return queue.sending;
     }
 
-    function enqueue(queue: Queue, entries: readonly unknown[]): void {
+    function enqueue(queue: Queue, entries: readonly unknown[], immediately = false): void {
         try {
             queue.items.push(...entries);
-            if (queue.items.length > maxQueued) queue.items.splice(0, queue.items.length - maxQueued);
-            if (queue.items.length >= FLUSH_AT) void drain(queue);
+            if (queue.items.length > queue.maxQueued) queue.items.splice(0, queue.items.length - queue.maxQueued);
+            if (immediately || queue.items.length >= FLUSH_AT) void drain(queue);
             else arm(queue);
         } catch {
             /* never slow or break monitoring */
@@ -115,8 +152,15 @@ export function createServerApi(deps: ServerApiDeps = {}): ServerApi & { flush()
     return {
         recordScheduleChange: (entry) => enqueue(scheduleChanges, [entry]),
         recordRequest: (entry) => enqueue(requests, [entry]),
-        recordCheck: (entry) => enqueue(checks, [entry]),
+        // a check is rare (every few minutes) and the page waits for it: no batching delay
+        recordCheck: (entry) => enqueue(checks, [entry], true),
         recordReservations: (events) => enqueue(reservations, events),
+        // rare (only when something changed) and the page may read it right away: no batching delay
+        recordCalendar: (entry) => enqueue(calendars, [entry], true),
+        onSent(listener) {
+            sentListeners.add(listener);
+            return () => void sentListeners.delete(listener);
+        },
         async flush() {
             await Promise.all(queues.map((queue) => drain(queue)));
         },

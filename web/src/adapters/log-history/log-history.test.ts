@@ -37,4 +37,12 @@ describe('log history', () => {
         const fetchFn = vi.fn(async () => { throw new TypeError('offline'); });
         await expect(createLogHistory(fetchFn as never).reservations({})).rejects.toThrow('offline');
     });
+
+    it('reads the saved calendar of an institution and service', async () => {
+        const latest = { snapshot: null, lastCheckAt: null };
+        const fetchFn = vi.fn(async () => json(latest));
+        const result = await createLogHistory(fetchFn as never).calendar({ institutionCode: 'CHI', serviceCode: '1' });
+        expect(result).toEqual(latest);
+        expect(fetchFn).toHaveBeenCalledWith('/api/calendar-snapshots/latest?institutionCode=CHI&serviceCode=1');
+    });
 });

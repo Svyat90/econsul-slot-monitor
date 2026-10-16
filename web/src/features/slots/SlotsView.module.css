@@ -3,4 +3,5 @@
 .subtitle { margin-left: 8px; font-size: 14px; font-weight: 500; color: var(--color-text-muted); }
 .top { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
 .main { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); gap: 16px; align-items: start; }
+.stored { margin: 0; padding: 10px 16px; border-radius: var(--radius-card); background: var(--color-accent-bg); font-size: 13px; color: var(--color-text); }
 .empty { margin: 0; padding: 16px 20px; border-radius: var(--radius-card); background: var(--color-surface); font-size: 14px; color: var(--color-text-muted); box-shadow: var(--shadow-card); }

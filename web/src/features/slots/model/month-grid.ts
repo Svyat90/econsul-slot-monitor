@@ -77,6 +77,11 @@ export function summaryText(input: { models: DayModels; range: DateRange; reserv
     return parts.join(' · ') + open;
 }
 
+// The newest day open for booking (the horizon): where new days appear. The page opens its month
+export function lastOpenDay(models: DayModels): DateKey | null {
+    return Object.keys(models.byDate).sort().at(-1) ?? null;
+}
+
 // The first day with free slots in the range, otherwise the first open day
 export function defaultDay(models: DayModels, range: DateRange): DateKey | null {
     const keys = Object.keys(models.byDate).sort();

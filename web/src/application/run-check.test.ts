@@ -82,6 +82,7 @@ function setup(options: { dateRange?: { from: string | null; to: string | null }
         hasToken: true,
         running: true,
         checking: false,
+        currentCheck: null,
         checks: 0,
         nextAt: 0,
         nextKind: 'scheduled',
@@ -99,6 +100,7 @@ function setup(options: { dateRange?: { from: string | null; to: string | null }
         log: [],
     };
     let known: ReadonlySet<string> | null = null;
+    let calendarSent: string | null = null;
     const ctx: RunCheckContext = {
         econsul,
         server: {
@@ -106,9 +108,14 @@ function setup(options: { dateRange?: { from: string | null; to: string | null }
             recordRequest: () => undefined,
             recordCheck: (entry) => void checkEntries.push(entry),
             recordReservations: (batch) => void reservationEvents.push(...batch),
+            recordCalendar: () => undefined,
         },
         ids: { uuid: () => `00000000-0000-4000-8000-${String(++uuidCounter).padStart(12, '0')}` },
         session: { tabSessionId: TAB, appVersion: '1.0.0' },
+        getCalendarSent: () => calendarSent,
+        setCalendarSent: (key) => {
+            calendarSent = key;
+        },
         getPrevReserved: () => prevReserved,
         setPrevReserved: (p) => {
             prevReserved = p;

@@ -18,7 +18,7 @@ import { AppServicesContext, type AppServices } from '@/hooks/use-app-services.t
 const APP_VERSION: string = import.meta.env.VITE_APP_VERSION ?? 'dev';
 
 // Composition root: the only place that picks adapters for ports and builds the use cases.
-type Services = { app: AppServices; flush: () => Promise<void> };
+type Services = { app: AppServices; flush: () => Promise<void>; onLogsSent: (listener: () => void) => () => void };
 
 function createServices(): Services {
     const alerts = createAlerts();
@@ -46,13 +46,14 @@ function createServices(): Services {
     });
     const extensionLink = createExtensionLink({ bridge, monitor, settings, alerts, clock, scheduler });
     links.current = extensionLink;
-    return { app: { monitor, extensionLink, clock, scheduler, history: createLogHistory(), openBooking }, flush: serverApi.flush };
+    return { app: { monitor, extensionLink, clock, scheduler, history: createLogHistory(), openBooking }, flush: serverApi.flush, onLogsSent: serverApi.onSent };
 }
 
 // One set of services and one start for the page's lifetime, also under StrictMode's double effects
 let services: Services | null = null;
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
 let started = false;
+const HISTORY_KEYS = new Set(['summary', 'check-log', 'check-counts', 'schedule-changes', 'reservations', 'reservation-log', 'calendar']);
 
 function getServices(): Services {
     services ??= createServices();
@@ -60,7 +61,7 @@ function getServices(): Services {
 }
 
 export function AppProviders({ children }: { children: ReactNode }) {
-    const { app: value, flush } = getServices();
+    const { app: value, flush, onLogsSent } = getServices();
     useEffect(() => {
         if (started) return;
         started = true;
@@ -70,7 +71,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
         document.addEventListener('click', () => value.extensionLink.userGesture(), { capture: true });
         // Send the batched log entries before the tab goes away
         window.addEventListener('pagehide', () => void flush());
-    }, [value, flush]);
+        // The history shows a check only once its batch has reached the server: refetch then,
+        // not at the check's start (the polling interval stays as a fallback)
+        onLogsSent(() => void queryClient.invalidateQueries({ predicate: (query) => HISTORY_KEYS.has(String(query.queryKey[0])) }));
+    }, [value, flush, onLogsSent]);
     return (
         <QueryClientProvider client={queryClient}>
             <AppServicesContext value={value}>{children}</AppServicesContext>

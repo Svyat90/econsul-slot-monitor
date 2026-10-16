@@ -1,11 +1,14 @@
 import styles from './NearestFree.module.css';
+import type { SlotKey } from '@/domain/monitoring/slots-diff.ts';
 import { buildNearestFree } from './model/nearest-free.ts';
 import { useAppServices, useMonitorState } from '@/hooks/use-app-services.ts';
 
-export function NearestFree() {
+// storedFreeKeys: the free slots of the calendar the server saved, while the monitor has not looked
+export function NearestFree({ storedFreeKeys }: { storedFreeKeys?: readonly SlotKey[] }) {
     const { openBooking } = useAppServices();
     const state = useMonitorState();
-    const view = buildNearestFree(state.free?.keys ?? [], state.dateRange);
+    const known = state.free !== null || storedFreeKeys !== undefined;
+    const view = buildNearestFree(state.free?.keys ?? storedFreeKeys ?? [], state.dateRange);
 
     return (
         <section className={styles.card} aria-labelledby="nearest-free-title">
@@ -26,7 +29,7 @@ export function NearestFree() {
                 </ul>
             ) : (
                 <p className={styles.empty}>
-                    {state.free === null ? 'Вільні слоти ще не перевірені.' : 'У вибраному діапазоні вільних слотів немає.'}
+                    {!known ? 'Вільні слоти ще не перевірені.' : 'У вибраному діапазоні вільних слотів немає.'}
                 </p>
             )}
             <div>

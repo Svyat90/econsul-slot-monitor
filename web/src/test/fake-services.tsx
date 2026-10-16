@@ -15,6 +15,7 @@ export const baseMonitorState: MonitorState = {
     hasToken: false,
     running: false,
     checking: false,
+        currentCheck: null,
     checks: 0,
     nextAt: 0,
     nextKind: 'scheduled',
@@ -33,7 +34,7 @@ export const baseMonitorState: MonitorState = {
     tabTitleMarks: true,
 };
 
-export const baseExtensionState: ExtensionState = { connected: false, version: null, auth: null, autoBook: false, draft: null };
+export const baseExtensionState: ExtensionState = { connected: false, version: null, auth: null, autoBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5, draft: null, draftJob: null, alarm: null };
 
 export function createFakeServices(options: { monitor?: Partial<MonitorState>; extension?: Partial<ExtensionState>; now?: number } = {}) {
     let monitorState: MonitorState = { ...baseMonitorState, ...options.monitor };
@@ -72,6 +73,8 @@ export function createFakeServices(options: { monitor?: Partial<MonitorState>; e
         start: vi.fn(),
         dispose: vi.fn(),
         login: vi.fn(),
+        createDraft: vi.fn(),
+        setDraftSettings: vi.fn(),
         setAutoBook: vi.fn(),
         setDraftUrl: vi.fn(),
         testSound: vi.fn(),
@@ -83,11 +86,12 @@ export function createFakeServices(options: { monitor?: Partial<MonitorState>; e
     const emptySummary: Summary = { checks: { total: 0, fast: 0, failed: 0 }, newFree: { total: 0, lastAt: null }, reservations: { reserved: 0, released: 0 } };
     const history = {
         summary: vi.fn<LogHistory['summary']>(async () => emptySummary),
-        checks: vi.fn<LogHistory['checks']>(async () => emptyPage),
-        reservations: vi.fn<LogHistory['reservations']>(async () => emptyPage),
-        scheduleChanges: vi.fn<LogHistory['scheduleChanges']>(async () => emptyPage),
+        checks: vi.fn<LogHistory['checks']>(async () => ({ ...emptyPage, total: 0 })),
+        reservations: vi.fn<LogHistory['reservations']>(async () => ({ ...emptyPage, total: 0 })),
+        scheduleChanges: vi.fn<LogHistory['scheduleChanges']>(async () => ({ ...emptyPage, total: 0 })),
         extensionEvents: vi.fn<LogHistory['extensionEvents']>(async () => emptyPage),
         scheduleLogDownloadUrl: () => '/api/schedule-log.jsonl',
+        calendar: vi.fn<LogHistory['calendar']>(async () => ({ snapshot: null, lastCheckAt: null })),
     } satisfies LogHistory;
     const openBooking = vi.fn();
     const services = { monitor, extensionLink, clock, scheduler, history, openBooking } as unknown as AppServices;

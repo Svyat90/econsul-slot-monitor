@@ -1,12 +1,12 @@
 // Ports of the web app (plan §4 «Порти»). Use cases depend on these; adapters implement them;
 // src/app/providers.tsx wires them together.
+import type { CalendarLatest, CalendarSnapshot } from '@contracts/calendar-snapshots.ts';
 import type { CheckEntry, CheckQuery, StoredCheckEntry } from '@contracts/checks.ts';
 import type { ExtensionEventQuery, StoredExtensionEvent } from '@contracts/extension-events.ts';
 import type { RequestLogEntry } from '@contracts/request-log.ts';
 import type { ReservationEvent, ReservationQuery, StoredReservationEvent } from '@contracts/reservation-log.ts';
-import type { ScheduleLogEntry, StoredScheduleLogEntry } from '@contracts/schedule-log.ts';
+import type { ScheduleLogEntry, ScheduleLogQuery, StoredScheduleLogEntry } from '@contracts/schedule-log.ts';
 import type { Summary } from '@contracts/summary.ts';
-import type { HistoryQuery } from '@contracts/common.ts';
 import type { ReservedResponse, ScheduleResponse } from '@/domain/contracts/econsul.ts';
 import type { AppMessage, ExtMessage } from '@/domain/contracts/extension-messages.ts';
 import type { Locations } from '@/domain/contracts/locations.ts';
@@ -37,18 +37,25 @@ export interface ServerApi {
     recordRequest(entry: RequestLogEntry): void;
     recordCheck(entry: CheckEntry): void;
     recordReservations(events: readonly ReservationEvent[]): void;
+    // The calendar the Slots page draws (schedule + reserved slots), sent when it changed
+    recordCalendar(entry: CalendarSnapshot): void;
 }
 
 export type Page<T> = { entries: T[]; nextCursor: number | null };
+// numbered pages of the check log: `total` counts every entry the filters match
+export type NumberedPage<T> = Page<T> & { total: number };
+export type CheckPage = NumberedPage<StoredCheckEntry>;
 
 // History for the Monitoring page (GET /api/*). These may throw; the page shows the error.
 export interface LogHistory {
     summary(range: { from: string; to: string; institutionCode?: string }): Promise<Summary>;
-    checks(query: Partial<CheckQuery>): Promise<Page<StoredCheckEntry>>;
-    reservations(query: Partial<ReservationQuery>): Promise<Page<StoredReservationEvent>>;
-    scheduleChanges(query: Partial<HistoryQuery>): Promise<Page<StoredScheduleLogEntry>>;
+    checks(query: Partial<CheckQuery>): Promise<CheckPage>;
+    reservations(query: Partial<ReservationQuery>): Promise<NumberedPage<StoredReservationEvent>>;
+    scheduleChanges(query: Partial<ScheduleLogQuery>): Promise<NumberedPage<StoredScheduleLogEntry>>;
     extensionEvents(query: Partial<ExtensionEventQuery>): Promise<Page<StoredExtensionEvent>>;
     scheduleLogDownloadUrl(): string; // GET /api/schedule-log.jsonl
+    // The last calendar the server saved for the institution and service, with the time of the newest check
+    calendar(scope: { institutionCode: string; serviceCode: string }): Promise<CalendarLatest>;
 }
 
 export interface LocationsSource {
@@ -107,6 +114,14 @@ export interface SettingsStore {
     saveScheduleSnapshot(institutionCode: string, snapshot: ScheduleSnapshot): void;
     loadTabTitleMarks(): boolean; // 'slots.tabTitleMarks', true by default
     saveTabTitleMarks(on: boolean): void;
+    // Whether this tab was monitoring when it was reloaded ('slots.monitoring' in sessionStorage:
+    // a reload keeps it, a new tab does not inherit it)
+    loadMonitoring(): boolean;
+    saveMonitoring(on: boolean): void;
+    // The free slots seen by the last check of '<institution>:<service>' ('slots.knownFree' in
+    // sessionStorage): a reload must not turn every free slot into a "new" one. null clears it.
+    loadKnownFree(scope: string): string[] | null;
+    saveKnownFree(scope: string, keys: readonly string[] | null): void;
 }
 
 // ---- Time, randomness, timers (adapters/browser-runtime; fakes in tests) ----

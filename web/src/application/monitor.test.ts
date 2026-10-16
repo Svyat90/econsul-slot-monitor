@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { calendarSnapshotSchema, type CalendarSnapshot } from '@contracts/calendar-snapshots.ts';
 import { checkEntrySchema, type CheckEntry } from '@contracts/checks.ts';
 import { reservationEventSchema, type ReservationEvent } from '@contracts/reservation-log.ts';
 import locationsJson from '../../../server/data/locations.json';
@@ -48,13 +49,17 @@ function setup(options: { startAt?: number; random?: number } = {}) {
     type Timer = { id: number; callback: () => void; at: number };
     let timers: Timer[] = [];
     let nextId = 1;
+    const intervals: (() => void)[] = [];
     const scheduler: Scheduler = {
         setTimeout(callback, delayMs) {
             const timer = { id: nextId++, callback, at: nowMs + delayMs };
             timers.push(timer);
             return { id: timer.id };
         },
-        setInterval: () => ({ id: nextId++ }),
+        setInterval: (callback) => {
+            intervals.push(callback);
+            return { id: nextId++ };
+        },
         clear(handle: TimerHandle | null) {
             if (handle) timers = timers.filter((t) => t.id !== handle.id);
         },
@@ -123,6 +128,13 @@ function setup(options: { startAt?: number; random?: number } = {}) {
         saveDraft: () => undefined,
         loadTabTitleMarks: () => (store.tabTitleMarks as boolean | undefined) ?? true,
         saveTabTitleMarks: (on) => void (store.tabTitleMarks = on),
+        loadMonitoring: () => store.monitoring === true,
+        saveMonitoring: (on) => void (store.monitoring = on),
+        loadKnownFree: (scope) => (store.knownFreeScope === scope ? (store.knownFree as string[]) : null),
+        saveKnownFree: (scope, keys) => {
+            store.knownFreeScope = keys ? scope : undefined;
+            store.knownFree = keys ?? undefined;
+        },
         loadScheduleSnapshot: (code) => snapshots.get(code) ?? null,
         saveScheduleSnapshot: (code, s) => void snapshots.set(code, s),
     };
@@ -130,6 +142,7 @@ function setup(options: { startAt?: number; random?: number } = {}) {
     const scheduleChanges: unknown[] = [];
     const checkEntries: CheckEntry[] = [];
     const reservationEvents: ReservationEvent[] = [];
+    const calendarEntries: CalendarSnapshot[] = [];
     let uuidCounter = 0;
     const monitor = createMonitor({
         econsul,
@@ -138,6 +151,7 @@ function setup(options: { startAt?: number; random?: number } = {}) {
             recordRequest: () => undefined,
             recordCheck: (e) => void checkEntries.push(e),
             recordReservations: (batch) => void reservationEvents.push(...batch),
+            recordCalendar: (e) => void calendarEntries.push(e),
         },
         ids: { uuid: () => `00000000-0000-4000-8000-${String(++uuidCounter).padStart(12, '0')}` },
         session: { tabSessionId: TAB, appVersion: '1.0.0' },
@@ -162,8 +176,13 @@ function setup(options: { startAt?: number; random?: number } = {}) {
         metas,
         checkEntries,
         reservationEvents,
+        calendarEntries,
         store,
         fire,
+        tickIntervals: async () => {
+            intervals.forEach((callback) => callback());
+            await flush();
+        },
         pending: () => timers.map((t) => t.at - nowMs),
         advance: (ms: number) => void (nowMs += ms),
         fail: (e: Error | null) => void (failure = e),
@@ -251,6 +270,29 @@ describe('monitor', () => {
         t.advance(SCHEDULE_REFRESH_MS);
         await t.fire();
         expect(t.calls).toEqual({ schedule: 2, reserved: 4 });
+    });
+
+    it('idle monitor: the token arrival takes the schedule once, so the extension learns the next opening; a stale schedule is taken again', async () => {
+        const t = setup();
+        await ready(t);
+        await flush();
+        expect(t.calls).toEqual({ schedule: 1, reserved: 0 }); // no slot check, no check entry
+        expect(t.monitor.getState().releases.length).toBeGreaterThan(0);
+        expect(t.checkEntries).toHaveLength(0);
+        expect(t.metas).toEqual([{ checkKind: null, checkSeq: null }]);
+        t.advance(SCHEDULE_REFRESH_MS + 1);
+        await t.tickIntervals(); // the idle timer
+        expect(t.calls.schedule).toBe(2);
+        expect(t.calls.reserved).toBe(0);
+    });
+
+    it('idle refresh stays silent when the request fails', async () => {
+        const t = setup();
+        t.fail(new SessionExpiredError(401));
+        await ready(t);
+        await flush();
+        expect(t.monitor.getState().log.some((e) => e.kind === 'error')).toBe(false);
+        expect(t.monitor.getState().releases).toEqual([]);
     });
 
     it('new slots: the first check reports all, the next only those that appeared', async () => {
@@ -363,6 +405,76 @@ describe('monitor', () => {
         expect(t.monitor.getState().running).toBe(false);
     });
 
+    it('a reload resumes monitoring once the extension hands over the token', async () => {
+        const t = setup();
+        await ready(t);
+        await t.monitor.start();
+        expect(t.store.monitoring).toBe(true);
+        // a new page: same storage, fresh monitor memory
+        const reloaded = setup();
+        reloaded.store.monitoring = true;
+        reloaded.store.selection = t.store.selection;
+        await reloaded.monitor.init();
+        expect(reloaded.monitor.getState().running).toBe(false);
+        expect(reloaded.monitor.getState().lastResult).toContain('токен');
+        reloaded.monitor.setToken('token-from-extension', 'extension');
+        await flush();
+        expect(reloaded.monitor.getState().running).toBe(true);
+        expect(messages(reloaded).some((m) => m.startsWith('Відновлено після входу'))).toBe(true);
+    });
+
+    it('a reload keeps the known free slots: they are not reported as new again', async () => {
+        const t = setup();
+        await ready(t);
+        await t.monitor.start();
+        expect(t.store.knownFree).toHaveLength(2);
+        const reloaded = setup();
+        reloaded.store.monitoring = true;
+        reloaded.store.selection = t.store.selection;
+        reloaded.store.knownFreeScope = t.store.knownFreeScope;
+        reloaded.store.knownFree = t.store.knownFree;
+        const events: string[][] = [];
+        reloaded.monitor.on('newSlots', (fresh) => void events.push(fresh));
+        await reloaded.monitor.init();
+        reloaded.monitor.setToken('token-from-extension', 'extension');
+        await flush();
+        expect(reloaded.monitor.getState().running).toBe(true);
+        expect(events).toHaveLength(0);
+        expect(reloaded.monitor.getState().lastFresh).toEqual([]);
+    });
+
+    it('a reload after the user pressed stop does not resume', async () => {
+        const t = setup();
+        await ready(t);
+        await t.monitor.start();
+        t.monitor.stop('Зупинено користувачем', 'user');
+        expect(t.store.monitoring).toBe(false);
+        const reloaded = setup();
+        reloaded.store.monitoring = t.store.monitoring;
+        await reloaded.monitor.init();
+        reloaded.monitor.setToken('token-from-extension', 'extension');
+        await flush();
+        expect(reloaded.monitor.getState().running).toBe(false);
+    });
+
+    it('a lost session keeps the wish to monitor for the next reload', async () => {
+        const t = setup();
+        await ready(t);
+        await t.monitor.start();
+        t.monitor.sessionLost('logged out');
+        expect(t.store.monitoring).toBe(true);
+    });
+
+    it('currentCheck is set while a check is in flight and cleared after', async () => {
+        const t = setup();
+        await ready(t);
+        const seen: unknown[] = [];
+        t.monitor.subscribe(() => void seen.push(t.monitor.getState().currentCheck));
+        await t.monitor.start();
+        expect(seen.some((c) => c !== null && (c as { seq: number }).seq === 1)).toBe(true);
+        expect(t.monitor.getState().currentCheck).toBeNull();
+    });
+
     it('sessionLost stops a running monitor with cause session', async () => {
         const t = setup();
         await ready(t);
@@ -465,10 +577,31 @@ describe('monitor', () => {
             ['scheduled', 2, 'ok'],
             ['manual', 3, 'ok'],
         ]);
-        expect(t.metas.map((m) => m?.checkSeq)).toEqual([1, 1, 2, 3]);
-        expect(t.metas[0]).toEqual({ checkKind: 'scheduled', checkSeq: 1 });
+        // the first request is the idle schedule refresh made when the token arrived: it belongs to no check
+        expect(t.metas.map((m) => m?.checkSeq)).toEqual([null, 1, 2, 3]);
+        expect(t.metas[0]).toEqual({ checkKind: null, checkSeq: null });
+        expect(t.metas[1]).toEqual({ checkKind: 'scheduled', checkSeq: 1 });
         expect(entries[0]!.tabSessionId).toBe(TAB);
         expect(JSON.stringify(t.checkEntries)).not.toContain('secret-token');
+    });
+
+    it('sends the calendar to the server only when it changed: the first check, not an identical one, again when the reserved slots move', async () => {
+        const t = setup({ random: 0 });
+        await ready(t);
+        await t.monitor.start();
+        expect(t.calendarEntries).toHaveLength(1);
+        const first = calendarSnapshotSchema.parse(t.calendarEntries[0]);
+        expect(first).toMatchObject({ institutionCode: CODE, serviceCode: '1', appVersion: '1.0.0' });
+        expect(first.reserved.slots.length).toBeGreaterThan(100);
+        expect(first.schedule.length).toBeGreaterThan(0);
+        expect(JSON.stringify(first)).not.toContain('secret-token');
+        await t.fire(); // the same answers
+        expect(t.calendarEntries).toHaveLength(1);
+        t.responses.reserved = reservedWithout(1, 3);
+        await t.fire();
+        expect(t.calendarEntries).toHaveLength(2);
+        expect(t.calendarEntries[1]!.reservedHash).not.toBe(first.reservedHash);
+        expect(t.calendarEntries[1]!.scheduleHash).toBe(first.scheduleHash);
     });
 
     it('reservations: none on the first check, one reserved event on the second; a new institution starts a new baseline', async () => {

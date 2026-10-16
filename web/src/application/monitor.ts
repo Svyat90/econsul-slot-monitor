@@ -2,7 +2,7 @@
 // scheduleNextCheck(), resetMonitorState()): state, timers through the Scheduler, planning of the
 // next check, events for the extension link. The check itself is run-check.ts.
 import type { FreeSlots } from '@/domain/slots/free-slots.ts';
-import { clampIntervalBounds, FAST_CHECKS, planNextCheck } from '@/domain/monitoring/schedule.ts';
+import { clampIntervalBounds, FAST_CHECKS, planNextCheck, SCHEDULE_REFRESH_MS } from '@/domain/monitoring/schedule.ts';
 import type { DateRange, SlotKey } from '@/domain/monitoring/slots-diff.ts';
 import type { ReservedSlot } from '@/domain/contracts/econsul.ts';
 import { SessionExpiredError } from '@/domain/contracts/errors.ts';
@@ -11,6 +11,7 @@ import {
     alertSession,
     alertSlots,
     DEFAULT_TITLE,
+    refreshSchedule,
     runCheck,
     setTabTitle,
     type CheckKind,
@@ -83,6 +84,7 @@ export function createMonitor(deps: MonitorDeps): Monitor {
         hasToken: false,
         running: false,
         checking: false,
+        currentCheck: null,
         checks: 0,
         nextAt: 0,
         nextKind: 'scheduled',
@@ -103,8 +105,12 @@ export function createMonitor(deps: MonitorDeps): Monitor {
     let token = '';
     let knownFree: ReadonlySet<SlotKey> | null = null;
     let prevReserved: { slots: ReservedSlot[]; at: number } | null = null;
+    let calendarSent: string | null = null;
     let timer: TimerHandle | null = null;
     let disposed = false;
+    let idleRefresh: TimerHandle | null = null;
+    // This tab was monitoring before a reload: start again as soon as the token and the selection are there
+    let resumePending = false;
     const listeners = new Set<() => void>();
     const handlers: Handlers = { newSlots: new Set(), authFailed: new Set(), changed: new Set() };
 
@@ -119,9 +125,15 @@ export function createMonitor(deps: MonitorDeps): Monitor {
         patch({ log: [{ at: clock.now(), message, kind }, ...state.log].slice(0, LOG_LIMIT) });
     }
 
+    function knownScope(): string {
+        const selection = state.selection;
+        return selection ? `${selection.institution.code}:${selection.serviceCode}` : '';
+    }
+
     // Called when the institution or service changes: the next check starts from scratch
     function resetMonitorState(): void {
         knownFree = null;
+        settings.saveKnownFree(knownScope(), null);
         prevReserved = null;
         patch({
             schedule: null,
@@ -137,6 +149,9 @@ export function createMonitor(deps: MonitorDeps): Monitor {
         if (!state.running) return;
         scheduler.clear(timer);
         timer = null;
+        resumePending = false;
+        // a lost session keeps the wish to monitor: the new token resumes it, also after a reload
+        if (cause !== 'session') settings.saveMonitoring(false);
         patch({ running: false, stoppedBy: cause, nextAt: 0 });
         log(`Зупинено: ${reason}`, cause === 'session' ? 'error' : 'info');
     }
@@ -149,6 +164,10 @@ export function createMonitor(deps: MonitorDeps): Monitor {
         clock,
         ids,
         session,
+        getCalendarSent: () => calendarSent,
+        setCalendarSent: (key) => {
+            calendarSent = key;
+        },
         getPrevReserved: () => prevReserved,
         setPrevReserved: (prev) => {
             prevReserved = prev;
@@ -159,9 +178,18 @@ export function createMonitor(deps: MonitorDeps): Monitor {
         patch,
         log,
         getToken: () => token,
-        getKnownFree: () => knownFree,
+        // after a reload the free slots of the previous check come back from the tab's storage,
+        // so slots that were already free are not reported as new again
+        getKnownFree: () => {
+            if (!knownFree) {
+                const saved = settings.loadKnownFree(knownScope());
+                if (saved) knownFree = new Set(saved);
+            }
+            return knownFree;
+        },
         setKnownFree: (known) => {
             knownFree = known;
+            settings.saveKnownFree(knownScope(), [...known]);
         },
         stop,
         emitNewSlots: (fresh, free) => handlers.newSlots.forEach((listener) => listener(fresh, free)),
@@ -204,6 +232,7 @@ export function createMonitor(deps: MonitorDeps): Monitor {
     async function start(options: { resumed?: boolean } = {}): Promise<void> {
         const resumed = options.resumed ?? false;
         if (state.running || !canCheck()) return;
+        await refreshing; // an idle schedule request in flight: its rows are the first check's rows too
         const selection = state.selection;
         if (!selection) return;
         if (!resumed) {
@@ -211,10 +240,15 @@ export function createMonitor(deps: MonitorDeps): Monitor {
             if (alerts.notificationPermission() === 'default') await alerts.requestNotificationPermission();
         }
         if (state.running || disposed) return;
+        resumePending = false;
+        settings.saveMonitoring(true);
         patch({ running: true, stoppedBy: null });
         if (!resumed) {
             patch({ checks: 0 });
+            // the schedule an idle refresh took (at most 30 min old, refetched by the check when older) is still good
+            const { schedule, releases } = state;
             resetMonitorState();
+            patch({ schedule, releases });
         }
         setTabTitle(context, DEFAULT_TITLE);
         const { min, max } = state.interval;
@@ -243,6 +277,7 @@ export function createMonitor(deps: MonitorDeps): Monitor {
             dateRange: settings.loadDateRange(),
             tabTitleMarks: settings.loadTabTitleMarks(),
         });
+        idleRefresh = scheduler.setInterval(refreshReleases, SCHEDULE_REFRESH_MS);
         try {
             const locations = await deps.locations.load();
             const institution =
@@ -257,6 +292,26 @@ export function createMonitor(deps: MonitorDeps): Monitor {
         } catch (error) {
             log(`Не вдалося завантажити locations.json (${error instanceof Error ? error.message : String(error)})`, 'error');
         }
+        if (settings.loadMonitoring()) {
+            resumePending = true;
+            patch({ lastResult: 'чекаємо токен від розширення, щоб відновити моніторинг' });
+            tryResume();
+        }
+    }
+
+    // An idle monitor still learns the next opening: the extension's reminder alarm needs it
+    let refreshing: Promise<void> | null = null;
+    function refreshReleases(): void {
+        if (refreshing) return;
+        const run = refreshSchedule(context).finally(() => {
+            if (refreshing === run) refreshing = null;
+        });
+        refreshing = run;
+    }
+
+    // Resumes a monitor that a reload interrupted, once both the token and the selection exist
+    function tryResume(): void {
+        if (resumePending && !state.running && canCheck()) void start({ resumed: true });
     }
 
     return {
@@ -289,7 +344,10 @@ export function createMonitor(deps: MonitorDeps): Monitor {
             }
             if (source === 'extension' && !state.running && state.stoppedBy === 'session') {
                 void start({ resumed: true });
+            } else {
+                tryResume();
             }
+            refreshReleases();
         },
         sessionLost(reason) {
             // The session ended outside a check (the site logged out, the token expired):
@@ -306,6 +364,7 @@ export function createMonitor(deps: MonitorDeps): Monitor {
             settings.saveSelection({ institution: institution.code, service: serviceCode });
             patch({ selection: { institution, serviceCode } });
             resetMonitorState(); // a running monitor switches to the new selection on its next check
+            refreshReleases();
         },
         setInterval(bounds) {
             const clamped = clampIntervalBounds(bounds.min, bounds.max);
@@ -340,6 +399,7 @@ export function createMonitor(deps: MonitorDeps): Monitor {
         },
         log,
         dispose() {
+            scheduler.clear(idleRefresh);
             scheduler.clear(timer);
             timer = null;
             disposed = true;
