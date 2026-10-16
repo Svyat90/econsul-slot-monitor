@@ -33,4 +33,14 @@ export function pageOf<T extends z.ZodType>(entry: T) {
     return z.object({ entries: z.array(entry), nextCursor: z.number().int().nullable() });
 }
 
+// Numbered pages (the Monitoring page): `offset` skips newer entries, the page carries `total`
+// (every entry the filters match, ignoring `before` and `offset`). Only the logs that show page
+// numbers take part; the others ignore neither: they reject `offset` as an unknown key.
+export const offsetField = z.coerce.number().int().min(0).max(1_000_000).optional();
+
+export function pageWithTotalOf<T extends z.ZodType>(entry: T) {
+    return pageOf(entry).extend({ total: z.number().int().nonnegative() });
+}
+
 export type Page<T> = { entries: T[]; nextCursor: number | null };
+export type PageWithTotal<T> = Page<T> & { total: number };

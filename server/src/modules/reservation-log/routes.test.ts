@@ -22,6 +22,7 @@ async function build() {
     const list = vi.fn<ReservationLogRepository['list']>(async () => ({
         entries: [{ ...event, id: 5, receivedAt: '2026-10-09T11:00:01.000Z' }],
         nextCursor: 5,
+        total: 8,
     }));
     const app = Fastify();
     app.setValidatorCompiler(validatorCompiler);

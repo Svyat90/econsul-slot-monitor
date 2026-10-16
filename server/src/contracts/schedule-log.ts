@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { batchOf, historyQuerySchema, pageOf, storedFields } from './common.ts';
+import { batchOf, historyQuerySchema, offsetField, pageWithTotalOf, storedFields } from './common.ts';
 
 // One line of the old logs/schedule-changes.jsonl; strict so a stray key (e.g. `token`) is rejected.
 export const scheduleLogEntrySchema = z.object({
@@ -15,8 +15,9 @@ export type ScheduleLogEntry = z.infer<typeof scheduleLogEntrySchema>;
 
 // POST /api/schedule-log: a batch of the same entries (client_id is derived from the entry itself).
 export const scheduleLogBatchSchema = batchOf(scheduleLogEntrySchema);
-export const scheduleLogQuerySchema = historyQuerySchema;
+export const scheduleLogQuerySchema = historyQuerySchema.extend({ offset: offsetField }).strict();
 export const storedScheduleLogEntrySchema = z.object({ ...storedFields }).extend(scheduleLogEntrySchema.shape);
-export const scheduleLogPageSchema = pageOf(storedScheduleLogEntrySchema);
+export const scheduleLogPageSchema = pageWithTotalOf(storedScheduleLogEntrySchema);
 
+export type ScheduleLogQuery = z.infer<typeof scheduleLogQuerySchema>;
 export type StoredScheduleLogEntry = z.infer<typeof storedScheduleLogEntrySchema>;

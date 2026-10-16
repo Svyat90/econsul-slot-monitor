@@ -1,7 +1,6 @@
-import { and, asc, desc, eq, gte, lt, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, lt, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
-import type { HistoryQuery } from '../../contracts/common.ts';
-import type { ScheduleLogEntry, scheduleLogPageSchema } from '../../contracts/schedule-log.ts';
+import type { ScheduleLogEntry, ScheduleLogQuery, scheduleLogPageSchema } from '../../contracts/schedule-log.ts';
 import type { Db } from '../../db/client.ts';
 import { scheduleChanges } from '../../db/schema/index.ts';
 import { scheduleLogClientId } from './client-id.ts';
@@ -12,7 +11,7 @@ export interface ScheduleLogRepository {
     // Returns how many entries were really inserted (repeats are skipped).
     insertMany(entries: ScheduleLogEntry[]): Promise<number>;
     // Newest first; `nextCursor` is the smallest id of a full page, else null.
-    list(query: HistoryQuery): Promise<ScheduleLogPage>;
+    list(query: ScheduleLogQuery): Promise<ScheduleLogPage>;
     // Every entry, oldest first, in the shape of a line of the old schedule-changes.jsonl.
     listAll(): Promise<ScheduleLogEntry[]>;
 }
@@ -56,20 +55,27 @@ export function createScheduleLogRepository(db: Db): ScheduleLogRepository {
             if (query.institutionCode) conditions.push(eq(scheduleChanges.institutionCode, query.institutionCode));
             if (query.from) conditions.push(gte(scheduleChanges.checkedAt, new Date(query.from)));
             if (query.to) conditions.push(lt(scheduleChanges.checkedAt, new Date(query.to)));
-            if (query.before !== undefined) conditions.push(lt(scheduleChanges.id, query.before));
-            const rows = await db
-                .select()
-                .from(scheduleChanges)
-                .where(and(...conditions))
-                .orderBy(desc(scheduleChanges.id))
-                .limit(query.limit);
+            const cursor = query.before !== undefined ? lt(scheduleChanges.id, query.before) : undefined;
+            const [rows, [counted]] = await Promise.all([
+                db
+                    .select()
+                    .from(scheduleChanges)
+                    .where(and(...conditions, cursor))
+                    .orderBy(desc(scheduleChanges.id))
+                    .limit(query.limit)
+                    .offset(query.offset ?? 0),
+                db
+                    .select({ total: count() })
+                    .from(scheduleChanges)
+                    .where(and(...conditions)),
+            ]);
             const entries = rows.map((row) => ({
                 ...toEntry(row),
                 id: row.id,
                 receivedAt: row.receivedAt.toISOString(),
             }));
             const last = entries.at(-1);
-            return { entries, nextCursor: entries.length === query.limit && last ? last.id : null };
+            return { entries, nextCursor: entries.length === query.limit && last ? last.id : null, total: counted?.total ?? 0 };
         },
 
         async listAll() {

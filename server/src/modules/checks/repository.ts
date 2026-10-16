@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, gte, lt, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, gt, gte, lt, ne, type SQL } from 'drizzle-orm';
 import type { CheckEntry, CheckQuery, StoredCheckEntry } from '../../contracts/checks.ts';
 import type { Db } from '../../db/client.ts';
 import { monitorChecks } from '../../db/schema/index.ts';
@@ -6,6 +6,7 @@ import { monitorChecks } from '../../db/schema/index.ts';
 export interface CheckPage {
     entries: StoredCheckEntry[];
     nextCursor: number | null;
+    total: number;
 }
 
 export interface ChecksRepository {
@@ -51,14 +52,22 @@ export function createChecksRepository(db: Db): ChecksRepository {
                 query.kind ? eq(monitorChecks.kind, query.kind) : undefined,
                 query.outcome ? eq(monitorChecks.outcome, query.outcome) : undefined,
                 query.onlyNew ? gt(monitorChecks.newCount, 0) : undefined,
-                query.before ? lt(monitorChecks.id, query.before) : undefined,
+                query.failed ? ne(monitorChecks.outcome, 'ok') : undefined,
             ];
-            const rows = await db
-                .select()
-                .from(monitorChecks)
-                .where(and(...filters))
-                .orderBy(desc(monitorChecks.id))
-                .limit(query.limit);
+            const cursor = query.before ? lt(monitorChecks.id, query.before) : undefined;
+            const [rows, [counted]] = await Promise.all([
+                db
+                    .select()
+                    .from(monitorChecks)
+                    .where(and(...filters, cursor))
+                    .orderBy(desc(monitorChecks.id))
+                    .limit(query.limit)
+                    .offset(query.offset ?? 0),
+                db
+                    .select({ total: count() })
+                    .from(monitorChecks)
+                    .where(and(...filters)),
+            ]);
             const entries: StoredCheckEntry[] = rows.map((row) => ({
                 id: row.id,
                 receivedAt: row.receivedAt.toISOString(),
@@ -79,7 +88,7 @@ export function createChecksRepository(db: Db): ChecksRepository {
                 errorMessage: row.errorMessage,
             }));
             const last = entries.at(-1);
-            return { entries, nextCursor: entries.length === query.limit && last ? last.id : null };
+            return { entries, nextCursor: entries.length === query.limit && last ? last.id : null, total: counted?.total ?? 0 };
         },
     };
 }

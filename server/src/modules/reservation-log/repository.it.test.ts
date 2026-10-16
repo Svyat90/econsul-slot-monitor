@@ -69,4 +69,13 @@ describe('ReservationLogRepository', () => {
         });
         expect(ranged.entries.map((e) => e.clientId)).toEqual([event(2).clientId]);
     });
+
+    it('numbered pages: offset skips newer events, total counts the filtered rows', async () => {
+        await repository.insertMany([event(1), event(2), event(3, { kind: 'released' }), event(4), event(5)]);
+        const second = await repository.list({ limit: 2, offset: 2 });
+        expect(second.entries.map((e) => e.clientId)).toEqual([event(3).clientId, event(2).clientId]);
+        expect(second.total).toBe(5);
+        const released = await repository.list({ limit: 10, kind: 'released' });
+        expect(released.total).toBe(1);
+    });
 });

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { batchOf, historyQuerySchema, isoDateTime, pageOf, storedFields } from './common.ts';
+import { batchOf, historyQuerySchema, isoDateTime, offsetField, pageWithTotalOf, storedFields } from './common.ts';
 
 // A slot that became reserved, or was released, between two checks (IDEA-004).
 export const reservationEventSchema = z.object({
@@ -17,9 +17,10 @@ export const reservationEventSchema = z.object({
 export const reservationBatchSchema = batchOf(reservationEventSchema);
 export const reservationQuerySchema = historyQuerySchema.extend({
     kind: z.enum(['reserved', 'released']).optional(),
+    offset: offsetField,
 }).strict();
 export const storedReservationEventSchema = z.object({ ...storedFields }).extend(reservationEventSchema.shape);
-export const reservationPageSchema = pageOf(storedReservationEventSchema);
+export const reservationPageSchema = pageWithTotalOf(storedReservationEventSchema);
 
 export type ReservationEvent = z.infer<typeof reservationEventSchema>;
 export type ReservationQuery = z.infer<typeof reservationQuerySchema>;

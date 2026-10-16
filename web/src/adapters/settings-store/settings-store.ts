@@ -8,13 +8,15 @@ const INTERVAL_KEY = 'slots.interval';
 const DATE_RANGE_KEY = 'slots.dateRange';
 const DRAFT_KEY = 'slots.draft';
 const TAB_TITLE_MARKS_KEY = 'slots.tabTitleMarks';
+const MONITORING_KEY = 'slots.monitoring';
+const KNOWN_FREE_KEY = 'slots.knownFree';
 const SCHEDULE_KEY_PREFIX = 'slots.schedule.';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function createSettingsStore(storage?: Storage): SettingsStore {
+export function createSettingsStore(storage?: Storage, sessionStore?: Storage): SettingsStore {
     function readJson(key: string): unknown {
         try {
             const raw = (storage ?? localStorage).getItem(key);
@@ -98,6 +100,41 @@ export function createSettingsStore(storage?: Storage): SettingsStore {
         },
         saveTabTitleMarks(on) {
             writeJson(TAB_TITLE_MARKS_KEY, on);
+        },
+        loadMonitoring() {
+            try {
+                return (sessionStore ?? storage ?? sessionStorage).getItem(MONITORING_KEY) === '1';
+            } catch {
+                return false;
+            }
+        },
+        saveMonitoring(on) {
+            try {
+                const target = sessionStore ?? storage ?? sessionStorage;
+                if (on) target.setItem(MONITORING_KEY, '1');
+                else target.removeItem(MONITORING_KEY);
+            } catch {
+                /* storage unavailable */
+            }
+        },
+        loadKnownFree(scope) {
+            try {
+                const raw = (sessionStore ?? storage ?? sessionStorage).getItem(KNOWN_FREE_KEY);
+                const saved: unknown = raw ? JSON.parse(raw) : null;
+                if (!isRecord(saved) || saved.scope !== scope || !Array.isArray(saved.keys)) return null;
+                return saved.keys.filter((key): key is string => typeof key === 'string');
+            } catch {
+                return null;
+            }
+        },
+        saveKnownFree(scope, keys) {
+            try {
+                const target = sessionStore ?? storage ?? sessionStorage;
+                if (keys) target.setItem(KNOWN_FREE_KEY, JSON.stringify({ scope, keys }));
+                else target.removeItem(KNOWN_FREE_KEY);
+            } catch {
+                /* storage unavailable */
+            }
         },
     };
 }

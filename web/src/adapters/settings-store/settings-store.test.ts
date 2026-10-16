@@ -87,4 +87,25 @@ describe('settings store', () => {
             store.saveScheduleSnapshot('X', { checkedAt: 't', rows: [] });
         }).not.toThrow();
     });
+
+    it('known free slots: saved per scope, another scope and clearing give null', () => {
+        const store = createSettingsStore(memoryStorage(), memoryStorage());
+        expect(store.loadKnownFree('A:1')).toBeNull();
+        store.saveKnownFree('A:1', ['2026-10-23 09:00']);
+        expect(store.loadKnownFree('A:1')).toEqual(['2026-10-23 09:00']);
+        expect(store.loadKnownFree('B:1')).toBeNull();
+        store.saveKnownFree('A:1', null);
+        expect(store.loadKnownFree('A:1')).toBeNull();
+        expect(createSettingsStore(throwing).loadKnownFree('A:1')).toBeNull();
+    });
+
+    it('monitoring flag: off by default, saved, cleared, and unavailable storage means off', () => {
+        const store = createSettingsStore(memoryStorage(), memoryStorage());
+        expect(store.loadMonitoring()).toBe(false);
+        store.saveMonitoring(true);
+        expect(store.loadMonitoring()).toBe(true);
+        store.saveMonitoring(false);
+        expect(store.loadMonitoring()).toBe(false);
+        expect(createSettingsStore(throwing).loadMonitoring()).toBe(false);
+    });
 });

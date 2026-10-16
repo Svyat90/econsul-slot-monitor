@@ -2,9 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useAppServices, useMonitorState } from './use-app-services.ts';
 
 // The reservation log of the selected institution, shared by the Slots day panel and the
-// Monitoring page: one query key, one shape. The monitor's check counter in the key refetches it
-// after each check; a check's entries reach the server only after the batch queue flushes (up to
-// 5 s later), so it also refreshes every REFRESH_MS.
+// Monitoring page: one query key, one shape. The composition root invalidates it when a log batch
+// reaches the server (the check counter in the key moves at a check's start, too early); it also
+// refreshes every REFRESH_MS.
 export const HISTORY_REFRESH_MS = 15_000;
 export const HISTORY_LIST_LIMIT = 50;
 

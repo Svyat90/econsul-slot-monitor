@@ -25,7 +25,7 @@ const stored: StoredCheckEntry = { ...entry, id: 7, receivedAt: '2026-10-09T10:0
 
 async function build() {
     const insertMany = vi.fn(async (entries: CheckEntry[]) => entries.length);
-    const list = vi.fn(async (_query: CheckQuery) => ({ entries: [stored], nextCursor: null }));
+    const list = vi.fn(async (_query: CheckQuery) => ({ entries: [stored], nextCursor: null, total: 1 }));
     const app = Fastify();
     app.setValidatorCompiler(validatorCompiler);
     app.setSerializerCompiler(serializerCompiler);
@@ -55,7 +55,7 @@ describe('GET /api/checks', () => {
         const { app, list } = await build();
         const res = await app.inject({ method: 'GET', url: '/api/checks?onlyNew=true&kind=fast&limit=20' });
         expect(res.statusCode).toBe(200);
-        expect(res.json()).toEqual({ entries: [stored], nextCursor: null });
+        expect(res.json()).toEqual({ entries: [stored], nextCursor: null, total: 1 });
         expect(list).toHaveBeenCalledWith({ kind: 'fast', onlyNew: true, limit: 20 });
     });
 });

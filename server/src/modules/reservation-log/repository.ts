@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, gte, lt, type SQL } from 'drizzle-orm';
 import type { ReservationEvent, ReservationQuery, StoredReservationEvent } from '../../contracts/reservation-log.ts';
 import type { Db } from '../../db/client.ts';
 import { reservationEvents } from '../../db/schema/index.ts';
@@ -6,6 +6,7 @@ import { reservationEvents } from '../../db/schema/index.ts';
 export interface ReservationPage {
     entries: StoredReservationEvent[];
     nextCursor: number | null;
+    total: number;
 }
 
 export interface ReservationLogRepository {
@@ -44,13 +45,20 @@ export function createReservationLogRepository(db: Db): ReservationLogRepository
             if (query.institutionCode) conditions.push(eq(reservationEvents.institutionCode, query.institutionCode));
             if (query.from) conditions.push(gte(reservationEvents.detectedAt, new Date(query.from)));
             if (query.to) conditions.push(lt(reservationEvents.detectedAt, new Date(query.to)));
-            if (query.before) conditions.push(lt(reservationEvents.id, query.before));
-            const rows = await db
-                .select()
-                .from(reservationEvents)
-                .where(and(...conditions))
-                .orderBy(desc(reservationEvents.id))
-                .limit(query.limit);
+            const cursor = query.before ? lt(reservationEvents.id, query.before) : undefined;
+            const [rows, [counted]] = await Promise.all([
+                db
+                    .select()
+                    .from(reservationEvents)
+                    .where(and(...conditions, cursor))
+                    .orderBy(desc(reservationEvents.id))
+                    .limit(query.limit)
+                    .offset(query.offset ?? 0),
+                db
+                    .select({ total: count() })
+                    .from(reservationEvents)
+                    .where(and(...conditions)),
+            ]);
             const entries = rows.map((row) => ({
                 id: row.id,
                 receivedAt: row.receivedAt.toISOString(),
@@ -65,7 +73,7 @@ export function createReservationLogRepository(db: Db): ReservationLogRepository
                 tabSessionId: row.tabSessionId,
             }));
             const last = entries.at(-1);
-            return { entries, nextCursor: entries.length === query.limit && last ? last.id : null };
+            return { entries, nextCursor: entries.length === query.limit && last ? last.id : null, total: counted?.total ?? 0 };
         },
     };
 }

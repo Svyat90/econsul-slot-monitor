@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { batchOf, checkKindSchema, historyQuerySchema, isoDateTime, pageOf, requestOutcomeSchema, storedFields } from './common.ts';
+import { batchOf, checkKindSchema, historyQuerySchema, isoDateTime, offsetField, pageWithTotalOf, requestOutcomeSchema, storedFields } from './common.ts';
 
 export const newSlotSchema = z.object({
     date: z.iso.date(),
@@ -31,9 +31,11 @@ export const checkQuerySchema = historyQuerySchema.extend({
     kind: checkKindSchema.optional(),
     outcome: requestOutcomeSchema.optional(),
     onlyNew: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+    failed: z.enum(['true', 'false']).transform((v) => v === 'true').optional(), // any outcome but ok
+    offset: offsetField,
 }).strict();
 export const storedCheckEntrySchema = z.object({ ...storedFields }).extend(checkEntrySchema.shape);
-export const checkPageSchema = pageOf(storedCheckEntrySchema);
+export const checkPageSchema = pageWithTotalOf(storedCheckEntrySchema);
 
 export type NewSlot = z.infer<typeof newSlotSchema>;
 export type CheckEntry = z.infer<typeof checkEntrySchema>;

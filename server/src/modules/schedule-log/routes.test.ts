@@ -16,7 +16,7 @@ const entry: ScheduleLogEntry = {
 function fakeRepository(overrides: Partial<ScheduleLogRepository> = {}): ScheduleLogRepository {
     return {
         insertMany: vi.fn(async (entries: ScheduleLogEntry[]) => entries.length),
-        list: vi.fn(async () => ({ entries: [], nextCursor: null })),
+        list: vi.fn(async () => ({ entries: [], nextCursor: null, total: 0 })),
         listAll: vi.fn(async () => []),
         ...overrides,
     };
@@ -79,6 +79,7 @@ describe('GET /api/schedule-log', () => {
         const page = {
             entries: [{ ...entry, id: 7, receivedAt: '2026-10-09T10:00:01.000Z' }],
             nextCursor: 7,
+            total: 9,
         };
         const { app, repository } = await build(scheduleLogApiRoutes, fakeRepository({ list: vi.fn(async () => page) }));
         const res = await app.inject({ method: 'GET', url: '/api/schedule-log?limit=1&institutionCode=NYC&before=9' });

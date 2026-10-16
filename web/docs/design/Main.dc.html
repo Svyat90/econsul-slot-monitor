@@ -238,22 +238,52 @@ button{font-family:Manrope,system-ui,sans-serif}
           <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868">Журнал перевірок</div>
           <div style="display: flex; flex-wrap: wrap; gap: 6px">
             <sc-for list="{{filters}}" as="f" hint-placeholder-count="4">
-              <button onClick="{{f.pick}}" style="{{f.style}}">{{f.label}}</button>
+              <button onClick="{{f.pick}}" style="{{f.style}}">{{f.label}} <span style="font-weight: 600; opacity: .75; font-variant-numeric: tabular-nums">{{f.count}}</span></button>
             </sc-for>
           </div>
         </div>
-        <sc-for list="{{logShown}}" as="l" hint-placeholder-count="7">
-          <div style="{{l.rowStyle}}">
-            <span style="font: 500 12px 'IBM Plex Mono', monospace; color: #4A5868; width: 64px; flex: none; padding-top: 2px">{{l.t}}</span>
-            <div style="flex: 1; min-width: 0">
-              <div style="font-size: 14px"><b>{{l.title}}</b> <span style="{{l.tagStyle}}">{{l.tag}}</span></div>
-              <div style="font-size: 13px; color: #3E4C5B">{{l.result}}</div>
-              <sc-if value="{{l.hasNew}}" hint-placeholder-val="{{false}}">
-                <div style="font: 500 12px 'IBM Plex Mono', monospace; color: #1E6B34; margin-top: 2px">{{l.newLine}}</div>
-              </sc-if>
-            </div>
+        <div style="border-top: 1px solid #E3E8EF">
+          <sc-for list="{{logRows}}" as="l" hint-placeholder-count="12">
+            <sc-if value="{{l.isDay}}" hint-placeholder-val="{{false}}">
+              <div style="padding: 8px 8px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #4A5868; background: #F6F8FB; border-bottom: 1px solid #E3E8EF">{{l.dayText}}</div>
+            </sc-if>
+            <sc-if value="{{l.isRow}}" hint-placeholder-val="{{true}}">
+              <div style="{{l.rowStyle}}">
+                <span style="font: 500 12px 'IBM Plex Mono', monospace; color: #3E4C5B; font-variant-numeric: tabular-nums">{{l.t}}</span>
+                <span style="{{l.dotStyle}}"></span>
+                <div style="min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px">
+                  <b style="font-weight: 700">{{l.title}}</b>
+                  <sc-if value="{{l.hasSlots}}" hint-placeholder-val="{{false}}">
+                    <span style="font: 500 12px 'IBM Plex Mono', monospace; color: #1E6B34">{{l.slots}}</span>
+                  </sc-if>
+                  <span style="font-size: 12px; color: #3E4C5B">{{l.sub}}</span>
+                </div>
+                <span style="display: flex; gap: 4px; justify-content: flex-end">
+                  <sc-if value="{{l.hasTag1}}" hint-placeholder-val="{{false}}"><span style="{{l.tag1Style}}">{{l.tag1}}</span></sc-if>
+                  <sc-if value="{{l.hasTag2}}" hint-placeholder-val="{{false}}"><span style="{{l.tag2Style}}">{{l.tag2}}</span></sc-if>
+                </span>
+                <span style="font: 500 12px 'IBM Plex Mono', monospace; color: #3E4C5B; text-align: right; font-variant-numeric: tabular-nums">{{l.dur}}</span>
+              </div>
+            </sc-if>
+          </sc-for>
+          <sc-if value="{{noLogRows}}" hint-placeholder-val="{{false}}">
+            <div style="padding: 20px 8px; font-size: 13px; color: #3E4C5B">Записів немає</div>
+          </sc-if>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding-top: 12px; font-size: 12px; color: #4A5868">
+          <div style="display: flex; align-items: center; gap: 6px">
+            <span>Рядків на сторінці</span>
+            <sc-for list="{{sizes}}" as="z" hint-placeholder-count="3">
+              <button onClick="{{z.pick}}" style="{{z.style}}">{{z.label}}</button>
+            </sc-for>
           </div>
-        </sc-for>
+          <span style="font-variant-numeric: tabular-nums">{{rangeText}}</span>
+          <div style="display: flex; align-items: center; gap: 4px">
+            <sc-for list="{{pager}}" as="p" hint-placeholder-count="7">
+              <button onClick="{{p.pick}}" aria-label="{{p.aria}}" style="{{p.style}}">{{p.label}}</button>
+            </sc-for>
+          </div>
+        </div>
       </section>
 
       <div style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
@@ -502,31 +532,121 @@ class Component extends DCLogic {
 
     // Monitoring tab
     const tagStyle = (bg, fg) => 'font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: ' + bg + '; color: ' + fg;
-    const row = 'display: flex; gap: 12px; padding: 10px 8px; border-top: 1px solid #EEF2F7; border-radius: 6px; ';
-    const log = [
-      { t: '10:41:52', title: 'Перевірка #128', tag: 'часта', tagStyle: tagStyle('#EFEAFD', '#4B2FB0'), result: '18 вільних · 696 поза діапазоном дат', hasNew: false, rowStyle: row },
-      { t: '10:41:33', title: 'Перевірка #127', tag: 'часта', tagStyle: tagStyle('#EFEAFD', '#4B2FB0'), result: '18 вільних · 2 нові', hasNew: true, newLine: 'нові: 31.03.2027: 09:50, 11:40', rowStyle: row + 'background: #F1FAF3' },
-      { t: '10:41:40', title: 'Розширення вибрало слот', tag: '', tagStyle: '', result: 'ср, 31.03.2027 о 09:50 у чернетці — натисніть «Підтвердити»', hasNew: false, rowStyle: row },
-      { t: '10:39:10', title: 'Перевірка #126', tag: '', tagStyle: '', result: '16 вільних', hasNew: false, rowStyle: row },
-      { t: '10:36:02', title: 'Перевірка #125', tag: 'помилка', tagStyle: tagStyle('#FDECEA', '#B42318'), result: 'Мережа недоступна — моніторинг триває', hasNew: false, rowStyle: row },
-      { t: '10:33:47', title: 'Перевірка #124', tag: 'вручну', tagStyle: tagStyle('#F4F7FB', '#3E4C5B'), result: '16 вільних · розклад оновлено', hasNew: false, rowStyle: row },
-      { t: '10:30:12', title: 'Перевірка #123', tag: '', tagStyle: '', result: '16 вільних', hasNew: false, rowStyle: row }
-    ];
-    const kinds = ['fast', 'new', 'info', 'plain', 'error', 'manual', 'plain'];
-    log.forEach((l, i) => { l.kind = kinds[i]; });
+    // Check journal: no "Перевірка #N"; time, state dot, result, tags, duration. Sample data.
+    const tg = (bg, fg) => 'font-size: 11px; font-weight: 700; line-height: 18px; padding: 0 7px; border-radius: 999px; white-space: nowrap; background: ' + bg + '; color: ' + fg;
+    const TAG = { fast: ['часта', tg('#EFEAFD', '#4B2FB0')], manual: ['вручну', tg('#E3E8EF', '#3E4C5B')], err: ['помилка', tg('#FFFFFF', '#B42318')], ext: ['розширення', tg('#E3E8EF', '#3E4C5B')], wait: ['в обробці', tg('#E8F0FA', accent)] };
+    const clock = (sec) => pad(Math.floor(sec / 3600)) + ':' + pad(Math.floor(sec / 60) % 60) + ':' + pad(sec % 60);
+    const T = (h, m, sec) => h * 3600 + m * 60 + sec;
+    const rows = [];
+    // today, newest first: the hand-made head, then a steady run back to 128 checks
+    rows.push({ day: 0, sec: T(10, 41, 52), kind: 'fast', free: 18, note: '696 поза діапазоном дат', dur: 1.9 });
+    rows.push({ day: 0, sec: T(10, 41, 40), ext: true, title: 'Розширення вибрало слот', note: '31.03.2027 09:50 у чернетці, натисніть «Підтвердити»' });
+    rows.push({ day: 0, sec: T(10, 41, 33), kind: 'fast', free: 18, fresh: ['31.03 09:50', '31.03 11:40'], dur: 2.3 });
+    rows.push({ day: 0, sec: T(10, 39, 10), kind: 'scheduled', free: 16, dur: 1.4 });
+    rows.push({ day: 0, sec: T(10, 36, 2), kind: 'scheduled', err: 'Мережа недоступна, моніторинг триває', dur: 8.0 });
+    rows.push({ day: 0, sec: T(10, 33, 47), kind: 'manual', free: 16, note: 'розклад оновлено', dur: 2.6 });
+    let sec = T(10, 30, 12), todayChecks = 5;
+    rows.push({ day: 0, sec, kind: 'scheduled', free: 16, dur: 1.6 });
+    for (let i = 0; todayChecks < 127; i++) {
+      const inWindow = sec > T(9, 57, 40) && sec < T(10, 3, 10);
+      sec -= inWindow ? 15 + ((i * 7) % 6) : 95 + ((i * 37) % 85);
+      todayChecks += 1;
+      const o = { day: 0, sec, kind: inWindow ? 'fast' : 'scheduled', free: 12 + (i % 5), dur: Math.round((1.2 + ((i * 13) % 17) / 10) * 10) / 10 };
+      if (inWindow && todayChecks % 4 === 0) { o.free = 18; o.fresh = ['01.04 ' + pad(9 + (i % 3)) + ':' + (i % 2 ? '10' : '30')]; }
+      rows.push(o);
+    }
+    // yesterday
+    let ys = T(18, 4, 20);
+    for (let i = 0; i < 34; i++) {
+      ys -= 100 + ((i * 29) % 90);
+      const o = { day: 1, sec: ys, kind: 'scheduled', free: 15 + (i % 3), dur: Math.round((1.3 + ((i * 11) % 15) / 10) * 10) / 10 };
+      if (i === 6) { delete o.free; o.err = 'HTTP 500'; o.dur = 0.8; }
+      if (i === 15) { o.fresh = ['17.03 10:00']; o.free = 17; }
+      rows.push(o);
+    }
+    rows.forEach((r) => { r.isNew = !!r.fresh; r.isErr = !!r.err; });
+
+    const matches = (r, f) => f === 'all' ? true
+      : f === 'new' ? r.isNew
+      : f === 'error' ? r.isErr
+      : (r.kind === 'fast');
     const filterDefs = [['all', 'Усі'], ['new', 'Нові слоти'], ['error', 'Помилки'], ['fast', 'Часті']];
     const filters = filterDefs.map(([id, label]) => ({
       label,
-      pick: () => this.setState({ logFilter: id }),
-      style: 'height: 30px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 700; cursor: pointer; ' +
+      count: String(rows.filter((r) => matches(r, id) && !(r.ext && id !== 'all')).length),
+      pick: () => this.setState({ logFilter: id, logPage: 1 }),
+      style: 'height: 28px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 700; cursor: pointer; ' +
         (logFilter === id ? 'border: 1px solid ' + accent + '; background: #E8F0FA; color: ' + accent : 'border: 1px solid #C5CFDB; background: #FFFFFF; color: #3E4C5B')
     }));
-    const logShown = logFilter === 'all' ? log
-      : logFilter === 'fast' ? log.filter((l) => l.tag === 'часта')
-      : log.filter((l) => l.kind === logFilter);
+    const shown = rows.filter((r) => matches(r, logFilter) && !(r.ext && logFilter !== 'all'));
+    const logSize = st.logSize ?? 25;
+    const pages = Math.max(1, Math.ceil(shown.length / logSize));
+    const logPage = Math.min(st.logPage ?? 1, pages);
+    const from = (logPage - 1) * logSize;
+    const slice = shown.slice(from, from + logSize);
+    const dayName = ['Сьогодні · 10.10.2026', 'Вчора · 09.10.2026'];
+    const logRows = [];
+    // the request in flight sits on top of the first page of "Усі"
+    if (logPage === 1 && (logFilter === 'all')) {
+      logRows.push({ isDay: false, isRow: true, rowStyle: 'display: grid; grid-template-columns: 64px 14px minmax(0, 1fr) auto 52px; align-items: center; gap: 0 10px; min-height: 36px; padding: 5px 8px; border-bottom: 1px solid #E3E8EF; font-size: 13px; background: #F4F8FD',
+        t: '10:44:03', dotStyle: 'width: 8px; height: 8px; border-radius: 50%; justify-self: center; background: ' + accent,
+        title: 'Запит надіслано', hasSlots: false, slots: '', sub: 'очікуємо відповідь e-Consul',
+        hasTag1: true, tag1: TAG.manual[0], tag1Style: TAG.manual[1], hasTag2: true, tag2: TAG.wait[0], tag2Style: TAG.wait[1], dur: '…' });
+    }
+    let lastDay = -1;
+    slice.forEach((r) => {
+      if (r.day !== lastDay) { logRows.push({ isDay: true, isRow: false, dayText: dayName[r.day] }); lastDay = r.day; }
+      const bg = r.isErr ? '#FDECEA' : r.isNew ? '#E3F4E8' : 'transparent';
+      const tags = [];
+      if (r.ext) tags.push(TAG.ext);
+      if (r.kind === 'fast') tags.push(TAG.fast);
+      if (r.kind === 'manual') tags.push(TAG.manual);
+      if (r.isErr) tags.push(TAG.err);
+      const dot = r.ext ? 'background: ' + accent + '; border-radius: 2px' : r.isErr ? 'background: #B42318; border-radius: 50%' : r.isNew ? 'background: #1E7B34; border-radius: 50%' : 'background: #7D8A99; opacity: .6; border-radius: 50%';
+      logRows.push({
+        isDay: false, isRow: true,
+        rowStyle: 'display: grid; grid-template-columns: 64px 14px minmax(0, 1fr) auto 52px; align-items: center; gap: 0 10px; min-height: 36px; padding: 5px 8px; border-bottom: 1px solid #E3E8EF; font-size: 13px; background: ' + bg,
+        t: clock(r.sec),
+        dotStyle: 'width: 8px; height: 8px; justify-self: center; ' + dot,
+        title: r.ext ? r.title : r.isErr ? 'Не вдалося перевірити' : r.isNew ? (r.fresh.length === 1 ? '1 новий слот' : r.fresh.length + ' нові слоти') : 'Вільних ' + (r.free ? r.free : 'немає'),
+        hasSlots: !!r.fresh, slots: r.fresh ? r.fresh.join(' · ') : '',
+        sub: r.ext ? r.note : r.isErr ? r.err : r.isNew ? 'усього вільних: ' + r.free : (r.note ?? ''),
+        hasTag1: tags.length > 0, tag1: tags[0] ? tags[0][0] : '', tag1Style: tags[0] ? tags[0][1] : '',
+        hasTag2: tags.length > 1, tag2: tags[1] ? tags[1][0] : '', tag2Style: tags[1] ? tags[1][1] : '',
+        dur: r.dur ? String(r.dur.toFixed(1)).replace('.', ',') + ' с' : ''
+      });
+    });
+    const hasLogRows = logRows.length > 0;
+    const noLogRows = !hasLogRows;
+    const rangeText = shown.length ? (from + 1) + '–' + (from + slice.length) + ' з ' + shown.length : '0 записів';
+    const sizes = [15, 25, 50].map((n) => ({
+      label: String(n),
+      pick: () => this.setState({ logSize: n, logPage: 1 }),
+      style: 'height: 28px; min-width: 32px; padding: 0 8px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; ' +
+        (logSize === n ? 'border: 1px solid ' + accent + '; background: #E8F0FA; color: ' + accent : 'border: 1px solid #C5CFDB; background: #FFFFFF; color: #3E4C5B')
+    }));
+    const pbtn = (label, aria, target, active, disabled) => ({
+      label, aria,
+      pick: () => { if (!disabled && target) this.setState({ logPage: target }); },
+      style: 'height: 32px; min-width: 32px; padding: 0 8px; border-radius: 8px; font-size: 12px; font-weight: 700; ' +
+        (disabled ? 'cursor: default; border: 1px solid #E3E8EF; background: transparent; color: #9AA6B2' : active ? 'cursor: default; border: 1px solid ' + accent + '; background: #E8F0FA; color: ' + accent : 'cursor: pointer; border: 1px solid #C5CFDB; background: #FFFFFF; color: #0B1B2B')
+    });
+    const pager = [pbtn('←', 'Попередня сторінка', logPage - 1, false, logPage === 1)];
+    let prevN = 0;
+    for (let n = 1; n <= pages; n++) {
+      if (n === 1 || n === pages || Math.abs(n - logPage) <= 1) {
+        if (prevN && n - prevN > 1) pager.push(pbtn('…', 'Пропущені сторінки', 0, false, true));
+        pager.push(pbtn(String(n), 'Сторінка ' + n, n, n === logPage, false));
+        prevN = n;
+      }
+    }
+    pager.push(pbtn('→', 'Наступна сторінка', logPage + 1, false, logPage === pages));
+    const todayRows = rows.filter((r) => r.day === 0 && !r.ext);
+    const todayFast = todayRows.filter((r) => r.kind === 'fast').length;
+    const todayErr = todayRows.filter((r) => r.isErr).length;
     const big = (color) => 'font-size: 26px; font-weight: 800; color: ' + color;
     const stats = [
-      { label: 'Перевірок сьогодні', value: '128', note: '14 частих · 1 помилка', valueStyle: big('#0B1B2B') },
+      { label: 'Перевірок сьогодні', value: String(todayRows.length), note: todayFast + ' частих · ' + todayErr + ' помилка', valueStyle: big('#0B1B2B') },
       { label: 'Нових вільних', value: '6', note: 'останні о 10:41', valueStyle: big('#1E7B34') },
       { label: 'Резервувань', value: '23', note: '9 — новий день за 38 с', valueStyle: big('#0B1B2B') },
       { label: 'Скасувань', value: '2', note: 'звільнені слоти', valueStyle: big(accent) }
@@ -570,7 +690,7 @@ class Component extends DCLogic {
       daySummary: L.f + ' вільних · ' + L.r + ' зайнятих' + (L.nw ? ' · ' + L.nw + ' неробочих' : ''),
       dayTiles, dayOff, dayHasOff: L.nw > 0,
       dayRecent: recent, dayHasRecent: recent.length > 0, dayNoRecent: recent.length === 0,
-      nearest, log, logShown, filters, stats, reservations, schedule, tests
+      nearest, logRows, hasLogRows, noLogRows, rangeText, sizes, pager, filters, stats, reservations, schedule, tests
     };
   }
 }

@@ -70,4 +70,22 @@ describe('ChecksRepository', () => {
         expect(page.entries.map((e) => e.checkSeq)).toEqual([2]);
         expect(page.entries[0]?.newSlots).toEqual(slots);
     });
+
+    it('numbered pages: offset skips newer entries and total ignores limit, offset and the cursor', async () => {
+        await repository.insertMany([check(1), check(2), check(3), check(4), check(5)]);
+        const second = await repository.list({ limit: 2, offset: 2 });
+        expect(second.entries.map((e) => e.checkSeq)).toEqual([3, 2]);
+        expect(second.total).toBe(5);
+        const last = await repository.list({ limit: 2, offset: 4 });
+        expect(last.entries.map((e) => e.checkSeq)).toEqual([1]);
+        expect(last.nextCursor).toBeNull();
+    });
+
+    it('failed keeps every outcome but ok and total counts only the matches', async () => {
+        const bad = { outcome: 'session_expired', freeCount: null, newCount: null, outOfRangeCount: null, errorMessage: 'HTTP 401' } as const;
+        await repository.insertMany([check(1), check(2, bad), check(3, { ...bad, outcome: 'network_error' }), check(4)]);
+        const page = await repository.list({ limit: 1, failed: true });
+        expect(page.entries.map((e) => e.checkSeq)).toEqual([3]);
+        expect(page.total).toBe(2);
+    });
 });

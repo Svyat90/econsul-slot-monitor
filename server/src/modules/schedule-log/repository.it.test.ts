@@ -56,6 +56,14 @@ describe('ScheduleLogRepository', () => {
             changes: [`change ${i}`],
         }));
 
+        it('numbered pages: offset skips newer entries, total counts the filtered rows', async () => {
+            await repository.insertMany(entries);
+            const second = await repository.list({ limit: 2, offset: 2 });
+            expect(second.entries.map((e) => e.changes[0])).toEqual(['change 1', 'change 0']);
+            expect(second.total).toBe(4);
+            expect((await repository.list({ limit: 10, institutionCode: 'NYC' })).total).toBe(2);
+        });
+
         it('returns newest first as ISO strings with a cursor when the page is full', async () => {
             await repository.insertMany(entries);
             const page = await repository.list({ limit: 2 });
