@@ -4,6 +4,8 @@ import { extname } from 'node:path';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { hasZodFastifySchemaValidationErrors, serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import type { CalendarSnapshotRepository } from './modules/calendar-snapshots/repository.ts';
+import { calendarSnapshotRoutes } from './modules/calendar-snapshots/routes.ts';
 import type { ChecksRepository } from './modules/checks/repository.ts';
 import { checksRoutes } from './modules/checks/routes.ts';
 import type { ExtensionEventsRepository } from './modules/extension-events/repository.ts';
@@ -25,6 +27,7 @@ export interface AppDeps {
     checks: ChecksRepository;
     extensionEvents: ExtensionEventsRepository;
     reservationLog: ReservationLogRepository;
+    calendarSnapshots: CalendarSnapshotRepository;
     summary: SummaryRepository;
     pingDb: () => Promise<void>;
     logger?: boolean;
@@ -43,7 +46,7 @@ function isDbUnavailable(error: unknown): boolean {
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
-    const { config, scheduleLog, requestLog, checks, extensionEvents, reservationLog, summary, pingDb } = deps;
+    const { config, scheduleLog, requestLog, checks, extensionEvents, reservationLog, calendarSnapshots, summary, pingDb } = deps;
     const app = Fastify({
         bodyLimit: BODY_LIMIT,
         logger: deps.logger
@@ -98,6 +101,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await app.register(checksRoutes, { repository: checks });
     await app.register(extensionEventsRoutes, { repository: extensionEvents });
     await app.register(reservationLogRoutes, { repository: reservationLog, prefix: '/api' });
+    await app.register(calendarSnapshotRoutes, { repository: calendarSnapshots });
     await app.register(summaryRoutes, { repository: summary, prefix: '/api' });
 
     // New app at the root: only the build folder is served, never the repository root.

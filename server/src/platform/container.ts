@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { createDb } from '../db/client.ts';
+import { createCalendarSnapshotRepository, type CalendarSnapshotRepository } from '../modules/calendar-snapshots/repository.ts';
 import { createChecksRepository, type ChecksRepository } from '../modules/checks/repository.ts';
 import { createExtensionEventsRepository, type ExtensionEventsRepository } from '../modules/extension-events/repository.ts';
 import { createRequestLogRepository, type RequestLogRepository } from '../modules/request-log/repository.ts';
@@ -14,6 +15,7 @@ export interface Container {
     checks: ChecksRepository;
     extensionEvents: ExtensionEventsRepository;
     reservationLog: ReservationLogRepository;
+    calendarSnapshots: CalendarSnapshotRepository;
     summary: SummaryRepository;
     pingDb: () => Promise<void>;
     close: () => Promise<void>;
@@ -28,6 +30,7 @@ export function createContainer(config: Config): Container {
         checks: createChecksRepository(db),
         extensionEvents: createExtensionEventsRepository(db),
         reservationLog: createReservationLogRepository(db),
+        calendarSnapshots: createCalendarSnapshotRepository(db),
         summary: createSummaryRepository(db),
         pingDb: async () => {
             await db.execute(sql`select 1`);

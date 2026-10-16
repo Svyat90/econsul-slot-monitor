@@ -17,11 +17,12 @@ const emptySummary = {
 function fakeDeps(patch: Partial<AppDeps> = {}): AppDeps {
     return {
         config,
-        scheduleLog: { insertMany: async (entries) => entries.length, list: async () => emptyPage, listAll: async () => [] },
+        scheduleLog: { insertMany: async (entries) => entries.length, list: async () => ({ ...emptyPage, total: 0 }), listAll: async () => [] },
         requestLog: { insertMany: async (entries) => entries.length, list: async () => emptyPage },
-        checks: { insertMany: async (entries) => entries.length, list: async () => emptyPage },
+        checks: { insertMany: async (entries) => entries.length, list: async () => ({ ...emptyPage, total: 0 }) },
         extensionEvents: { insertMany: async (entries) => entries.length, list: async () => emptyPage },
-        reservationLog: { insertMany: async (entries) => entries.length, list: async () => emptyPage },
+        reservationLog: { insertMany: async (entries) => entries.length, list: async () => ({ ...emptyPage, total: 0 }) },
+        calendarSnapshots: { insertMany: async (entries) => entries.length, latest: async () => ({ snapshot: null, lastCheckAt: null }), list: async () => emptyPage },
         summary: { summary: async () => emptySummary },
         pingDb: async () => {},
         ...patch,
@@ -176,7 +177,7 @@ describe('module routes', () => {
         for (const url of ['/api/request-log', '/api/checks', '/api/extension-events', '/api/reservation-log', '/api/schedule-log']) {
             const res = await app.inject({ url });
             expect(res.statusCode, url).toBe(200);
-            expect(res.json()).toEqual(emptyPage);
+            expect(res.json()).toEqual(['/api/checks', '/api/reservation-log', '/api/schedule-log'].includes(url) ? { ...emptyPage, total: 0 } : emptyPage);
         }
         const summary = await app.inject({ url: `/api/summary?from=${from}&to=${to}` });
         expect(summary.statusCode).toBe(200);

@@ -4,3 +4,4 @@ export * from './monitor-checks.ts';
 export * from './reservation-events.ts';
 export * from './schedule-changes.ts';
 export * from './extension-events.ts';
+export * from './calendar-snapshots.ts';

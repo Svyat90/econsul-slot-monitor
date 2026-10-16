@@ -40,6 +40,7 @@ pnpm start            # http://localhost:3000
 | `econsul_requests` | кожен запит до e-Consul: метод, фільтри, статус, тривалість, результат | застосунок, розширення |
 | `monitor_checks` | кожна перевірка моніторингу: вид, вільних, нових | застосунок |
 | `reservation_events` | слоти, що зарезервували або звільнили між перевірками | застосунок |
+| `calendar_snapshots` | розклад установи й зайняті слоти послуги (стисло), лише коли змінились; останній знімок показує сторінка «Слоти» без моніторингу | застосунок |
 | `schedule_changes` | зміни розкладу консулів (зараз — `logs/schedule-changes.jsonl`) | застосунок |
 | `extension_events` | події розширення: сесія, чернетка, вибір слота | розширення |
 
@@ -52,11 +53,14 @@ pnpm start            # http://localhost:3000
 
 | Маршрут | Призначення |
 |---|---|
-| `POST /api/request-log`, `/api/checks`, `/api/reservation-log`, `/api/schedule-log`, `/api/extension-events` | пачки 1–100 записів → 204 |
+| `POST /api/request-log`, `/api/checks`, `/api/reservation-log`, `/api/calendar-snapshots`, `/api/schedule-log`, `/api/extension-events` | пачки 1–100 записів → 204 |
 | `GET /api/checks`, `/api/reservation-log`, `/api/schedule-log`, `/api/request-log` | історія з фільтрами, нові зверху |
+| `GET /api/checks`, `/api/reservation-log`, `/api/schedule-log` з `offset=` | номери сторінок: `offset` пропускає новіші записи, у відповіді ще `total` — скільки записів підходить під фільтри (без `before` і `offset`); `/api/checks` ще має `failed=true` (будь-який результат, крім `ok`) |
 | `GET /api/schedule-log.jsonl` | журнал змін розкладу файлом |
 | `GET /api/summary?date=` | зведення за день |
 | `GET /api/locations` | довідник установ і свят |
+| `GET /api/calendar-snapshots/latest?institutionCode&serviceCode` | останній знімок календаря (`snapshot`) і час останньої успішної перевірки (`lastCheckAt`) |
+| `GET /api/calendar-snapshots` | історія знімків без вмісту (`reservedCount`), з фільтрами установи, послуги й дат |
 | `GET /api/health` | чи живі сервер і база |
 
 ## Файли
