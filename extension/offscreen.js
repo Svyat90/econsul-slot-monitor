@@ -1,5 +1,5 @@
 // Plays sounds for the background service worker, which has no DOM and no Web Audio.
-// Messages: { target: 'offscreen', type: 'play', sound: 'glass' | 'chime' | 'selected', minMs?, maxMs? }
+// Messages: { target: 'offscreen', type: 'play', sound: 'glass' | 'chime' | 'draft' | 'reminder' | 'selected', minMs?, maxMs? }
 //           { target: 'offscreen', type: 'stop', force? }
 // The "selected" alarm repeats every second for at least minMs and at most maxMs. stop with
 // force (the user pressed "Вимкнути звук") ends it at once; without force (an automatic reason)
@@ -42,6 +42,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.sound === 'selected') startAlarm(message.minMs ?? 30000, message.maxMs ?? 120000);
         else if (message.sound === 'glass') EconsulSounds.glass(audio());
         else if (message.sound === 'chime') EconsulSounds.chime(audio());
+        else if (message.sound === 'draft') EconsulSounds.draftSaved(audio());
+        else if (message.sound === 'reminder') EconsulSounds.reminder(audio());
         sendResponse({ ok: true, state: audio().state });
     } else if (message.type === 'stop') {
         if (message.force) stopAlarm('muted');

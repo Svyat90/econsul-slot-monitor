@@ -7,6 +7,9 @@
 // tab goes from step 3 to the calendar with «Далі», selects the earliest free slot of the
 // list (picker.js), shows a banner and highlights «Підтвердити».
 //
+// When the background asks (create-draft), it fills steps 1–3 of a new application from the
+// app's settings (creator.js) and stops on step 4 with nothing selected: that is the draft.
+//
 // It books only when the person turned on auto-booking (settings.autoBook) and the slots are
 // not a test: then it presses «Підтвердити» (#finish-button) for the selected slot. Never
 // «Підтверджую» or «Записатись в чергу очікування». «Далі» exists only on steps 1–3 and just
@@ -79,6 +82,33 @@
         send({ type: 'econsul:auth-check', token, ok, status });
     }
 
+    // GET /tasks/{taskId}: what the site knows about the application. { createdAt, finished,
+    // deleted } or { missing } (404); null when it could not be read
+    async function fetchTaskInfo(taskId, token) {
+        let info = null;
+        const startedAt = Date.now(), perfStart = performance.now();
+        let responded = false;
+        try {
+            const response = await fetch(`${API}/tasks/${encodeURIComponent(taskId)}`, { headers: { token }, cache: 'no-store' });
+            responded = true;
+            reportRequest('tasks', startedAt, perfStart, response.status);
+            if (response.status === 404) info = { missing: true };
+            else if (response.ok) {
+                const json = await response.json();
+                const task = json && json.data && !Array.isArray(json.data) ? json.data : json;
+                info = {
+                    createdAt: task.createdAt ? Date.parse(task.createdAt) : null,
+                    finished: !!task.finished,
+                    deleted: !!(task.deleted || task.isDeleted)
+                };
+            }
+        } catch (e) {
+            // network: report without the details
+            if (!responded) reportRequest('tasks', startedAt, perfStart, 0);
+        }
+        return info;
+    }
+
     // The tab shows an application: report it with its creation time from GET /tasks/{id}.
     // A sent application (finished) or a deleted one is not a draft.
     async function reportTask() {
@@ -90,26 +120,7 @@
         let info = null;
         if (token && !checkedTasks.has(taskId)) {
             checkedTasks.add(taskId);
-            const startedAt = Date.now(), perfStart = performance.now();
-            let responded = false;
-            try {
-                const response = await fetch(`${API}/tasks/${encodeURIComponent(taskId)}`, { headers: { token }, cache: 'no-store' });
-                responded = true;
-                reportRequest('tasks', startedAt, perfStart, response.status);
-                if (response.status === 404) info = { missing: true };
-                else if (response.ok) {
-                    const json = await response.json();
-                    const task = json && json.data && !Array.isArray(json.data) ? json.data : json;
-                    info = {
-                        createdAt: task.createdAt ? Date.parse(task.createdAt) : null,
-                        finished: !!task.finished,
-                        deleted: !!(task.deleted || task.isDeleted)
-                    };
-                }
-            } catch (e) {
-                // network: report without the details
-                if (!responded) reportRequest('tasks', startedAt, perfStart, 0);
-            }
+            info = await fetchTaskInfo(taskId, token);
         }
         send({ type: 'econsul:task', url: location.origin + location.pathname, taskId, step, info });
     }
@@ -135,7 +146,7 @@
     // Content script messages show in the page's DevTools console
     const log = text => console.info('[e-Consul Helper]', text);
 
-    async function selectSlot({ jobId, taskId, slots, autoBook }) {
+    async function selectSlot({ jobId, taskId, slots, autoBook, confirmTries }) {
         if (job) return;
         job = jobId;
         log(`select-slot: ${slots.length} slot(s), earliest ${slots[0].date} ${slots[0].time}${autoBook ? ', auto-booking' : ''}`);
@@ -154,7 +165,7 @@
             let booked;
             try {
                 log('auto-booking: pressing «Підтвердити»');
-                booked = await EconsulPicker.confirm(result.slot);
+                booked = await EconsulPicker.confirm(result.slot, log, confirmTries);
                 log('auto-booking result: ' + JSON.stringify(booked));
             } catch (e) {
                 booked = { error: 'exception: ' + e.message };
@@ -172,6 +183,26 @@
         } else {
             send({ type: 'econsul:slot-result', jobId, ok: false, error: result.error, tried: result.tried || [] });
         }
+    }
+
+    // ---- Draft creation ----
+
+    let draftJob = null; // the running create-draft
+
+    // Steps 1–3 of the application this tab shows (the background opened /tasks/create/…)
+    async function createDraft({ jobId, selection }) {
+        if (draftJob) return;
+        draftJob = jobId;
+        log(`create-draft: ${selection.institutionName}, ${selection.serviceName}`);
+        let result;
+        try {
+            result = await EconsulCreator.createDraft(selection, log);
+        } catch (e) {
+            result = { error: 'exception: ' + e.message };
+        }
+        log(result.error ? `draft not created: ${result.error}` : 'draft created (step 4, nothing selected)');
+        draftJob = null;
+        send({ type: 'econsul:draft-result', jobId, ok: !result.error, error: result.error || null });
     }
 
     // Design A: blue banner on top with the selected slot, the alarm time and «Вимкнути
@@ -287,8 +318,20 @@
 
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.type === 'ping') {
-            sendResponse({ ok: true, taskId: (location.pathname.match(TASK_PATH_RE) || [])[1] || null, busy: !!job });
+            sendResponse({ ok: true, taskId: (location.pathname.match(TASK_PATH_RE) || [])[1] || null, path: location.pathname, busy: !!job || !!draftJob });
             return;
+        }
+        if (message.type === 'create-draft') {
+            createDraft(message);
+            sendResponse({ ok: true, busy: draftJob !== message.jobId });
+            return;
+        }
+        if (message.type === 'check-task') {
+            // Is the application still a draft? Answers { info } (see fetchTaskInfo)
+            const token = readToken();
+            if (!token) sendResponse({ info: null });
+            else fetchTaskInfo(message.taskId, token).then(info => sendResponse({ info }));
+            return true;
         }
         if (message.type === 'select-slot') {
             selectSlot(message);

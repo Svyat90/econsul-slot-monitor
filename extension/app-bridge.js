@@ -1,4 +1,4 @@
-// Content script on http://localhost:3000/*: a bridge between the page of the app (slots.html)
+// Content script on http://localhost:4000/*: a bridge between the page of the app (slots.html)
 // and the background. The page talks to it with window.postMessage, so it does not need the
 // extension ID. Only messages from this window and this origin with source 'econsul-app' are
 // passed on; replies go back to this origin only.

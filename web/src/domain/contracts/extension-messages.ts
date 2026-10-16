@@ -35,9 +35,25 @@ export const extMessageSchema = z.discriminatedUnion('type', [
   }),
   ext('ext:token', { token: z.string().min(1), exp: z.number().nullable().optional() }),
   ext('ext:draft', { draft: draftSchema.nullable() }),
+  // The extension fills steps 1–3 of a new application itself: running, failed (with the reason), or null when done / idle
+  ext('ext:draft-job', {
+    status: z.enum(['running', 'failed']).nullable(),
+    error: z.string().nullable().optional(),
+    text: z.string().nullable().optional(),
+  }),
   ext('ext:mute', {}),
+  // The reminder fired shortly before the location opens new days (`at`: the opening moment, epoch ms)
+  ext('ext:alarm', { at: z.number(), opening: z.string().nullable().optional() }),
   ext('ext:slots-received', { count: z.number() }),
-  ext('ext:settings', { autoBook: z.boolean(), paused: z.boolean() }),
+  ext('ext:settings', {
+    autoBook: z.boolean(),
+    paused: z.boolean(),
+    // v0.5: a draft made after a login, and the alarm that makes one before the location opens
+    autoDraft: z.boolean().optional(),
+    autoMonitor: z.boolean().optional(),
+    alarmEnabled: z.boolean().optional(),
+    alarmLeadMin: z.number().optional(),
+  }),
   ext('ext:slot-selected', { slot: slotSchema }),
   ext('ext:slot-booked', { slot: slotSchema }),
   ext('ext:slot-failed', {
@@ -93,8 +109,17 @@ export const appMessageSchema = z.discriminatedUnion('type', [
   app('app:monitor', { audioReady: z.boolean(), monitor: monitorSchema }),
   app('app:received', { exp: z.number().nullable().optional(), draftUrl: z.string().optional() }),
   app('app:login', {}),
+  app('app:create-draft', {}),
   app('app:mute', {}),
   app('app:test-sound', { sound: z.enum(['selected', 'glass']) }),
-  app('app:settings', { patch: z.object({ autoBook: z.boolean() }) }),
+  app('app:settings', {
+    patch: z.object({
+      autoBook: z.boolean().optional(),
+      autoDraft: z.boolean().optional(),
+      autoMonitor: z.boolean().optional(),
+      alarmEnabled: z.boolean().optional(),
+      alarmLeadMin: z.number().optional(),
+    }),
+  }),
 ])
 export type AppMessage = z.infer<typeof appMessageSchema>

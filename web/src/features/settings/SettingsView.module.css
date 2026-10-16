@@ -227,6 +227,35 @@
     margin-top: 3px;
 }
 
+.alarm {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.alarmRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.alarmRow input[type='checkbox'] {
+    margin: 0;
+}
+
+/* the number field sits in the text line: narrower and lower than the form fields */
+.leadInput {
+    width: 64px;
+    height: 32px;
+    padding: 0 8px;
+    text-align: center;
+}
+
+.alarmHint {
+    padding-left: 24px; /* under the text, not under the checkbox */
+}
+
 .tests {
     display: flex;
     flex-wrap: wrap;

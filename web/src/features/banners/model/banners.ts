@@ -20,6 +20,41 @@ export function sessionBanner(
     return null;
 }
 
+const DRAFT_TTL_MS = 24 * 3600_000; // the site deletes an unsent draft a day after creation
+
+export type DraftBanner =
+    | { kind: 'creating' } // the extension is filling steps 1–3
+    | { kind: 'failed'; text: string | null }
+    | { kind: 'missing' } // monitoring runs, but there is no draft to pick a slot in
+    | { kind: 'expired'; at: number };
+
+// Monitoring finds slots, but the extension picks one only in a draft. Warn when there is none
+// (or the site has deleted it) while monitoring runs. Nothing without the extension, and nothing
+// while the session banner already asks to log in
+export function draftBanner(
+    extension: Pick<ExtensionState, 'connected' | 'auth' | 'draft' | 'draftJob'>,
+    monitorRunning: boolean,
+    nowMs: number,
+): DraftBanner | null {
+    const { connected, auth, draft, draftJob } = extension;
+    if (!connected || auth?.loggedIn !== true) return null;
+    if (draftJob?.status === 'running') return { kind: 'creating' };
+    if (draftJob?.status === 'failed') return { kind: 'failed', text: draftJob.text };
+    if (!monitorRunning) return null;
+    if (!draft) return { kind: 'missing' };
+    const expiresAt = draft.expiresAt ?? draft.savedAt + DRAFT_TTL_MS;
+    return nowMs >= expiresAt ? { kind: 'expired', at: expiresAt } : null;
+}
+
+const ALARM_AFTER_MS = 3 * 60_000; // the reminder lasts until a little after the opening
+
+// The reminder fired and the opening is near: the session banner adds the opening time, and a
+// monitor that is not running gets its own banner. Gone as soon as the monitor runs, or the
+// opening has passed
+export function alarmActive(alarm: ExtensionState['alarm'], nowMs: number): alarm is { at: number } {
+    return alarm !== null && nowMs < alarm.at + ALARM_AFTER_MS;
+}
+
 const WEEKDAYS = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 
 // ['2027-03-31 09:50', '2027-03-31 11:40'] -> 'ср 31.03 09:50, 11:40'; days separated by ' · '

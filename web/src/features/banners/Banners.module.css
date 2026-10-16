@@ -29,6 +29,12 @@
     --banner-color: var(--color-fast);
 }
 
+.info {
+    background: var(--color-accent-bg);
+    border-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-accent-bg));
+    --banner-color: var(--color-accent);
+}
+
 .success {
     background: var(--color-success-bg);
     border-color: color-mix(in srgb, var(--color-success) 30%, var(--color-success-bg));

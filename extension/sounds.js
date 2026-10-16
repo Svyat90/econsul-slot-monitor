@@ -1,6 +1,8 @@
 // Sound generators (Web Audio, no files). The glass sound is the same as playSessionSound()
 // in slots.html: keep the two copies in sync. The three alerts must be easy to tell apart:
-// chime = new slots, double beeps = slot selected, broken glass = session ended.
+// chime = new slots, double beeps = slot selected, broken glass = session ended, soft low
+// two-note "ding-dong" = draft saved (calm: nothing to do right now), three bell strokes = a
+// reminder before the location opens (log in / start the monitor).
 const EconsulSounds = (() => {
     // Free slots: bright rising chime (A5–C#6–E6), three times. Same as playSlotSound() in slots.html
     function chime(ctx) {
@@ -23,6 +25,24 @@ const EconsulSounds = (() => {
         tone(ctx, 1568, at + 0.4, 0.09, 0.28, 'triangle');
         tone(ctx, 2093, at + 0.53, 0.09, 0.28, 'triangle');
         return 1;
+    }
+
+    // Draft saved: two soft low notes going up (E5, A5), sine with a slow decay; once
+    function draftSaved(ctx) {
+        const at = ctx.currentTime + 0.05;
+        tone(ctx, 659, at, 0.45, 0.28, 'sine', 0.015);
+        tone(ctx, 880, at + 0.28, 0.7, 0.28, 'sine', 0.015);
+        return 1.1;
+    }
+
+    // Reminder: three strokes of a low bell (C5 with an octave overtone), 0.6 s apart
+    function reminder(ctx) {
+        const start = ctx.currentTime + 0.05;
+        for (let i = 0; i < 3; i++) {
+            tone(ctx, 523, start + i * 0.6, 0.55, 0.3, 'sine', 0.01);
+            tone(ctx, 1046, start + i * 0.6, 0.35, 0.12, 'sine', 0.01);
+        }
+        return 1.9;
     }
 
     // Session ended: broken glass, twice. A burst of high-passed white noise with a sharp decay,
@@ -77,5 +97,5 @@ const EconsulSounds = (() => {
         osc.stop(at + duration + 0.02);
     }
 
-    return { chime, selectedBeat, glass };
+    return { chime, selectedBeat, glass, draftSaved, reminder };
 })();

@@ -107,6 +107,25 @@ var EconsulPicker = (() => {
     // for a while: «Далі» 4 s after the load failed validation on the live site
     const MIN_PAGE_AGE_MS = 6000;
 
+    // When new days open the site is loaded by everyone who tries to book and answers many times
+    // slower (tens of seconds instead of a few). Every wait below is generous on purpose: giving
+    // up early and starting over only adds load and loses the slot's place in the race
+    const STEP_WAIT_MS = 90 * 1000;       // the form of a step appears
+    const NEXT_CLICK_WAIT_MS = 30 * 1000; // «Далі» becomes active
+    const STEP_MOVE_WAIT_MS = 45 * 1000;  // the address changes after «Далі», before it is pressed again
+    const CHECKS_WAIT_MS = 120 * 1000;    // the site's own checks after «Далі» («Зачекайте…»)
+    const CALENDAR_WAIT_MS = 180 * 1000;  // the calendar shows slots after «Відбувається пошук…»
+    const WEEK_WAIT_MS = 15 * 1000;
+
+    // Really on the calendar: the address says step 4, step 4 has no «Далі», and the page shows
+    // the search, slots, the «no time» text or «Підтвердити». A direct address of step 4 shows
+    // step 4 for a moment and then sends the browser back to step 3 («Далі» is there)
+    function onCalendar() {
+        if (currentStep() !== CALENDAR_STEP || document.getElementById('next-step-button')) return false;
+        return !!(document.getElementById('finish-button') || slotButtons(document).length
+            || /пошук активних слотів/i.test(mainText()) || NO_TIME_RE.test(mainText()) || UNAVAILABLE_RE.test(mainText()));
+    }
+
     // Steps 1–3 → step 4. «Далі» there only saves the step and runs its checks. A click before
     // the form is filled from the saved document fails validation (the site logs
     // validation.errors and stays): wait for the page to settle and press again if needed
@@ -117,9 +136,15 @@ var EconsulPicker = (() => {
                 if (s === CALENDAR_STEP) return s;
                 if (STEPS_BEFORE_CALENDAR.includes(s) && document.getElementById('next-step-button')) return s;
                 return null;
-            }, 30000);
+            }, STEP_WAIT_MS);
             if (!step) return { error: 'form-not-loaded' };
-            if (step === CALENDAR_STEP) return {};
+            if (step === CALENDAR_STEP) {
+                // do not trust the address alone: see onCalendar
+                await sleep(3000);
+                if (onCalendar()) return {};
+                log('the address says step 4, the page is not on the calendar: going on from the step it shows');
+                continue;
+            }
             let moved = false;
             for (let attempt = 1; attempt <= 3 && !moved; attempt++) {
                 const age = performance.now();
@@ -128,16 +153,16 @@ var EconsulPicker = (() => {
                 if (currentStep() !== step) { moved = true; break; }
                 if (UNAVAILABLE_RE.test(mainText())) return { error: 'unavailable' };
                 log(`step ${step}: Далі (${attempt})`);
-                if (!await waitFor(clickNext, 15000)) return { error: 'next-disabled' };
+                if (!await waitFor(clickNext, NEXT_CLICK_WAIT_MS)) return { error: 'next-disabled' };
                 // The site's own checks after «Далі» can take a while; without them nothing
                 // happening for 8 s means the click was not taken
                 moved = !!await waitFor(() => {
                     if (currentStep() !== step) return true;
                     if (UNAVAILABLE_RE.test(mainText())) return true;
                     return null;
-                }, 8000);
-                if (!moved) log(`step ${step}: still here after 8 s${CHECKING_RE.test(mainText()) ? ', the site is checking' : ''}`);
-                if (!moved && CHECKING_RE.test(mainText())) moved = !!await waitFor(() => currentStep() !== step || UNAVAILABLE_RE.test(mainText()), 45000);
+                }, STEP_MOVE_WAIT_MS);
+                if (!moved) log(`step ${step}: still here after ${STEP_MOVE_WAIT_MS / 1000} s${CHECKING_RE.test(mainText()) ? ', the site is checking' : ''}`);
+                if (!moved && CHECKING_RE.test(mainText())) moved = !!await waitFor(() => currentStep() !== step || UNAVAILABLE_RE.test(mainText()), CHECKS_WAIT_MS);
             }
             if (!moved) return { error: 'step-stuck' };
             if (currentStep() === step) return { error: 'unavailable' };
@@ -145,14 +170,17 @@ var EconsulPicker = (() => {
         return currentStep() === CALENDAR_STEP ? {} : { error: 'step-stuck' };
     }
 
+    // 'left': the page went back to a step with «Далі» (see onCalendar), the caller presses it again
     async function waitForCalendar() {
+        const since = Date.now();
         return waitFor(() => {
             if (slotButtons(document).length) return 'slots';
+            if (Date.now() - since > 3000 && STEPS_BEFORE_CALENDAR.includes(currentStep()) && document.getElementById('next-step-button')) return 'left';
             const text = mainText();
             if (NO_TIME_RE.test(text)) return 'no-time';
             if (UNAVAILABLE_RE.test(text)) return 'unavailable';
             return null;
-        }, 60000, 300);
+        }, CALENDAR_WAIT_MS, 300);
     }
 
     async function openWeek(isoDate) {
@@ -160,7 +188,7 @@ var EconsulPicker = (() => {
         const chip = weekChips().find(w => w.from <= isoDate && isoDate <= w.to);
         if (!chip) return false;
         chip.el.click();
-        return !!await waitFor(() => dayGroup(isoDate), 5000);
+        return !!await waitFor(() => dayGroup(isoDate), WEEK_WAIT_MS);
     }
 
     async function expandDay(isoDate) {
@@ -171,7 +199,7 @@ var EconsulPicker = (() => {
             await waitFor(() => {
                 const g = dayGroup(isoDate);
                 return g && ![...g.querySelectorAll('button')].some(b => /^Показати ще/.test(b.textContent.trim()));
-            }, 3000);
+            }, 10000);
         }
         return dayGroup(isoDate);
     }
@@ -193,17 +221,22 @@ var EconsulPicker = (() => {
         const box = clearAllBox();
         if (!box) return;
         box.click();
-        await waitFor(() => !clearAllBox(), 3000);
+        await waitFor(() => !clearAllBox(), 10000);
     }
 
     // slots: [{ date: 'YYYY-MM-DD', time: 'HH:MM' }], earliest first. Selects the first one the
     // calendar shows as free. Returns { slot, element } or { error, tried }
     async function pick(slots, log = () => {}) {
-        const reached = await reachCalendar(log);
-        if (reached.error) return reached;
-        log('calendar step, waiting for slots');
-        const state = await waitForCalendar();
-        if (state !== 'slots') return { error: state || 'calendar-not-loaded' };
+        let state = null;
+        for (let round = 1; round <= 3; round++) {
+            const reached = await reachCalendar(log);
+            if (reached.error) return reached;
+            log('calendar step, waiting for slots');
+            state = await waitForCalendar();
+            if (state !== 'left') break;
+            log(`back on a step before the calendar (round ${round}): pressing «Далі» again`);
+        }
+        if (state !== 'slots') return { error: state === 'left' ? 'step-stuck' : (state || 'calendar-not-loaded') };
         log('calendar loaded');
 
         const tried = [];
@@ -222,7 +255,7 @@ var EconsulPicker = (() => {
                 await clearSelection();
                 const target = findSlot(date, time);
                 if (target && !isSelected(target)) target.click();
-                const selected = await waitFor(() => { const t = findSlot(date, time); return t && isSelected(t) && t; }, 3000);
+                const selected = await waitFor(() => { const t = findSlot(date, time); return t && isSelected(t) && t; }, 10000);
                 if (selected) return { slot: { date, time }, element: selected, tried };
                 tried.push(`${date} ${time}: click did not select`);
             }
@@ -239,7 +272,7 @@ var EconsulPicker = (() => {
     const DONE_RE = /Дякуємо|обробляємо ваш запит/i;
 
     function alertTexts() {
-        return [...document.querySelectorAll('[role=alert], [role=alertdialog], .MuiAlert-message, .MuiSnackbar-root')]
+        return [...document.querySelectorAll('[role=alert], [role=alertdialog], [role=dialog], .MuiAlert-message, .MuiSnackbar-root, .MuiDialog-root')]
             .map(el => el.innerText.trim()).filter(Boolean);
     }
 
@@ -253,24 +286,58 @@ var EconsulPicker = (() => {
         return null;
     }
 
-    async function confirm(slot) {
+    // The site's own line near the buttons («Сервіс недоступний. Скористайтеся послугою пізніше»): it is
+    // plain text, not an alert, and is what a loaded site answers to «Підтвердити»
+    function unavailableText() {
+        const line = [...document.querySelectorAll('main *')]
+            .find(el => !el.children.length && UNAVAILABLE_RE.test(el.textContent) && el.textContent.length < 300);
+        return line ? line.textContent.trim() : '';
+    }
+
+    // «Підтвердити» is pressed again when the site says it is unavailable (not booked yet), like a person
+    // would: up to CONFIRM_TRIES times with a growing pause. It is never pressed again after any other
+    // answer or silence: a booking that may be going through must not be repeated
+    const CONFIRM_TRIES = 6; // the default; the background passes fewer outside the opening window
+    const CONFIRM_PAUSE_MS = 8000;
+    const ANSWER_WAIT_MS = 240000; // a loaded site may take minutes to answer a booking: not an error yet
+
+    async function confirm(slot, log = () => {}, tries = CONFIRM_TRIES) {
+        let presses = 0;
         let error = checkReady(slot);
         if (error) return { error };
         await sleep(SAVE_PAUSE_MS);
-        error = checkReady(slot);
-        if (error) return { error };
-        const before = new Set(alertTexts());
-        document.getElementById('finish-button').click();
-        const outcome = await waitFor(() => {
-            if (DONE_RE.test(document.body.innerText)) return 'done';
-            const fresh = alertTexts().filter(t => !before.has(t));
-            if (fresh.length) return 'alert';
-            if (currentStep() !== CALENDAR_STEP) return 'left-calendar';
-            return null;
-        }, 90000, 500);
-        const text = (outcome === 'alert' ? alertTexts().filter(t => !before.has(t)).join(' | ') : (document.querySelector('main') || document.body).innerText).slice(0, 500);
-        if (outcome === 'done') return { ok: true, text };
-        return { error: outcome || 'no-outcome', text, path: location.pathname };
+        let last = null;
+        for (let attempt = 1; attempt <= tries; attempt++) {
+            error = checkReady(slot);
+            if (error) return { error, text: last ? last.text : undefined, presses };
+            const before = new Set(alertTexts());
+            const hadUnavailable = !!unavailableText();
+            log(`confirm: «Підтвердити» (${attempt}/${tries})`);
+            document.getElementById('finish-button').click();
+            presses++;
+            const clickedAt = Date.now();
+            const outcome = await waitFor(() => {
+                if (DONE_RE.test(document.body.innerText)) return 'done';
+                const fresh = alertTexts().filter(t => !before.has(t));
+                if (fresh.length) return 'alert';
+                if (currentStep() !== CALENDAR_STEP) return 'left-calendar';
+                // the line may already be there from the previous try: give the site a moment to answer anew
+                if (unavailableText() && (!hadUnavailable || Date.now() - clickedAt > 4000)) return 'unavailable';
+                return null;
+            }, ANSWER_WAIT_MS, 500);
+            if (outcome === 'done') return { ok: true, presses, text: (document.querySelector('main') || document.body).innerText.slice(0, 500) };
+            if (outcome === 'unavailable') {
+                last = { error: 'unavailable', text: unavailableText().slice(0, 300), path: location.pathname };
+                log(`confirm: the site says «${last.text}»`);
+                if (attempt < tries) await sleep(CONFIRM_PAUSE_MS * attempt);
+                continue;
+            }
+            const text = outcome === 'alert'
+                ? alertTexts().filter(t => !before.has(t)).join(' | ').slice(0, 500)
+                : (document.querySelector('main') || document.body).innerText.slice(0, 500);
+            return { error: outcome || 'no-outcome', text, path: location.pathname, presses };
+        }
+        return last ? { ...last, presses } : { error: 'no-outcome', presses };
     }
 
     return { pick, confirm, findSlot, isSelected, currentStep, CALENDAR_STEP };

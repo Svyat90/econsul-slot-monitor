@@ -69,15 +69,64 @@ describe('Banners', () => {
     it('new slots: lists them, opens the draft, can be closed, and the menu badge counts them', async () => {
         const { openBooking, setMonitorState } = setup({ monitor: { lastFresh: ['2027-03-31 09:50', '2027-03-31 11:40'] } });
         expect(screen.getByRole('status')).toHaveTextContent('Нові вільні слоти: ср 31.03 09:50, 11:40');
-        expect(screen.getByText('2 нові')).toBeInTheDocument();
+        expect(screen.getByLabelText('2 нові')).toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: 'Відкрити чернетку' }));
         expect(openBooking).toHaveBeenCalledOnce();
         await userEvent.click(screen.getByRole('button', { name: 'Закрити' }));
         expect(screen.queryByRole('status')).not.toBeInTheDocument();
-        expect(screen.getByText('2 нові')).toBeInTheDocument(); // the badge stays
+        expect(screen.getByLabelText('2 нові')).toBeInTheDocument(); // the badge stays
 
         setMonitorState({ lastFresh: ['2027-04-01 10:00'] });
         expect(await screen.findByRole('status')).toHaveTextContent('чт 01.04 10:00');
+    });
+
+    it('monitoring without a draft: warns and the button asks the extension to create one', async () => {
+        const { extensionLink } = setup({
+            monitor: { running: true },
+            extension: { connected: true, auth: { loggedIn: true, exp: NOW + 5 * 3600_000, reason: null }, draft: null },
+        });
+        expect(screen.getByRole('alert')).toHaveTextContent('Немає чернетки.');
+        await userEvent.click(screen.getByRole('button', { name: 'Створити чернетку' }));
+        expect(extensionLink.createDraft).toHaveBeenCalledOnce();
+    });
+
+    it('while the extension makes the draft: says so and has no button; a failure shows the reason', () => {
+        setup({
+            monitor: { running: true },
+            extension: { connected: true, auth: { loggedIn: true, exp: NOW + 5 * 3600_000, reason: null }, draftJob: { status: 'running', text: null } },
+        });
+        expect(screen.getByRole('alert')).toHaveTextContent('Створюю чернетку…');
+        expect(screen.queryByRole('button', { name: 'Створити чернетку' })).not.toBeInTheDocument();
+    });
+
+    it('a failed creation shows the reason from the extension', () => {
+        setup({
+            extension: { connected: true, auth: { loggedIn: true, exp: NOW + 5 * 3600_000, reason: null }, draftJob: { status: 'failed', text: 'Послугу не знайдено.' } },
+        });
+        expect(screen.getByRole('alert')).toHaveTextContent('Чернетку не створено. Послугу не знайдено.');
+    });
+
+    it('the reminder before the opening: the monitor is not running → asks to start it, and the button starts it', async () => {
+        const { monitor } = setup({
+            extension: { connected: true, auth: { loggedIn: true, exp: NOW + 5 * 3600_000, reason: null }, alarm: { at: NOW + 5 * 60_000 }, draft: { url: 'u', savedAt: NOW, expiresAt: NOW + 3600_000 } },
+        });
+        expect(screen.getByRole('alert')).toHaveTextContent(/Скоро відкриття о \d{2}:\d{2}\. Моніторинг не запущено\./);
+        await userEvent.click(screen.getByRole('button', { name: 'Запустити' }));
+        expect(monitor.start).toHaveBeenCalledOnce();
+    });
+
+    it('the reminder with a running monitor shows nothing', () => {
+        setup({
+            monitor: { running: true },
+            extension: { connected: true, auth: { loggedIn: true, exp: NOW + 5 * 3600_000, reason: null }, alarm: { at: NOW + 5 * 60_000 }, draft: { url: 'u', savedAt: NOW, expiresAt: NOW + 3600_000 } },
+        });
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('not logged in at the reminder: one banner, with the opening time', () => {
+        setup({ extension: { connected: true, auth: { loggedIn: false, exp: null, reason: null }, alarm: { at: NOW + 5 * 60_000 } } });
+        expect(screen.getAllByRole('alert')).toHaveLength(1);
+        expect(screen.getByRole('alert')).toHaveTextContent(/Увійдіть на e-consul\..*Нові дні відкриваються о \d{2}:\d{2}\./);
     });
 
     it('no institution: the empty state links to settings', () => {

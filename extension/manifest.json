@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
   "name": "e-Consul Helper",
-  "version": "0.4.0",
+  "version": "0.8.0",
   "description": "Передає токен сесії e-consul у локальний застосунок моніторингу слотів, вибирає знайдений слот у чернетці й сповіщає, коли треба увійти.",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "alarms", "notifications", "offscreen", "tabs", "scripting"],
   "host_permissions": [
     "https://e-consul.gov.ua/*",
     "https://my.e-consul.gov.ua/*",
-    "http://localhost:3000/*"
+    "http://localhost:4000/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -16,11 +16,11 @@
   "content_scripts": [
     {
       "matches": ["https://e-consul.gov.ua/*"],
-      "js": ["picker.js", "econsul.js"],
+      "js": ["picker.js", "creator.js", "econsul.js"],
       "run_at": "document_idle"
     },
     {
-      "matches": ["http://localhost:3000/*"],
+      "matches": ["http://localhost:4000/*"],
       "js": ["app-bridge.js"],
       "run_at": "document_start"
     }

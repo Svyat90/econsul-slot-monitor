@@ -7,7 +7,7 @@
 // alarm. A record never holds the token, a URL with it or applicant data; writing to the journal
 // never throws and never blocks the extension's work.
 const Telemetry = (() => {
-    const API = 'http://localhost:3000';
+    const API = 'http://localhost:4000';
     const QUEUE_KEY = 'telemetryQueue';
     const QUEUE_MAX = 2000;
     const BATCH_MAX = 100;

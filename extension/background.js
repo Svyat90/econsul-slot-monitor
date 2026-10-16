@@ -8,10 +8,12 @@
 // It never presses "Підтверджую" or "Записатись в чергу очікування" and does not call the API
 // to book or to write task documents. It selects a slot by clicks on the site (econsul.js, picker.js): «Далі» on step 3
 // and the slot on step 4; the site saves that itself. See extension/plans/extension-plan.md, section 3.
+// A new draft (steps 1–3 of «Запис на візит») is also made by clicks (creator.js): after a login
+// when there is no usable draft, and when the app or the popup asks. Settings come from the app.
 
 importScripts('telemetry.js'); // Telemetry: own requests and events for the local server
 
-const APP_ORIGIN = 'http://localhost:3000';
+const APP_ORIGIN = 'http://localhost:4000';
 const ECONSUL_TABS = 'https://e-consul.gov.ua/*';
 // Without a session the site sends the user to id.e-consul.gov.ua and returns afterwards
 const LOGIN_URL = 'https://e-consul.gov.ua/';
@@ -23,10 +25,45 @@ const AUTH_CHECK_MIN_MS = 10 * 60 * 1000; // GET auth/me every 10–15 min, rand
 const AUTH_CHECK_MAX_MS = 15 * 60 * 1000;
 const VERIFY_THROTTLE_MS = 10 * 60 * 1000; // re-check a token the API rejected at most this often
 const SELECTED_SOUND = { minMs: 30 * 1000, maxMs: 2 * 60 * 1000 };
-const DEFAULT_SETTINGS = { draftTime: '08:45', paused: false, autoBook: false };
-const SELECT_TIMEOUT_MS = 3 * 60 * 1000;  // a selection without a result by then has failed
+// alarmLeadMin: the reminder fires this many minutes before the current location opens new days
+// autoMonitor: after a login the app starts monitoring by itself (off until the person turns it on)
+const DEFAULT_SETTINGS = { paused: false, autoBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5 };
+const ALARM_LEAD_MIN = 1, ALARM_LEAD_MAX = 60;
+// When new days open the site is loaded by everyone who tries to book and answers many times
+// slower: the timeouts are generous and a failed selection starts over (see RETRYABLE)
+const SELECT_TIMEOUT_MS = 10 * 60 * 1000; // a selection without a result by then has failed
 const SELECTED_HOLD_MS = 3 * 60 * 1000;   // new slots do not replace a selected one this soon
-const TAB_READY_MS = 45 * 1000;           // the draft page loads and econsul.js answers
+const TAB_READY_MS = 120 * 1000;          // the draft page loads and econsul.js answers
+const LOGIN_DRAFT_DELAY_MS = 12 * 1000;   // after a login: tabs report their draft before we decide to make one
+const DRAFT_JOB_TIMEOUT_MS = 8 * 60 * 1000; // creating a draft takes ~20 s (minutes on a loaded site); no result by then is a failure
+const DRAFT_SOUND_MAX_AGE_MS = 20 * 60 * 1000; // «draft saved» sounds only for a draft this young
+
+// Errors that may be the site's load, not a lost slot: the selection starts over with a pause that
+// doubles (5, 10, 20, 40 s), up to MAX_SELECT_ATTEMPTS tries. Nothing else is retried: «not-found»
+// means the slot is gone, and a booking is never repeated
+const RETRYABLE = new Set(['tab-not-ready', 'form-not-loaded', 'next-disabled', 'step-stuck', 'unavailable', 'calendar-not-loaded', 'timeout']);
+const MAX_SELECT_ATTEMPTS = 5;
+
+// Do not hammer the site with a slot that does not book (it may hang on the site's side or be a
+// trap for bots: the same two slots stayed free for days and always answered «Сервіс недоступний»).
+// - A press of «Підтвердити» answered «unavailable» (or any failure) puts the SLOT in quarantine;
+//   every next failure makes it longer: 10 min, 30 min, 2 h, 6 h, 24 h. It is skipped (not even
+//   selected) until then, also across restarts of the monitor, which announces it again as new.
+// - Outside the opening of new days a try is 3 presses, in the window (2 min before to 20 min after
+//   the opening) 6: then the site is loaded and a slot may really come through.
+// - At most MAX_PRESSES_PER_HOUR presses over all slots; over that, slots are selected but not booked.
+// A booked slot clears its history. Kept in chrome.storage.local (`bookingHistory`, `pressLog`).
+const QUARANTINE_MS = [10, 30, 120, 360, 1440].map(minutes => minutes * 60 * 1000);
+const MAX_PRESSES_PER_HOUR = 12;
+const TRIES_IN_WINDOW = 6;
+const TRIES_OUTSIDE_WINDOW = 3;
+const WINDOW_BEFORE_MS = 2 * 60 * 1000;
+const WINDOW_AFTER_MS = 20 * 60 * 1000;
+const RETRY_PAUSE_MS = 5 * 1000;
+// The same for creating a draft: the site may be slow, or a login may still be settling
+const DRAFT_RETRYABLE = new Set(['tab-not-ready', 'form-not-loaded', 'country-not-found', 'country-not-found-missing', 'institution-not-found', 'institution-not-found-missing', 'service-not-found', 'service-not-found-missing', 'check-timeout', 'unavailable', 'next-disabled', 'step-stuck', 'timeout']);
+const MAX_DRAFT_ATTEMPTS = 3;
+const DRAFT_RETRY_PAUSE_MS = 10 * 1000;
 
 // Why a slot was not selected; shown in the popup and the notification
 const SELECT_ERRORS = {
@@ -48,7 +85,31 @@ const SELECT_ERRORS = {
     'no-confirm-button': 'Немає активної кнопки «Підтвердити».',
     'alert': 'Сайт показав повідомлення.',
     'left-calendar': 'Сайт пішов з календаря без «Дякуємо».',
-    'no-outcome': 'Після «Підтвердити» сайт нічого не показав за 90 с.'
+    'no-outcome': 'Після «Підтвердити» сайт нічого не показав за 240 с.',
+    'quarantined': 'Ці слоти недавно не забронювались: пропускаю їх, щоб не навантажувати сайт.'
+};
+// Why a draft was not created; shown in the popup, the app and the notification
+const DRAFT_ERRORS = {
+    'no-selection': 'Застосунок ще не передав установу й послугу. Відкрийте його й виберіть установу.',
+    'not-logged-in': 'Спершу увійдіть на e-consul.',
+    'tab-not-ready': 'Сторінка нової заявки не відповіла (можливо, сайт просить увійти).',
+    'form-not-loaded': 'Форма заявки не завантажилась.',
+    'applicant-incomplete': 'У профілі на e-consul не заповнені дані заявника (крок 1).',
+    'consent-not-set': 'Не вдалося поставити згоду на кроці 1.',
+    'country-not-found': 'Країну з налаштувань не знайдено у списку сайту.',
+    'country-not-found-missing': 'Поле «Країна» не знайдено на кроці 2.',
+    'institution-not-found': 'Установу з налаштувань не знайдено у списку сайту.',
+    'institution-not-found-missing': 'Поле «Консульська установа» не з’явилось на кроці 2.',
+    'service-not-found': 'Послугу з налаштувань не знайдено у списку сайту.',
+    'service-not-found-missing': 'Поле «Послуга» не знайдено на кроці 3.',
+    'check-timeout': 'Сайт довго перевіряє послугу.',
+    'unavailable': 'Сайт пише, що запис зараз недоступний.',
+    'self-not-set': 'Не вдалося вибрати «Для себе».',
+    'next-disabled': 'Кнопка «Далі» неактивна.',
+    'step-stuck': 'Сайт не перейшов на наступний крок.',
+    'wrong-step': 'Заявка відкрилась на несподіваному кроці.',
+    'timeout': 'Створення чернетки не завершилось вчасно.',
+    'busy': 'Зараз іде вибір слота.'
 };
 const VERSION = chrome.runtime.getManifest().version;
 
@@ -82,6 +143,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     const { settings } = await chrome.storage.local.get('settings');
     await chrome.storage.local.set({ settings: { ...DEFAULT_SETTINGS, ...settings } });
     renderBadge();
+    scheduleReleaseAlarm();
     // Tabs opened before the install or reload have no content scripts (or orphaned ones)
     for (const { js, matches } of chrome.runtime.getManifest().content_scripts) {
         for (const tab of await chrome.tabs.query({ url: matches })) {
@@ -89,11 +151,13 @@ chrome.runtime.onInstalled.addListener(async () => {
         }
     }
 });
-chrome.runtime.onStartup.addListener(() => { ensureAlarms(); renderBadge(); });
+chrome.runtime.onStartup.addListener(() => { ensureAlarms(); renderBadge(); scheduleReleaseAlarm(); });
 ensureAlarms();
 
 chrome.alarms.onAlarm.addListener(alarm => {
     if (alarm.name === 'tick') serial(onTick);
+    else if (alarm.name === 'draft-login') serial(() => maybeCreateDraft('login'));
+    else if (alarm.name === 'release-alarm') serial(onReleaseAlarm);
 });
 
 chrome.tabs.onRemoved.addListener(async tabId => {
@@ -122,7 +186,11 @@ async function updateAuth(update, opts = {}) {
     if (next.loggedIn === false && prev.loggedIn !== false) {
         await onLoggedOut(next, opts);
     } else if (next.loggedIn === true && (prev.loggedIn !== true || next.token !== prev.token)) {
-        if (prev.loggedIn !== true) Telemetry.event('session.logged-in');
+        if (prev.loggedIn !== true) {
+            Telemetry.event('session.logged-in');
+            // A login: make a draft if there is no usable one, after tabs had time to report theirs
+            chrome.alarms.create('draft-login', { when: Date.now() + LOGIN_DRAFT_DELAY_MS });
+        }
         chrome.notifications.clear('login');
         await sendToApps([authMessage(next), { type: 'ext:token', token: next.token, exp: next.exp }]);
     } else {
@@ -226,6 +294,10 @@ async function onSiteTask({ url, taskId, step, info }, tab) {
     }
     const same = draft && draft.taskId === taskId;
     const createdAt = (info && info.createdAt) || (same ? draft.createdAt : null);
+    // Several tabs may show applications (an abandoned half-filled one next to the new draft) and
+    // each repeats its report. The newest application stays the draft: another one replaces it
+    // only when it is known to be newer, or when we know nothing about the current one's age
+    if (draft && !same && draft.createdAt && !(createdAt && createdAt > draft.createdAt)) return;
     const next = {
         url, taskId, step,
         createdAt,
@@ -235,6 +307,7 @@ async function onSiteTask({ url, taskId, step, info }, tab) {
     };
     await chrome.storage.session.set({ draft: next });
     if (!same) Telemetry.event('draft.found', { taskId, step: step || null });
+    if (step === 'dateAndTimeVisitInfo' && !(same && draft.step === step)) await draftSavedSound(next);
     if (!same || next.createdAt !== draft.createdAt || next.url !== draft.url) await sendToApps([{ type: 'ext:draft', draft: publicDraft(next) }]);
 }
 
@@ -260,6 +333,229 @@ async function openDraft() {
     }
 }
 
+// The draft reached step 4 with nothing selected: it is saved and ready. One soft sound per
+// draft; not for a draft that slot picking only reopens, nor for an old one found after a reload
+async function draftSavedSound(draft) {
+    const { draftSounded, selection } = await chrome.storage.session.get(['draftSounded', 'selection']);
+    if (draftSounded === draft.taskId) return;
+    if (selection && selection.taskId === draft.taskId) return;
+    if (!draft.createdAt || Date.now() - draft.createdAt > DRAFT_SOUND_MAX_AGE_MS) return;
+    await chrome.storage.session.set({ draftSounded: draft.taskId });
+    Telemetry.event('draft.created', { taskId: draft.taskId, ageMs: Date.now() - draft.createdAt });
+    await playSound('draft');
+}
+
+// ---- Draft creation ----
+// draftJob: { status: 'running' | 'done' | 'failed', jobId, reason, tabId, error, startedAt, at }
+
+async function setDraftJob(job) {
+    await chrome.storage.session.set({ draftJob: job });
+    await sendToApps([draftJobMessage(job)]);
+    return job;
+}
+
+function draftJobMessage(job) {
+    if (!job || job.status === 'done') return { type: 'ext:draft-job', status: null };
+    return { type: 'ext:draft-job', status: job.status === 'retrying' ? 'running' : job.status, error: job.error || null, text: job.error ? (DRAFT_ERRORS[job.error] || job.error) : null };
+}
+
+async function getAppSelection() {
+    const { lastSelection = null } = await chrome.storage.local.get('lastSelection');
+    return lastSelection;
+}
+
+// Is there a draft worth keeping? None known, an expired one, or one the site has sent or
+// deleted does not count. The site is asked through a tab; no tab or no answer keeps the draft
+async function draftIsUsable() {
+    const { draft } = await chrome.storage.session.get('draft');
+    if (!draft) return false;
+    if (draft.expiresAt && draft.expiresAt <= Date.now()) return false;
+    const tab = await findEconsulTab();
+    if (!tab) return true;
+    const reply = await chrome.tabs.sendMessage(tab.id, { type: 'check-task', taskId: draft.taskId }).catch(() => null);
+    const info = reply && reply.info;
+    if (info && (info.missing || info.finished || info.deleted)) {
+        Telemetry.event('draft.gone', { taskId: draft.taskId, reason: info.missing ? 'missing' : info.finished ? 'finished' : 'deleted' });
+        await chrome.storage.session.remove('draft');
+        await sendToApps([{ type: 'ext:draft', draft: null }]);
+        return false;
+    }
+    return true;
+}
+
+// After a login: make a draft only when there is none usable
+async function maybeCreateDraft(reason) {
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    if (settings.autoDraft === false || settings.paused) return;
+    const auth = await getAuth();
+    if (auth.loggedIn !== true) return;
+    if (await draftIsUsable()) return;
+    await createDraft(reason);
+}
+
+// Opens a new application and fills steps 1–3 from the app's settings (institution, service).
+// reason: 'login' (the work tab that just logged in), 'app' / 'popup' (a new tab: the work tab
+// may be showing the current draft)
+async function createDraft(reason, attempt = 1) {
+    const { draftJob, selection } = await chrome.storage.session.get(['draftJob', 'selection']);
+    const now = Date.now();
+    if (draftJob && draftJob.status === 'running' && now - draftJob.startedAt < DRAFT_JOB_TIMEOUT_MS) return;
+    const job = { status: 'running', jobId: crypto.randomUUID(), reason, attempt, startedAt: now, at: now };
+    const busy = selection && ['running', 'booking'].includes(selection.status) && now - selection.startedAt < SELECT_TIMEOUT_MS;
+    if (busy) return draftFailed(job, 'busy');
+    if ((await getAuth()).loggedIn !== true) return draftFailed(job, 'not-logged-in');
+    const appSelection = await getAppSelection();
+    if (!appSelection) return draftFailed(job, 'no-selection');
+
+    await setDraftJob(job);
+    Telemetry.event('draft.create-started', { reason, institution: appSelection.institutionCode, service: appSelection.serviceCode }, { jobId: job.jobId });
+    let tab;
+    if (reason === 'login') tab = await openWorkTab(NEW_APPLICATION_URL);
+    else {
+        tab = await chrome.tabs.create({ url: NEW_APPLICATION_URL, active: true });
+        await chrome.windows.update(tab.windowId, { focused: true });
+    }
+    await setDraftJob({ ...job, tabId: tab.id });
+
+    // The site creates the task and moves to /tasks/{id}/applicantInfo; wait for econsul.js there
+    await new Promise(r => setTimeout(r, 2500));
+    const end = Date.now() + TAB_READY_MS;
+    let reply = null;
+    while (Date.now() < end) {
+        reply = await chrome.tabs.sendMessage(tab.id, { type: 'ping' }).catch(() => null);
+        if (reply && reply.ok && !reply.busy && /^\/tasks\/(?!create\/)[^/]+\//.test(reply.path || '')) break;
+        reply = null;
+        await new Promise(r => setTimeout(r, 1000));
+    }
+    if (!reply) return draftFailed({ ...job, tabId: tab.id }, 'tab-not-ready');
+    await chrome.tabs.sendMessage(tab.id, { type: 'create-draft', jobId: job.jobId, selection: appSelection }).catch(() => null);
+}
+
+async function draftFailed(job, error) {
+    const code = String(error).split(':')[0].slice(0, 50);
+    const attempt = job.attempt || 1;
+    const willRetry = DRAFT_RETRYABLE.has(code) && attempt < MAX_DRAFT_ATTEMPTS;
+    Telemetry.event('draft.create-failed', { error: code, reason: job.reason || null, attempt, willRetry, durationMs: job.startedAt ? Date.now() - job.startedAt : null }, { jobId: job.jobId });
+    if (willRetry) {
+        // A loaded site (or a login that is still settling): start over after a pause, quietly
+        await setDraftJob({ ...job, status: 'retrying', error, at: Date.now() });
+        setTimeout(() => serial(async () => {
+            const { draftJob } = await chrome.storage.session.get('draftJob');
+            if (!draftJob || draftJob.jobId !== job.jobId || draftJob.status !== 'retrying') return;
+            await createDraft(job.reason, attempt + 1);
+        }), DRAFT_RETRY_PAUSE_MS * attempt);
+        return;
+    }
+    await setDraftJob({ ...job, status: 'failed', error, at: Date.now() });
+    chrome.notifications.create('draft', {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: 'Чернетку не створено',
+        message: (DRAFT_ERRORS[error] || error) + ' Створіть її вручну на e-consul.',
+        requireInteraction: true,
+        priority: 2
+    });
+}
+
+// From econsul.js: steps 1–3 are over (ok) or stopped with an error code
+async function onDraftResult({ jobId, ok, error }) {
+    const { draftJob } = await chrome.storage.session.get('draftJob');
+    if (!draftJob || draftJob.jobId !== jobId) return;
+    if (!ok) return draftFailed(draftJob, error || 'step-stuck');
+    // The draft itself arrives as the tab reports step 4 (onSiteTask)
+    await setDraftJob({ ...draftJob, status: 'done', at: Date.now() });
+}
+
+// A creation without a result for too long has failed (the tab was closed, the page froze)
+async function checkDraftJobTimeout() {
+    const { draftJob } = await chrome.storage.session.get('draftJob');
+    if (draftJob && draftJob.status === 'running' && Date.now() - draftJob.startedAt > DRAFT_JOB_TIMEOUT_MS) await draftFailed(draftJob, 'timeout');
+}
+
+// ---- Release alarm ----
+// A reminder shortly before the current location opens new days (nextRelease of the app: its
+// opening moment in the user's time): log in if the session is gone, start the monitor if it is
+// not running. It creates nothing. The release comes from the app; it is kept in local storage
+// so the alarm is set again after a browser start, before the app is open.
+
+async function rememberNextRelease(release) {
+    if (!release || !Number.isFinite(release.at)) return;
+    const { nextRelease } = await chrome.storage.local.get('nextRelease');
+    // an opening that has begun is kept: the booking window counts from it
+    if (release.at <= Date.now()) await chrome.storage.local.set({ lastOpenAt: release.at });
+    if (nextRelease && nextRelease.at === release.at) return;
+    await chrome.storage.local.set({ nextRelease: { at: release.at, opening: release.opening || null } });
+    await scheduleReleaseAlarm();
+}
+
+// Sets (or clears) the alarm for the stored release. Returns when it fires, or null
+async function scheduleReleaseAlarm() {
+    const { settings = DEFAULT_SETTINGS, nextRelease = null } = await chrome.storage.local.get(['settings', 'nextRelease']);
+    const all = { ...DEFAULT_SETTINGS, ...settings };
+    const when = nextRelease && all.alarmEnabled !== false ? nextRelease.at - all.alarmLeadMin * 60 * 1000 : null;
+    const existing = await chrome.alarms.get('release-alarm');
+    if (!when || when <= Date.now()) {
+        if (existing) await chrome.alarms.clear('release-alarm');
+        return null;
+    }
+    if (!existing || Math.abs(existing.scheduledTime - when) > 1000) await chrome.alarms.create('release-alarm', { when });
+    return when;
+}
+
+// Did the app take the draft link? The app answers ext:draft with app:received (draftReceived).
+// Not yet: send the draft once more and give the app a moment
+async function draftBoundToApp() {
+    const bound = async () => {
+        const { draft, app } = await chrome.storage.session.get(['draft', 'app']);
+        return !!(draft && app && app.draftReceived && app.draftReceived.url === draft.url);
+    };
+    if (await bound()) return true;
+    const { draft } = await chrome.storage.session.get('draft');
+    await sendToApps([{ type: 'ext:draft', draft: publicDraft(draft) }]);
+    await new Promise(r => setTimeout(r, 2500));
+    return bound();
+}
+
+// The alarm: before the opening make sure everything is ready. Not logged in → remind to log
+// in; monitor not running → remind to start it; no usable draft (none, expired, deleted or sent
+// by the site, or one the app did not take) → make a fresh one. All in order — silence, the app
+// still gets ext:alarm and shows nothing then
+async function onReleaseAlarm() {
+    const { settings = DEFAULT_SETTINGS, nextRelease = null } = await chrome.storage.local.get(['settings', 'nextRelease']);
+    if (!nextRelease || settings.alarmEnabled === false) return;
+    if (Date.now() > nextRelease.at + 2 * 60 * 1000) return; // woke up from sleep after the opening: too late to remind
+    const auth = await getAuth();
+    const { app = null } = await chrome.storage.session.get('app');
+    const appOpen = await isAppConnected();
+    const running = !!(appOpen && app && app.monitor && app.monitor.running);
+    const at = nextRelease.at;
+    const time = new Date(at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+    const loggedIn = auth.loggedIn === true;
+    // Logged in: the draft must exist, be alive on the site and be bound to the app (when it is open)
+    let draftOk = true;
+    if (loggedIn) {
+        draftOk = await draftIsUsable();
+        if (draftOk && appOpen) draftOk = await draftBoundToApp();
+    }
+    Telemetry.event('alarm.fired', { loggedIn, monitorRunning: running, appOpen, draftOk, opensAt: time });
+    await sendToApps([{ type: 'ext:alarm', at, opening: nextRelease.opening || null }]);
+    // Not awaited: it takes ~20 s and the messages of other handlers wait in the queue behind us
+    if (loggedIn && !draftOk && settings.autoDraft !== false && !settings.paused) createDraft('alarm').catch(() => {});
+    if (loggedIn && running) return;
+    chrome.notifications.create('alarm', {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: loggedIn ? 'Скоро відкриття: запустіть моніторинг' : 'Скоро відкриття: увійдіть на e-consul',
+        message: `Нові дні відкриваються о ${time}. ` + (loggedIn
+            ? (appOpen ? 'Моніторинг не запущено: натисніть «Запустити» в застосунку.' : 'Відкрийте застосунок і запустіть моніторинг.')
+            : 'Сесії немає, моніторинг не працюватиме.'),
+        buttons: loggedIn ? [] : [{ title: 'Увійти' }],
+        requireInteraction: true,
+        priority: 2
+    });
+    await playSound('reminder');
+}
+
 // A draft the site deletes a day after creation: the journal gets one `draft.gone` when that
 // time has passed (the draft itself stays until the site says it is gone)
 async function checkDraftExpiry() {
@@ -274,6 +570,7 @@ async function checkDraftExpiry() {
 async function onTick() {
     Telemetry.flush();
     await checkDraftExpiry();
+    await checkDraftJobTimeout();
     const auth = await getAuth();
     if (auth.loggedIn === true && auth.exp && auth.exp <= Date.now()) {
         await updateAuth({ loggedIn: false, reason: 'expired' });
@@ -314,14 +611,24 @@ async function openWorkTab(url) {
     else tab = await chrome.tabs.create({ url, pinned: true, active: true });
     await chrome.windows.update(tab.windowId, { focused: true });
     await chrome.storage.session.set({ workTabId: tab.id });
+    return tab;
 }
 
 chrome.notifications.onButtonClicked.addListener(id => {
-    if (id === 'login') { openWorkTab(LOGIN_URL); chrome.notifications.clear(id); }
+    if (id === 'login' || id === 'alarm') { openWorkTab(LOGIN_URL); chrome.notifications.clear(id); }
 });
 chrome.notifications.onClicked.addListener(id => {
     if (id === 'login') { openWorkTab(LOGIN_URL); chrome.notifications.clear(id); }
+    if (id === 'alarm') { showApp(); chrome.notifications.clear(id); }
 });
+
+// Shows the tab of the app, or opens one
+async function showApp() {
+    const [tab] = await appTabs();
+    if (!tab) return chrome.tabs.create({ url: APP_ORIGIN + '/', active: true });
+    await chrome.tabs.update(tab.id, { active: true });
+    await chrome.windows.update(tab.windowId, { focused: true });
+}
 
 // ---- Badge ----
 
@@ -337,7 +644,7 @@ async function renderBadge(auth) {
     await chrome.action.setTitle({ title: auth.loggedIn === false ? 'e-Consul Helper: увійдіть на e-consul' : 'e-Consul Helper' });
 }
 
-// ---- App (slots.html on localhost:3000) ----
+// ---- App (slots.html on localhost:4000) ----
 
 async function appTabs() {
     return chrome.tabs.query({ url: APP_ORIGIN + '/*' });
@@ -380,15 +687,23 @@ async function onAppMessage(msg) {
         case 'app:hello': {
             await setApp({ audioReady: !!msg.audioReady });
             const { draft = null } = await chrome.storage.session.get('draft');
-            const replies = [{ type: 'ext:hello', version: VERSION }, authMessage(auth), { type: 'ext:draft', draft: publicDraft(draft) }, await settingsMessage()];
+            const { draftJob = null } = await chrome.storage.session.get('draftJob');
+            const replies = [{ type: 'ext:hello', version: VERSION }, authMessage(auth), { type: 'ext:draft', draft: publicDraft(draft) }, draftJobMessage(draftJob), await settingsMessage()];
             if (auth.loggedIn === true && auth.token) replies.push({ type: 'ext:token', token: auth.token, exp: auth.exp });
             return replies;
         }
         case 'app:monitor':
             await setApp({ audioReady: !!msg.audioReady, monitor: msg.monitor || null });
+            await rememberNextRelease(msg.monitor && msg.monitor.nextRelease);
             return [];
         case 'app:selection':
             await setApp({ selection: msg.selection || null });
+            // The settings a new draft is made from; kept for the next browser start, when the app is not open yet
+            if (msg.selection) await chrome.storage.local.set({ lastSelection: msg.selection });
+            return [];
+        case 'app:create-draft':
+            Telemetry.event('user.new-draft', { from: 'app' });
+            createDraft('app'); // not awaited: it takes ~20 s
             return [];
         case 'app:received':
             // The app took the token / draft link: the popup says so
@@ -415,11 +730,9 @@ async function onAppMessage(msg) {
             if ((msg.slots || []).length) startSelection(msg.slots, !!msg.test);
             return [{ type: 'ext:slots-received', count: (msg.slots || []).length }];
         case 'app:settings':
-            // Only what the app shows: the auto-booking checkbox
-            if (msg.patch && typeof msg.patch.autoBook === 'boolean') {
-                Telemetry.event('user.auto-book', { enabled: msg.patch.autoBook, from: 'app' });
-                await saveSettings({ autoBook: msg.patch.autoBook });
-            }
+            // What the app shows: auto-booking, auto draft and the reminder before the opening
+            if (msg.patch && typeof msg.patch.autoBook === 'boolean') Telemetry.event('user.auto-book', { enabled: msg.patch.autoBook, from: 'app' });
+            if (msg.patch) await saveSettings(msg.patch);
             return [];
         case 'app:login':
             await openWorkTab(LOGIN_URL);
@@ -438,6 +751,67 @@ async function onAppMessage(msg) {
     }
 }
 
+// ---- Slot quarantine and press limits (see QUARANTINE_MS) ----
+
+async function slotKeyOf(slot) {
+    const selection = await getAppSelection();
+    return `${selection ? selection.institutionCode : '?'}|${slot.date}|${slot.time}`;
+}
+
+// Is the booking window open: shortly before the opening of new days, and a while after it?
+async function inBookingWindow() {
+    const { nextRelease, lastOpenAt } = await chrome.storage.local.get(['nextRelease', 'lastOpenAt']);
+    const now = Date.now();
+    if (nextRelease && nextRelease.at - now <= WINDOW_BEFORE_MS && now - nextRelease.at <= WINDOW_AFTER_MS) return true;
+    return !!(lastOpenAt && now >= lastOpenAt && now - lastOpenAt <= WINDOW_AFTER_MS);
+}
+
+// Splits slots into those that may be tried now and those still in quarantine
+async function splitQuarantined(slots) {
+    const { bookingHistory = {} } = await chrome.storage.local.get('bookingHistory');
+    const now = Date.now();
+    const usable = [], skipped = [];
+    for (const slot of slots) {
+        const record = bookingHistory[await slotKeyOf(slot)];
+        if (record && record.until > now) skipped.push({ slot, until: record.until, fails: record.fails });
+        else usable.push(slot);
+    }
+    return { usable, skipped };
+}
+
+async function recordSlotFailure(slot, error) {
+    const key = await slotKeyOf(slot);
+    const { bookingHistory = {} } = await chrome.storage.local.get('bookingHistory');
+    const fails = ((bookingHistory[key] && bookingHistory[key].fails) || 0) + 1;
+    const until = Date.now() + QUARANTINE_MS[Math.min(fails, QUARANTINE_MS.length) - 1];
+    bookingHistory[key] = { fails, until, error: String(error).split(':')[0].slice(0, 50), at: Date.now() };
+    // old records go: a quarantine that ended a day ago is forgotten
+    for (const [k, v] of Object.entries(bookingHistory)) if (v.until < Date.now() - 24 * 60 * 60 * 1000) delete bookingHistory[k];
+    await chrome.storage.local.set({ bookingHistory });
+    return { fails, until };
+}
+
+async function clearSlotHistory(slot) {
+    const key = await slotKeyOf(slot);
+    const { bookingHistory = {} } = await chrome.storage.local.get('bookingHistory');
+    if (bookingHistory[key]) {
+        delete bookingHistory[key];
+        await chrome.storage.local.set({ bookingHistory });
+    }
+}
+
+async function pressesLastHour() {
+    const { pressLog = [] } = await chrome.storage.local.get('pressLog');
+    return pressLog.filter(at => at > Date.now() - 60 * 60 * 1000);
+}
+
+async function recordPresses(count) {
+    if (!count) return;
+    const recent = await pressesLastHour();
+    for (let i = 0; i < count; i++) recent.push(Date.now());
+    await chrome.storage.local.set({ pressLog: recent });
+}
+
 // ---- Slot selection ----
 // selection: { status: 'running' | 'selected' | 'booking' | 'booked' | 'book-failed' |
 //              'failed' | 'skipped', jobId, taskId, tabId, slot, error, text, tried, test,
@@ -450,11 +824,29 @@ async function setSelection(selection) {
 
 // New slots from the app (earliest first, already within the date range): open the draft,
 // go to the calendar and select the earliest one the site shows as free
-async function startSelection(slots, test) {
+async function startSelection(slots, test, attempt = 1) {
+    // A draft is being made (the tab is on steps 1–3): wait for it instead of reloading the tab
+    for (let i = 0; i < 480; i++) {
+        const { draftJob } = await chrome.storage.session.get('draftJob');
+        if (!draftJob || !['running', 'retrying'].includes(draftJob.status) || Date.now() - draftJob.startedAt > DRAFT_JOB_TIMEOUT_MS) break;
+        await new Promise(r => setTimeout(r, 1000));
+    }
     const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
-    const { selection, draft } = await chrome.storage.session.get(['selection', 'draft']);
+    let { selection, draft } = await chrome.storage.session.get(['selection', 'draft']);
     const now = Date.now();
     if (settings.paused) return setSelection({ status: 'skipped', error: 'paused', test, at: now });
+    // Slots came before any draft (a login started the monitor, the draft is not made yet): make
+    // it now and go on with these slots when it is ready, instead of failing with «no draft»
+    if (!draft && settings.autoDraft !== false && !test && (await getAuth()).loggedIn === true) {
+        await createDraft('slots');
+        for (let i = 0; i < 480; i++) {
+            const { draftJob } = await chrome.storage.session.get('draftJob');
+            if (!draftJob || !['running', 'retrying'].includes(draftJob.status) || Date.now() - draftJob.startedAt > DRAFT_JOB_TIMEOUT_MS) break;
+            await new Promise(r => setTimeout(r, 1000));
+        }
+        ({ draft } = await chrome.storage.session.get('draft'));
+        if (draft) Telemetry.event('selection.stage', { stage: 'draft-made-for-slots', taskId: draft.taskId });
+    }
     if (selection && ['running', 'booking'].includes(selection.status) && now - selection.startedAt < SELECT_TIMEOUT_MS) return;
     // The person may be pressing «Підтвердити» right now: do not switch the slot under them
     if (selection && selection.status === 'selected' && now - selection.at < SELECTED_HOLD_MS) return;
@@ -462,19 +854,38 @@ async function startSelection(slots, test) {
     // This draft is booked: the site turns it into a sent application
     if (selection && selection.status === 'booked' && selection.taskId === draft.taskId) return;
 
-    const jobId = crypto.randomUUID();
-    const autoBook = !!settings.autoBook && !test; // test slots are never booked
-    const current = await setSelection({ status: 'running', jobId, taskId: draft.taskId, test, autoBook, startedAt: now, at: now });
+    // Slots that did not book recently are left alone (see QUARANTINE_MS)
+    if (!test) {
+        const { usable, skipped } = await splitQuarantined(slots);
+        if (skipped.length) {
+            Telemetry.event('selection.stage', { stage: 'quarantine-skip', skipped: skipped.length, usable: usable.length, until: new Date(Math.min(...skipped.map(s => s.until))).toISOString() });
+        }
+        if (!usable.length) {
+            const until = Math.min(...skipped.map(s => s.until));
+            await sendToApps([{ type: 'ext:slot-failed', error: 'quarantined', text: `Слоти не бронювались: пропускаю до ${new Date(until).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}.`, test: false }]);
+            return setSelection({ status: 'skipped', error: 'quarantined', test, at: now, until });
+        }
+        slots = usable;
+    }
 
-    // Load the draft again even if it is open on step 4: the calendar there may be old.
-    // A direct address of step 4 opens step 3, from where econsul.js presses «Далі»
+    const jobId = crypto.randomUUID();
+    const pressesLeft = MAX_PRESSES_PER_HOUR - (await pressesLastHour()).length;
+    const autoBook = !!settings.autoBook && !test && pressesLeft > 0; // test slots are never booked
+    if (settings.autoBook && !test && pressesLeft <= 0) Telemetry.event('selection.stage', { stage: 'press-limit', limit: MAX_PRESSES_PER_HOUR });
+    const confirmTries = Math.min(await inBookingWindow() ? TRIES_IN_WINDOW : TRIES_OUTSIDE_WINDOW, Math.max(1, pressesLeft));
+    const current = await setSelection({ status: 'running', jobId, taskId: draft.taskId, test, autoBook, slots, attempt, startedAt: now, at: now });
+
+    // Load the draft again even if it is open on step 4: the calendar there may be old. Step 3 is
+    // opened directly (the address of step 4 shows step 4 for a moment and goes back to step 3);
+    // econsul.js presses «Далі» from there
+    const openUrl = `https://e-consul.gov.ua/tasks/${draft.taskId}/consularServiceInfo`;
     let tab = draft.tabId != null && await chrome.tabs.get(draft.tabId).catch(() => null);
     if (!(tab && tab.url && tab.url.includes(`/tasks/${draft.taskId}`))) tab = null;
-    if (tab) tab = await chrome.tabs.update(tab.id, { active: true, url: draft.url });
-    else tab = await chrome.tabs.create({ url: draft.url, active: true });
+    if (tab) tab = await chrome.tabs.update(tab.id, { active: true, url: openUrl });
+    else tab = await chrome.tabs.create({ url: openUrl, active: true });
     await chrome.windows.update(tab.windowId, { focused: true });
     await setSelection({ ...current, tabId: tab.id });
-    Telemetry.event('selection.started', { taskId: draft.taskId, slots: slots.length, autoBook }, { jobId, test });
+    Telemetry.event('selection.started', { taskId: draft.taskId, slots: slots.length, autoBook, attempt }, { jobId, test });
 
     // Wait until the new page's econsul.js answers for this task
     await new Promise(r => setTimeout(r, 1500));
@@ -488,15 +899,31 @@ async function startSelection(slots, test) {
     }
     if (!reply) return selectionFailed({ ...current, tabId: tab.id }, 'tab-not-ready');
     Telemetry.event('selection.stage', { stage: 'tab-ready', taskId: draft.taskId, durationMs: Date.now() - now }, { jobId, test });
-    await chrome.tabs.sendMessage(tab.id, { type: 'select-slot', jobId, taskId: draft.taskId, slots, autoBook }).catch(() => null);
+    await chrome.tabs.sendMessage(tab.id, { type: 'select-slot', jobId, taskId: draft.taskId, slots, autoBook, confirmTries }).catch(() => null);
 }
 
 async function selectionFailed(selection, error, tried = []) {
     Telemetry.event('selection.failed', {
         error: String(error).split(':')[0].slice(0, 50), // a code of SELECT_ERRORS, never page text
         taskId: selection.taskId || null,
-        durationMs: selection.startedAt ? Date.now() - selection.startedAt : null
+        durationMs: selection.startedAt ? Date.now() - selection.startedAt : null,
+        attempt: selection.attempt || 1
     }, { jobId: selection.jobId, test: selection.test });
+    const attempt = selection.attempt || 1;
+    const code = String(error).split(':')[0];
+    if (RETRYABLE.has(code) && attempt < MAX_SELECT_ATTEMPTS && selection.slots && selection.slots.length) {
+        // Probably the site's load: start over instead of telling the person it failed
+        const pause = RETRY_PAUSE_MS * 2 ** (attempt - 1);
+        await setSelection({ ...selection, status: 'retrying', error, tried, at: Date.now() });
+        Telemetry.event('selection.stage', { stage: 'retry', attempt: attempt + 1, error: code, pauseMs: pause, taskId: selection.taskId || null }, { jobId: selection.jobId, test: selection.test });
+        setTimeout(() => serial(async () => {
+            // A newer selection (new slots, the person's own work) took over meanwhile
+            const { selection: now } = await chrome.storage.session.get('selection');
+            if (!now || now.jobId !== selection.jobId || now.status !== 'retrying') return;
+            await startSelection(selection.slots, !!selection.test, attempt + 1);
+        }), pause);
+        return;
+    }
     await setSelection({ ...selection, status: 'failed', error, tried, at: Date.now() });
     await sendToApps([{ type: 'ext:slot-failed', error, text: SELECT_ERRORS[error] || error, test: !!selection.test }]);
     if (selection.test && error === 'not-found') return; // test slots are made up
@@ -534,15 +961,22 @@ async function onSlotResult({ jobId, ok, slot, error, tried, booking }) {
 }
 
 // From econsul.js: auto-booking pressed «Підтвердити». ok: the site said «Дякуємо»
-async function onBookResult({ jobId, slot, ok, error, text }) {
+async function onBookResult({ jobId, slot, ok, error, text, presses }) {
     const { selection } = await chrome.storage.session.get('selection');
     if (!selection || selection.jobId !== jobId) return;
     const date = slot.date.split('-').reverse().join('.');
     Telemetry.event(ok ? 'booking.booked' : 'booking.failed', {
         taskId: selection.taskId, date: slot.date, time: slot.time,
-        ...(ok ? {} : { error: String(error).split(':')[0].slice(0, 50) })
+        ...(ok ? {} : { error: String(error).split(':')[0].slice(0, 50) }),
+        // what the site said when it answered with a message (not the page text: that has the applicant's data)
+        ...(!ok && (error === 'alert' || error === 'unavailable') && text ? { message: String(text).slice(0, 300) } : {})
     }, { jobId, test: selection.test });
-    await setSelection({ ...selection, status: ok ? 'booked' : 'book-failed', slot, error: error || null, text: text || null, at: Date.now() });
+    await recordPresses(presses);
+    let quarantine = null;
+    if (ok) await clearSlotHistory(slot);
+    else if (['unavailable', 'alert', 'no-outcome'].includes(String(error).split(':')[0])) quarantine = await recordSlotFailure(slot, error);
+    if (quarantine) Telemetry.event('selection.stage', { stage: 'quarantine-start', fails: quarantine.fails, until: new Date(quarantine.until).toISOString(), presses: presses || 0 }, { jobId, test: selection.test });
+    await setSelection({ ...selection, status: ok ? 'booked' : 'book-failed', slot, error: error || null, text: text || null, quarantineUntil: quarantine ? quarantine.until : null, at: Date.now() });
     // Either way the person has to look: the result comes by email, or the slot waits for them
     await playSound('selected', SELECTED_SOUND);
     chrome.notifications.create('slot', {
@@ -551,7 +985,7 @@ async function onBookResult({ jobId, slot, ok, error, text }) {
         title: ok ? `Заброньовано ${date} о ${slot.time}` : `Не вдалося забронювати ${date} о ${slot.time}`,
         message: ok
             ? 'Сайт прийняв заявку. Підтвердження прийде на email.'
-            : `${SELECT_ERRORS[error] || error}${text ? ' ' + text.slice(0, 120) : ''} Слот лишився вибраним, можна натиснути «Підтвердити» самому.`,
+            : `${SELECT_ERRORS[error] || error}${text ? ' ' + text.slice(0, 120) : ''} Слот лишився вибраним, можна натиснути «Підтвердити» самому.${quarantine ? ` Автоматично цей слот пропускаю до ${new Date(quarantine.until).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}.` : ''}`,
         requireInteraction: true,
         priority: 2
     });
@@ -568,7 +1002,16 @@ async function showSelectionTab() {
 
 chrome.notifications.onClicked.addListener(id => {
     if (id === 'slot') { showSelectionTab(); chrome.notifications.clear(id); }
+    if (id === 'draft') { showDraftJobTab(); chrome.notifications.clear(id); }
 });
+
+async function showDraftJobTab() {
+    const { draftJob } = await chrome.storage.session.get('draftJob');
+    const tab = draftJob && draftJob.tabId != null && await chrome.tabs.get(draftJob.tabId).catch(() => null);
+    if (!tab) return openWorkTab(NEW_APPLICATION_URL);
+    await chrome.tabs.update(tab.id, { active: true });
+    await chrome.windows.update(tab.windowId, { focused: true });
+}
 
 // ---- Sounds (offscreen document) ----
 
@@ -599,16 +1042,28 @@ async function stopSounds(force) {
 
 // ---- Settings (popup and app) ----
 
+// Only known settings of the right type get in; the alarm lead is a whole number of minutes
+function cleanSettingsPatch(patch = {}) {
+    const clean = {};
+    for (const key of ['paused', 'autoBook', 'autoDraft', 'autoMonitor', 'alarmEnabled']) if (typeof patch[key] === 'boolean') clean[key] = patch[key];
+    const lead = Math.round(Number(patch.alarmLeadMin));
+    if (patch.alarmLeadMin != null && Number.isFinite(lead)) clean.alarmLeadMin = Math.min(ALARM_LEAD_MAX, Math.max(ALARM_LEAD_MIN, lead));
+    return clean;
+}
+
 async function saveSettings(patch) {
     const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
-    await chrome.storage.local.set({ settings: { ...DEFAULT_SETTINGS, ...settings, ...patch } });
+    const clean = cleanSettingsPatch(patch);
+    await chrome.storage.local.set({ settings: { ...DEFAULT_SETTINGS, ...settings, ...clean } });
+    if ('alarmEnabled' in clean || 'alarmLeadMin' in clean) await scheduleReleaseAlarm();
     await renderBadge();
     await sendToApps([await settingsMessage()]);
 }
 
 async function settingsMessage() {
     const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
-    return { type: 'ext:settings', autoBook: !!settings.autoBook, paused: !!settings.paused };
+    const all = { ...DEFAULT_SETTINGS, ...settings };
+    return { type: 'ext:settings', autoBook: !!all.autoBook, paused: !!all.paused, autoDraft: all.autoDraft !== false, autoMonitor: !!all.autoMonitor, alarmEnabled: all.alarmEnabled !== false, alarmLeadMin: all.alarmLeadMin };
 }
 
 // ---- Popup ----
@@ -617,10 +1072,11 @@ async function onPopupMessage(msg) {
     switch (msg.type) {
         case 'popup:state': {
             const auth = await getAuth();
-            const { app = null, lastSlots = null, draft = null, sound = null, selection = null } = await chrome.storage.session.get(['app', 'lastSlots', 'draft', 'sound', 'selection']);
+            const { app = null, lastSlots = null, draft = null, sound = null, selection = null, draftJob = null } = await chrome.storage.session.get(['app', 'lastSlots', 'draft', 'sound', 'selection', 'draftJob']);
             const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
             const { token, ...publicAuth } = auth; // the popup does not need the token itself
-            return { version: VERSION, auth: { ...publicAuth, hasToken: !!token }, app, appConnected: await isAppConnected(), lastSlots, draft, sound, selection, selectErrors: SELECT_ERRORS, settings };
+            const alarm = await chrome.alarms.get('release-alarm');
+            return { version: VERSION, auth: { ...publicAuth, hasToken: !!token }, app, appConnected: await isAppConnected(), lastSlots, draft, sound, selection, draftJob, draftAlarmAt: alarm ? alarm.scheduledTime : null, selectErrors: SELECT_ERRORS, draftErrors: DRAFT_ERRORS, settings };
         }
         case 'popup:login':
             await openWorkTab(LOGIN_URL);
@@ -629,9 +1085,11 @@ async function onPopupMessage(msg) {
             await openDraft();
             return {};
         case 'popup:new-draft':
-            // A new tab: the work tab may be showing the current draft. The site creates the task
-            // and moves to /tasks/{id}/…, where econsul.js picks it up as the new draft
-            await chrome.tabs.create({ url: NEW_APPLICATION_URL, active: true });
+            // The app's settings are known: fill steps 1–3 ourselves. Otherwise open the new
+            // application and leave the steps to the person; econsul.js picks the draft up
+            Telemetry.event('user.new-draft', { from: 'popup' });
+            if (await getAppSelection() && (await getAuth()).loggedIn === true) createDraft('popup');
+            else await chrome.tabs.create({ url: NEW_APPLICATION_URL, active: true });
             return {};
         case 'popup:mute':
             Telemetry.event('user.mute', { from: 'popup' });
@@ -664,6 +1122,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         else if (message.type === 'econsul:task') handler = () => onSiteTask(message, sender.tab);
         else if (message.type === 'econsul:slot-result') handler = () => onSlotResult(message);
         else if (message.type === 'econsul:book-result') handler = () => onBookResult(message);
+        else if (message.type === 'econsul:draft-result') handler = () => onDraftResult(message);
         else if (message.type === 'econsul:request') handler = () => onSiteRequest(message);
         else if (message.type === 'econsul:confirm-clicked') handler = async () => {
             const { selection } = await chrome.storage.session.get('selection');

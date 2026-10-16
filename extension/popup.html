@@ -29,57 +29,74 @@
             <div id="outText" class="sub">Моніторинг зупинено. Він запуститься сам, щойно ви увійдете.</div>
         </div>
     </div>
-    <button id="loginBtn" class="primary" type="button">Увійти на e-consul</button>
+    <button id="loginBtn" class="primary" type="button"><svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 8l4 4-4 4M14 12H4"/></svg>Увійти на e-consul</button>
 </main>
 
 <!-- Logged in -->
 <div id="loggedIn" hidden>
     <main class="body">
-        <section class="section">
-            <div class="label">Сесія</div>
-            <div class="status-line"><span class="dot"></span>Ви увійшли на e-consul</div>
-            <div id="tokenLeft" class="sub"></div>
+        <section class="sess">
+            <div class="line"><span class="dot"></span><span id="tokenLeft" class="grow"></span><span id="tokenNote" class="ok-text"></span></div>
             <div id="tokenBar" class="bar"><div></div></div>
-            <div id="tokenNote" class="note"></div>
         </section>
 
-        <section class="section">
-            <div class="label">Чернетка</div>
-            <div id="draftTitle" class="strong"></div>
-            <div id="draftText" class="sub"></div>
-            <div id="draftNote" class="note"></div>
-            <div class="row top">
-                <button id="openDraftBtn" class="primary" type="button">Відкрити чернетку</button>
-                <button id="newDraftBtn" class="secondary" type="button">Створити нову</button>
+        <section class="sect">
+            <div class="sect-h"><b id="draftTitle">Чернетка заявки</b><span id="draftInfo" class="sub"></span><span id="draftNote" class="ok-text"></span></div>
+            <div id="draftText" class="sub" hidden></div>
+            <div class="btns">
+                <button id="openDraftBtn" class="primary" type="button"><svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>Відкрити</button>
+                <button id="newDraftBtn" class="secondary" type="button"><svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Створити нову</button>
             </div>
         </section>
 
-        <!-- Shown once the extension creates the morning draft itself (stage 3 of the plan) -->
-        <div class="time-row" hidden>
-            <label for="draftTime">Нова чернетка щодня о</label>
-            <input id="draftTime" inputmode="numeric" maxlength="5" autocomplete="off" spellcheck="false">
+        <div class="time-row">
+            <label class="check-label" for="alarmEnabled">
+                <input id="alarmEnabled" type="checkbox">
+                <span class="l">Будильник за</span>
+            </label>
+            <span class="time-field"><input id="alarmLead" type="number" min="1" max="60" step="1" inputmode="numeric" aria-label="Хвилин до відкриття"> хв до відкриття</span>
+            <button class="q" type="button" aria-label="Про будильник">?<span class="tip">За вказану кількість хвилин до відкриття нових днів поточної установи розширення нагадає звуком і нотифікацією: увійти на e-consul, якщо сесії немає, або запустити моніторинг, якщо він не працює. Якщо чернетки немає, вона недійсна чи не дійшла до застосунку, створює нову. Коли все гаразд, мовчить. Час відкриття бере із застосунку (потрібна відкрита вкладка).</span></button>
+        </div>
+        <div id="alarmNext" class="sub" hidden></div>
+
+        <div class="mon">
+            <div class="line"><span id="monitorDot" class="dot"></span><b id="monitorTitle" class="grow"></b><span id="monitorText" class="sub"></span></div>
         </div>
 
-        <div class="panel">
-            <div id="monitorTitle" class="strong"></div>
-            <div id="monitorText" class="sub"></div>
-            <div id="slotsText" class="sub" hidden></div>
-            <div id="selectionText" class="sub" hidden></div>
-        </div>
+        <section id="slotsBlock" hidden>
+            <div class="log-h">Нові слоти</div>
+            <div id="slotLog" class="log"></div>
+        </section>
 
-        <label class="check-row">
-            <input id="autoBook" type="checkbox">
-            <span>
-                <span class="strong">Бронювати автоматично</span>
-                <span class="sub">Після вибору слота розширення саме натисне «Підтвердити». Вимкнено: натискаєте ви.</span>
-            </span>
-        </label>
+        <div class="check">
+            <label class="check-label" for="autoDraft">
+                <input id="autoDraft" type="checkbox">
+                <span class="l">Створювати чернетку після входу</span>
+            </label>
+            <button class="q" type="button" aria-label="Про автоматичну чернетку">?<span class="tip">Після входу на e-consul, якщо чернетки немає, вона прострочена чи сайт її видалив, розширення саме пройде кроки 1–3 з установою й послугою з налаштувань застосунку.</span></button>
+        </div>
+        <div class="check">
+            <label class="check-label" for="autoMonitor">
+                <input id="autoMonitor" type="checkbox">
+                <span class="l">Запускати моніторинг після входу</span>
+            </label>
+            <button class="q" type="button" aria-label="Про автозапуск моніторингу">?<span class="tip">Коли ви входите на e-consul (токен приходить у застосунок), застосунок сам запускає моніторинг, якщо він не працює. Потрібна відкрита вкладка застосунку.</span></button>
+        </div>
+        <div class="check">
+            <label class="check-label" for="autoBook">
+                <input id="autoBook" type="checkbox">
+                <span class="l">Бронювати автоматично</span>
+            </label>
+            <button class="q" type="button" aria-label="Про автоматичне бронювання">?<span class="tip">Розширення саме натисне «Підтвердити» після вибору слота. Вимкнено: «Підтвердити» натискаєте ви.</span></button>
+        </div>
     </main>
     <footer class="foot">
-        <button id="muteBtn" class="secondary" type="button">Вимкнути звук</button>
-        <button id="pauseBtn" class="secondary" type="button">Призупинити</button>
+        <button id="muteBtn" class="secondary" type="button"><svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4zM16 9l5 6M21 9l-5 6"/></svg>Вимкнути звук</button>
+        <div class="with-q">
+            <button id="pauseBtn" class="secondary" type="button"><svg class="i" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg><span id="pauseLabel">Призупинити</span></button>
+            <button class="q" type="button" aria-label="Про паузу">?<span class="tip">Пауза вимикає автовибір і бронювання слота в чернетці. Застосунок і далі шукає слоти та сповіщає.</span></button>
+        </div>
     </footer>
-    <div class="foot-note">«Призупинити» вимикає автоматичний вибір і бронювання слота в чернетці. Застосунок і далі шукає слоти й сповіщає.</div>
 </div>
 
 <script src="popup.js"></script>

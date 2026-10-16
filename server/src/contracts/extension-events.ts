@@ -10,10 +10,11 @@ const SECRET_KEY = /token|authorization|cookie|password|jwt/i;
 export const extensionEventTypes = [
     'session.logged-in', 'session.logged-out',
     'draft.found', 'draft.opened', 'draft.gone',
+    'draft.create-started', 'draft.created', 'draft.create-failed',
     'selection.started', 'selection.stage', 'selection.selected', 'selection.failed',
     'booking.confirm-clicked', 'booking.booked', 'booking.failed',
-    'app.slots-received',
-    'user.mute', 'user.pause', 'user.auto-book', 'user.test-sound',
+    'app.slots-received', 'alarm.fired',
+    'user.mute', 'user.pause', 'user.auto-book', 'user.test-sound', 'user.new-draft',
 ] as const;
 
 export const extensionEventSchema = z.object({

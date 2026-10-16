@@ -123,6 +123,42 @@ describe('SettingsView', () => {
         expect(link.setAutoBook).toHaveBeenCalledWith(true);
     });
 
+    it('draft creation and the alarm: disabled without the extension, switched and set with one', async () => {
+        setup();
+        expect(screen.getByRole('checkbox', { name: /Створювати чернетку автоматично/ })).toBeDisabled();
+        expect(screen.getByRole('checkbox', { name: /Будильник/ })).toBeDisabled();
+    });
+
+    it('switches auto draft, the alarm and its lead time', async () => {
+        const { user, link } = setup({ extension: { connected: true } });
+        await user.click(screen.getByRole('checkbox', { name: /Створювати чернетку автоматично/ }));
+        expect(link.setDraftSettings).toHaveBeenCalledWith({ autoDraft: false });
+        await user.click(screen.getByRole('checkbox', { name: /Будильник/ }));
+        expect(link.setDraftSettings).toHaveBeenCalledWith({ alarmEnabled: false });
+        const lead = screen.getByRole('spinbutton', { name: 'Хвилин до відкриття' });
+        expect(lead).toHaveValue(5);
+        await user.clear(lead);
+        await user.type(lead, '10');
+        await user.tab();
+        expect(link.setDraftSettings).toHaveBeenCalledWith({ alarmLeadMin: 10 });
+    });
+
+    it('switches «start monitoring after login»', async () => {
+        const { user, link } = setup({ extension: { connected: true } });
+        await user.click(screen.getByRole('checkbox', { name: /Запускати моніторинг після входу/ }));
+        expect(link.setDraftSettings).toHaveBeenCalledWith({ autoMonitor: true });
+    });
+
+    it('ignores a lead time outside 1–60 and puts the old one back', async () => {
+        const { user, link } = setup({ extension: { connected: true } });
+        const lead = screen.getByRole('spinbutton', { name: 'Хвилин до відкриття' });
+        await user.clear(lead);
+        await user.type(lead, '99');
+        await user.tab();
+        expect(link.setDraftSettings).not.toHaveBeenCalled();
+        expect(lead).toHaveValue(5);
+    });
+
     it('runs the test alerts and the tab mark switch', async () => {
         const { user, monitor, link } = setup({ extension: { connected: true } });
         await user.click(screen.getByRole('button', { name: 'Сигнал нових слотів' }));

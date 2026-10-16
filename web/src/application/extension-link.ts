@@ -15,8 +15,18 @@ export type ExtensionState = {
     version: string | null;
     auth: { loggedIn: boolean | null; exp: number | null; reason: string | null } | null;
     autoBook: boolean;
+    autoDraft: boolean; // make a draft after a login when there is none
+    autoMonitor: boolean; // start monitoring after a login when it is not running
+    alarmEnabled: boolean; // make a fresh draft shortly before the location opens new days
+    alarmLeadMin: number; // ...this many minutes before
     draft: Draft | null;
+    // The extension is making a draft (steps 1–3) or failed to; null when idle
+    draftJob: { status: 'running' | 'failed'; text: string | null } | null;
+    // The reminder before the opening fired: when the location opens new days; null before it fires
+    alarm: { at: number } | null;
 };
+
+export type DraftSettingsPatch = Partial<Pick<ExtensionState, 'autoDraft' | 'autoMonitor' | 'alarmEnabled' | 'alarmLeadMin'>>;
 
 export interface ExtensionLink {
     getState(): ExtensionState;
@@ -24,7 +34,9 @@ export interface ExtensionLink {
     start(): void;
     dispose(): void;
     login(): void;
+    createDraft(): void; // the extension fills steps 1–3 from the institution and service settings
     setAutoBook(on: boolean): void;
+    setDraftSettings(patch: DraftSettingsPatch): void; // auto draft and the alarm; the extension keeps them
     setDraftUrl(url: string): void; // a link pasted by hand; empty removes the saved one
     testSound(kind: 'selected' | 'mute' | 'slots'): void;
     userGesture(): void; // a click on the page: unlock audio and report audioReady
@@ -54,7 +66,13 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
         version: null,
         auth: null,
         autoBook: false,
+        autoDraft: true,
+        autoMonitor: false,
+        alarmEnabled: true,
+        alarmLeadMin: 5,
         draft: settings.loadDraft(),
+        draftJob: null,
+        alarm: null,
     };
     const listeners = new Set<() => void>();
     let unsubscribers: (() => void)[] = [];
@@ -63,6 +81,8 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
     let sessionTitleShown = false;
     let lastSelectionKey = '';
     let started = false;
+    // A login happened (not logged in -> logged in): the token that follows may start the monitor
+    let startAfterToken = false;
 
     function patch(next: Partial<ExtensionState>): void {
         state = { ...state, ...next };
@@ -152,6 +172,7 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
     }
 
     function onAuth(msg: { loggedIn: boolean | null; exp?: number | null; reason?: string | null; alert?: boolean }): void {
+        const previousAuth = state.auth;
         const wasLoggedIn = state.auth?.loggedIn === true;
         patch({ auth: { loggedIn: msg.loggedIn, exp: msg.exp ?? null, reason: msg.reason ?? null } });
         if (msg.loggedIn === false) {
@@ -166,10 +187,20 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
             if (monitor.getState().tabTitleMarks) alerts.setTabTitle(DEFAULT_TITLE);
             sessionTitleShown = false;
         }
+        // Only a real login: the first ext:auth after the page opened (wasLoggedIn is unknown yet) is not one
+        if (msg.loggedIn === true && !wasLoggedIn && state.auth !== null && previousAuth !== null) startAfterToken = state.autoMonitor;
     }
 
     function onDraft(draft: { url: string; createdAt?: number | null; expiresAt?: number | null; foundAt?: number } | null): void {
-        if (!draft || !draft.url) return; // no draft in the extension: keep a link pasted by hand
+        if (!draft || !draft.url) {
+            // The extension no longer has the draft (sent, deleted, expired): drop what it gave us.
+            // A link pasted by hand stays
+            if (state.draft?.fromExtension) {
+                settings.saveDraft(null);
+                patch({ draft: null });
+            }
+            return;
+        }
         const prev = state.draft;
         if (prev?.url !== draft.url) monitor.log('Посилання на чернетку отримано від розширення');
         // Without createdAt the 24 h hint counts from when the link was first seen
@@ -200,12 +231,33 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
                             return onAuth(msg);
                         case 'ext:token':
                             monitor.setToken(msg.token, 'extension');
+                            if (startAfterToken) {
+                                startAfterToken = false;
+                                // a monitor stopped by the session already resumed itself in setToken
+                                if (!monitor.getState().running) {
+                                    monitor.log('Вхід: запускаю моніторинг (налаштування «Запускати моніторинг після входу»)');
+                                    void monitor.start();
+                                }
+                            }
                             bridge.send({ type: 'app:received', exp: msg.exp ?? null }); // the popup shows that the token arrived
                             return;
                         case 'ext:draft':
                             return onDraft(msg.draft);
+                        case 'ext:alarm':
+                            monitor.log(`Скоро відкриття нових днів (${new Date(msg.at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })})`);
+                            return patch({ alarm: { at: msg.at } });
+                        case 'ext:draft-job':
+                            if (msg.status === 'failed') monitor.log(`Чернетку не створено: ${msg.text ?? msg.error ?? ''}`, 'warn');
+                            else if (msg.status === 'running' && state.draftJob?.status !== 'running') monitor.log('Розширення створює чернетку (кроки 1–3)');
+                            return patch({ draftJob: msg.status ? { status: msg.status, text: msg.text ?? msg.error ?? null } : null });
                         case 'ext:settings':
-                            return patch({ autoBook: msg.autoBook });
+                            return patch({
+                                autoBook: msg.autoBook,
+                                ...(msg.autoDraft !== undefined && { autoDraft: msg.autoDraft }),
+                                ...(msg.autoMonitor !== undefined && { autoMonitor: msg.autoMonitor }),
+                                ...(msg.alarmEnabled !== undefined && { alarmEnabled: msg.alarmEnabled }),
+                                ...(msg.alarmLeadMin !== undefined && { alarmLeadMin: msg.alarmLeadMin }),
+                            });
                         case 'ext:slot-selected':
                             return monitor.log(
                                 `Розширення вибрало ${displayDate(msg.slot.date)} ${msg.slot.time} у чернетці: натисніть «Підтвердити»`,
@@ -253,6 +305,13 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
         login() {
             if (state.connected) bridge.send({ type: 'app:login' });
             else alerts.openUrl(SITE_URL);
+        },
+        setDraftSettings(draftPatch) {
+            patch(draftPatch);
+            bridge.send({ type: 'app:settings', patch: draftPatch });
+        },
+        createDraft() {
+            if (state.connected) bridge.send({ type: 'app:create-draft' });
         },
         setAutoBook(on) {
             patch({ autoBook: on });

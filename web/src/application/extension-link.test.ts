@@ -92,6 +92,7 @@ function setup(overrides: Partial<MonitorState> = {}, initialDraft: Draft | null
             return () => undefined;
         },
         setToken: vi.fn(),
+        start: vi.fn(async () => undefined),
         sessionLost: vi.fn(),
         log: vi.fn(),
     } as unknown as Monitor;
@@ -208,6 +209,100 @@ describe('extension link', () => {
         expect(t.settings.saveDraft).toHaveBeenCalledWith({ url: 'https://x/y', savedAt: 7, expiresAt: 9, fromExtension: true });
         expect(t.sent.at(-1)).toEqual({ type: 'app:received', draftUrl: 'https://x/y' });
         expect(t.link.getState().draft?.url).toBe('https://x/y');
+    });
+
+    it('a draft that vanished in the extension is dropped when the extension gave it, kept when pasted by hand', () => {
+        const fromExtension = setup({}, { url: 'https://x/y', savedAt: 1, fromExtension: true });
+        fromExtension.link.start();
+        fromExtension.receive({ type: 'ext:draft', draft: null });
+        expect(fromExtension.settings.saveDraft).toHaveBeenCalledWith(null);
+        expect(fromExtension.link.getState().draft).toBeNull();
+
+        const pasted = setup({}, { url: 'https://x/y', savedAt: 1 });
+        pasted.link.start();
+        pasted.receive({ type: 'ext:draft', draft: null });
+        expect(pasted.link.getState().draft?.url).toBe('https://x/y');
+    });
+
+    it('ext:draft-job: shows the running creation, the failure reason (also in the log) and clears when done', () => {
+        const t = setup();
+        t.link.start();
+        t.receive({ type: 'ext:draft-job', status: 'running' });
+        expect(t.link.getState().draftJob).toEqual({ status: 'running', text: null });
+        t.receive({ type: 'ext:draft-job', status: 'failed', error: 'unavailable', text: 'Сайт пише, що запис зараз недоступний.' });
+        expect(t.link.getState().draftJob).toEqual({ status: 'failed', text: 'Сайт пише, що запис зараз недоступний.' });
+        expect(t.monitor.log).toHaveBeenCalledWith('Чернетку не створено: Сайт пише, що запис зараз недоступний.', 'warn');
+        t.receive({ type: 'ext:draft-job', status: null });
+        expect(t.link.getState().draftJob).toBeNull();
+    });
+
+    it('createDraft asks the extension, and does nothing without it', () => {
+        const t = setup();
+        t.link.createDraft();
+        expect(t.types()).not.toContain('app:create-draft');
+        t.link.start();
+        t.receive({ type: 'ext:hello' });
+        t.link.createDraft();
+        expect(t.types()).toContain('app:create-draft');
+    });
+
+    it('ext:settings carries auto draft and the alarm; setDraftSettings updates the state and tells the extension', () => {
+        const t = setup();
+        t.link.start();
+        t.receive({ type: 'ext:hello' });
+        expect(t.link.getState()).toMatchObject({ autoDraft: true, alarmEnabled: true, alarmLeadMin: 5 });
+        t.receive({ type: 'ext:settings', autoBook: false, paused: false, autoDraft: false, alarmEnabled: false, alarmLeadMin: 12 });
+        expect(t.link.getState()).toMatchObject({ autoDraft: false, alarmEnabled: false, alarmLeadMin: 12 });
+        t.receive({ type: 'ext:settings', autoBook: true, paused: false }); // an old extension: the rest stays
+        expect(t.link.getState()).toMatchObject({ autoBook: true, autoDraft: false, alarmLeadMin: 12 });
+        t.sent.length = 0;
+        t.link.setDraftSettings({ alarmLeadMin: 8 });
+        expect(t.link.getState().alarmLeadMin).toBe(8);
+        expect(t.sent[0]).toEqual({ type: 'app:settings', patch: { alarmLeadMin: 8 } });
+    });
+
+    it('starts the monitor after a login when «start monitoring after login» is on, and only then', () => {
+        const login = (t: ReturnType<typeof setup>) => {
+            t.receive({ type: 'ext:auth', loggedIn: false, exp: null });
+            t.receive({ type: 'ext:auth', loggedIn: true, exp: NOW + 3600_000 });
+            t.receive({ type: 'ext:token', token: 'new', exp: NOW + 3600_000 });
+        };
+        const on = setup();
+        on.link.start();
+        on.receive({ type: 'ext:settings', autoBook: false, paused: false, autoMonitor: true });
+        login(on);
+        expect(on.monitor.setToken).toHaveBeenCalledWith('new', 'extension');
+        expect(on.monitor.start).toHaveBeenCalledOnce();
+        expect(on.monitor.log).toHaveBeenCalledWith(expect.stringContaining('запускаю моніторинг'));
+
+        const off = setup();
+        off.link.start();
+        login(off);
+        expect(off.monitor.start).not.toHaveBeenCalled(); // off by default
+
+        const running = setup({ running: true });
+        running.link.start();
+        running.receive({ type: 'ext:settings', autoBook: false, paused: false, autoMonitor: true });
+        login(running);
+        expect(running.monitor.start).not.toHaveBeenCalled(); // already running (or resumed by itself)
+    });
+
+    it('the first auth after the page opened is not a login: no start', () => {
+        const t = setup();
+        t.link.start();
+        t.receive({ type: 'ext:settings', autoBook: false, paused: false, autoMonitor: true });
+        t.receive({ type: 'ext:auth', loggedIn: true, exp: NOW + 3600_000 });
+        t.receive({ type: 'ext:token', token: 'old', exp: NOW + 3600_000 });
+        expect(t.monitor.start).not.toHaveBeenCalled();
+    });
+
+    it('ext:alarm is kept for the banner and logged', () => {
+        const t = setup();
+        t.link.start();
+        expect(t.link.getState().alarm).toBeNull();
+        t.receive({ type: 'ext:alarm', at: NOW + 5 * 60_000, opening: '09:00' });
+        expect(t.link.getState().alarm).toEqual({ at: NOW + 5 * 60_000 });
+        expect(t.monitor.log).toHaveBeenCalledWith(expect.stringContaining('Скоро відкриття'));
     });
 
     it('settings, login and test buttons', () => {
