@@ -1239,6 +1239,33 @@ async function onBookResult({ jobId, slot, ok, error, text, presses, onCalendar 
     return { showBanner: !ok, reason: SELECT_ERRORS[error] || error || null };
 }
 
+// «Наступний слот» on the banner: the person skips the selected slot (no quarantine: nothing was
+// wrong with it) and the next one of the same selection is selected on this calendar, in the same
+// order (new slots first, day by day). Skipped slots are not offered again in this selection.
+// { next: select-slot data } or { text } when there is nothing to offer
+async function onNextSlot({ slot }, tab) {
+    const { selection } = await chrome.storage.session.get('selection');
+    if (!selection || !['selected', 'book-failed'].includes(selection.status) || selection.tabId !== tab.id || !selection.slots) {
+        return { text: 'Цей вибір уже завершено.' };
+    }
+    const skipped = mergeSlots(selection.skipped || [], slot ? [slot] : []);
+    const skippedKeys = new Set(skipped.map(slotKey));
+    const { waitingSlots = { fresh: [], all: [] } } = await chrome.storage.session.get('waitingSlots');
+    await chrome.storage.session.remove('waitingSlots');
+    const rest = mergeSlots(waitingSlots.fresh, selection.slots, waitingSlots.all).filter(s => !skippedKeys.has(slotKey(s)));
+    const { usable } = selection.test ? { usable: rest } : await splitQuarantined(rest);
+    if (!usable.length) return { text: rest.length ? 'Решта слотів зараз у карантині.' : 'Інших вільних слотів немає.' };
+    const slots = tryOrder(usable, waitingSlots.fresh);
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    const { autoBook, aggressive, confirmTries, limitUntil } = await bookingPlan(settings, !!selection.test);
+    const jobId = crypto.randomUUID();
+    const now = Date.now();
+    await setSelection({ status: 'running', jobId, taskId: selection.taskId, tabId: tab.id, test: !!selection.test, autoBook, aggressive, limitUntil, slots, skipped, attempt: 1, startedAt: now, at: now });
+    await stopSounds(true);
+    Telemetry.event('selection.stage', { stage: 'user-next', skipped: skipped.length, left: slots.length }, { jobId, test: !!selection.test });
+    return { next: { jobId, taskId: selection.taskId, slots, autoBook, confirmTries, note: limitUntil ? limitText(limitUntil) : null } };
+}
+
 // The next step of a chain on the calendar the tab already shows: a new «running» selection
 // without loading the draft. { next: select-slot data } or { ended: true } (nothing left to try:
 // the person is told); null: go the usual way (load the draft again)
@@ -1398,6 +1425,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         else if (message.type === 'econsul:task') handler = () => onSiteTask(message, sender.tab);
         else if (message.type === 'econsul:slot-result') handler = () => onSlotResult(message);
         else if (message.type === 'econsul:book-result') handler = () => onBookResult(message);
+        else if (message.type === 'econsul:next-slot') handler = () => onNextSlot(message, sender.tab);
         else if (message.type === 'econsul:draft-result') handler = () => onDraftResult(message);
         else if (message.type === 'econsul:request') handler = () => onSiteRequest(message);
         else if (message.type === 'econsul:confirm-clicked') handler = async () => {

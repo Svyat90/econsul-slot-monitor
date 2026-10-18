@@ -148,9 +148,9 @@
 
     // select-slot, then each next step of a chain of failed bookings the background hands back
     // (the next slot on the same calendar, without loading the draft again)
-    async function selectSlot(message) {
+    async function selectSlot(message, startOnCalendar = false) {
         if (job) return;
-        let next = message, onCalendar = false;
+        let next = message, onCalendar = startOnCalendar;
         while (next) {
             if (next.pauseMs) await new Promise(r => setTimeout(r, next.pauseMs));
             next = await selectOne(next, onCalendar);
@@ -238,6 +238,7 @@
         .ech-banner button { height: 40px; padding: 0 14px; border: 1px solid rgba(255,255,255,.6); border-radius: 8px;
             background: transparent; color: #FFFFFF; font: 600 13px Manrope, system-ui, sans-serif; cursor: pointer; }
         .ech-banner button[hidden] { display: none; }
+        .ech-banner button:disabled { opacity: .6; cursor: default; }
         .ech-slot { box-shadow: 0 0 0 3px #FFFFFF, 0 0 0 5px #0057B8 !important; }
         .ech-finish { background: #0057B8 !important; color: #FFFFFF !important;
             box-shadow: 0 0 0 3px #FFFFFF, 0 0 0 6px #FFD500 !important; }
@@ -260,6 +261,7 @@
             <div class="ech-title"></div>
             <div class="ech-row">
                 <div class="ech-hint">Натисніть «Підтвердити», щоб забронювати</div>
+                <button type="button" class="ech-next">Наступний слот</button>
                 <button type="button" class="ech-mute">Вимкнути звук</button>
             </div>`;
         root.querySelector('.ech-title').textContent = 'Вибрано: ' + slotLabel(slot);
@@ -285,6 +287,17 @@
             else highlight(shown, arrow);
         }, 1000);
         highlight(slotElement, arrow);
+        // The person wants another slot: the background picks the next one of this selection, and it is
+        // selected right here on this calendar (this one is not put in quarantine, only skipped)
+        root.querySelector('.ech-next').addEventListener('click', async event => {
+            const button = event.currentTarget;
+            button.disabled = true;
+            button.textContent = 'Шукаю…';
+            const reply = await send({ type: 'econsul:next-slot', slot });
+            if (reply && reply.next) return selectSlot(reply.next, true);
+            button.hidden = true;
+            root.querySelector('.ech-hint').textContent = (reply && reply.text) || 'Іншого слота немає.';
+        });
         root.querySelector('.ech-mute').addEventListener('click', () => {
             send({ type: 'econsul:mute' });
             soundOff('Звук вимкнено');
