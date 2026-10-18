@@ -41,6 +41,19 @@ export function BookingSection() {
             <label className={styles.check}>
                 <input
                     type="checkbox"
+                    checked={extension.aggressiveBook}
+                    disabled={!extension.connected || !extension.autoBook}
+                    onChange={(event) => extensionLink.setDraftSettings({ aggressiveBook: event.target.checked })}
+                />
+                <span>
+                    <strong>Агресивне бронювання.</strong> Без ліміту 12 натискань на годину: одне «Підтвердити» на слот і одразу наступний; слот, що
+                    не забронювався, пропускається 5 хв, нові слоти — першими. Вимикається само, коли сесія закінчується.
+                    {!extension.connected ? ' Потрібне розширення.' : !extension.autoBook && ' Потрібне автоматичне бронювання.'}
+                </span>
+            </label>
+            <label className={styles.check}>
+                <input
+                    type="checkbox"
                     checked={extension.autoDraft}
                     disabled={!extension.connected}
                     onChange={(event) => extensionLink.setDraftSettings({ autoDraft: event.target.checked })}

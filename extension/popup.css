@@ -143,6 +143,7 @@ button[hidden] { display: none; }
 .check-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .check-label input { width: 17px; height: 17px; margin: 0; accent-color: var(--accent); flex: none; }
 .check .l { font-weight: 700; }
+.check-label:has(input:disabled) { cursor: default; opacity: .45; }
 
 .foot { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--divider); align-items: center; }
 .foot .with-q { flex: 1; display: flex; align-items: center; gap: 6px; }

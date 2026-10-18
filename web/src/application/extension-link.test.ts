@@ -225,6 +225,7 @@ describe('extension link', () => {
             slots: [{ date: '2026-11-01', time: '09:00' }, { date: '2026-11-02', time: '10:00' }],
             range: { from: '2026-11-01' },
             test: false,
+            all: true,
         }]);
         // the same draft on another step: nothing again
         t.receive({ type: 'ext:draft', draft: { url: 'https://e-consul.gov.ua/tasks/a1/dateAndTimeVisitInfo', createdAt: 7 } });
@@ -288,11 +289,18 @@ describe('extension link', () => {
         t.receive({ type: 'ext:settings', autoBook: false, paused: false, autoDraft: false, alarmEnabled: false, alarmLeadMin: 12 });
         expect(t.link.getState()).toMatchObject({ autoDraft: false, alarmEnabled: false, alarmLeadMin: 12 });
         t.receive({ type: 'ext:settings', autoBook: true, paused: false }); // an old extension: the rest stays
-        expect(t.link.getState()).toMatchObject({ autoBook: true, autoDraft: false, alarmLeadMin: 12 });
+        expect(t.link.getState()).toMatchObject({ autoBook: true, aggressiveBook: false, autoDraft: false, alarmLeadMin: 12 });
+        t.receive({ type: 'ext:settings', autoBook: true, aggressiveBook: true, paused: false });
+        expect(t.link.getState().aggressiveBook).toBe(true);
+        // the session ended: the extension turns aggressive booking off
+        t.receive({ type: 'ext:settings', autoBook: true, aggressiveBook: false, paused: false });
+        expect(t.link.getState().aggressiveBook).toBe(false);
         t.sent.length = 0;
         t.link.setDraftSettings({ alarmLeadMin: 8 });
         expect(t.link.getState().alarmLeadMin).toBe(8);
         expect(t.sent[0]).toEqual({ type: 'app:settings', patch: { alarmLeadMin: 8 } });
+        t.link.setDraftSettings({ aggressiveBook: true });
+        expect(t.sent[1]).toEqual({ type: 'app:settings', patch: { aggressiveBook: true } });
     });
 
     it('starts the monitor after a login when «start monitoring after login» is on, and only then', () => {

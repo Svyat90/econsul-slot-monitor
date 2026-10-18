@@ -123,6 +123,17 @@ describe('SettingsView', () => {
         expect(link.setAutoBook).toHaveBeenCalledWith(true);
     });
 
+    it('aggressive booking is disabled without auto-booking', () => {
+        setup({ extension: { connected: true } });
+        expect(screen.getByRole('checkbox', { name: /Агресивне бронювання/ })).toBeDisabled();
+    });
+
+    it('aggressive booking goes to the extension settings', async () => {
+        const { user, link } = setup({ extension: { connected: true, autoBook: true } });
+        await user.click(screen.getByRole('checkbox', { name: /Агресивне бронювання/ }));
+        expect(link.setDraftSettings).toHaveBeenCalledWith({ aggressiveBook: true });
+    });
+
     it('draft creation and the alarm: disabled without the extension, switched and set with one', async () => {
         setup();
         expect(screen.getByRole('checkbox', { name: /Створювати чернетку автоматично/ })).toBeDisabled();

@@ -189,6 +189,8 @@ function render() {
 
     renderSlotLog(now, lastSlots);
     if (document.activeElement !== $('autoBook')) $('autoBook').checked = !!settings.autoBook;
+    if (document.activeElement !== $('aggressiveBook')) $('aggressiveBook').checked = !!settings.aggressiveBook;
+    $('aggressiveBook').disabled = !settings.autoBook;
     if (document.activeElement !== $('autoDraft')) $('autoDraft').checked = settings.autoDraft !== false;
     if (document.activeElement !== $('autoMonitor')) $('autoMonitor').checked = !!settings.autoMonitor;
     $('pauseLabel').textContent = settings.paused ? 'Відновити' : 'Призупинити';
@@ -262,6 +264,10 @@ $('pauseBtn').addEventListener('click', async () => {
 });
 $('autoBook').addEventListener('change', async event => {
     await send('popup:settings', { patch: { autoBook: event.target.checked } });
+    refresh();
+});
+$('aggressiveBook').addEventListener('change', async event => {
+    await send('popup:settings', { patch: { aggressiveBook: event.target.checked } });
     refresh();
 });
 $('autoMonitor').addEventListener('change', async event => {

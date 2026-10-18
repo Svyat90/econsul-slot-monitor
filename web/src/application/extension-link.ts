@@ -15,6 +15,7 @@ export type ExtensionState = {
     version: string | null;
     auth: { loggedIn: boolean | null; exp: number | null; reason: string | null } | null;
     autoBook: boolean;
+    aggressiveBook: boolean; // no press limit, the next slot right after a failure; off when the session ends
     autoDraft: boolean; // make a draft after a login when there is none
     autoMonitor: boolean; // start monitoring after a login when it is not running
     alarmEnabled: boolean; // make a fresh draft shortly before the location opens new days
@@ -26,7 +27,7 @@ export type ExtensionState = {
     alarm: { at: number } | null;
 };
 
-export type DraftSettingsPatch = Partial<Pick<ExtensionState, 'autoDraft' | 'autoMonitor' | 'alarmEnabled' | 'alarmLeadMin'>>;
+export type DraftSettingsPatch = Partial<Pick<ExtensionState, 'aggressiveBook' | 'autoDraft' | 'autoMonitor' | 'alarmEnabled' | 'alarmLeadMin'>>;
 
 export interface ExtensionLink {
     getState(): ExtensionState;
@@ -67,6 +68,7 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
         version: null,
         auth: null,
         autoBook: false,
+        aggressiveBook: false,
         autoDraft: true,
         autoMonitor: false,
         alarmEnabled: true,
@@ -143,7 +145,7 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
     }
 
     // New slots in the date range, earliest first
-    function sendSlots(keys: readonly SlotKey[], free: Pick<FreeSlots, 'slotConsuls'> | null, test: boolean): void {
+    function sendSlots(keys: readonly SlotKey[], free: Pick<FreeSlots, 'slotConsuls'> | null, test: boolean, all = false): void {
         if (!state.connected || keys.length === 0) return;
         const slots: AppSlot[] = [...keys].sort().map((key) => {
             const [date = '', time = ''] = key.split(' ');
@@ -154,7 +156,7 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
         const range: { from?: string; to?: string } = {};
         if (from) range.from = from;
         if (to) range.to = to;
-        bridge.send({ type: 'app:slots', slots, range, test });
+        bridge.send({ type: 'app:slots', slots, range, test, ...(all && { all }) });
         const first = slots[0];
         if (first) {
             monitor.log(
@@ -175,7 +177,7 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
         if (keys.length === 0) return;
         offeredFor = taskId;
         monitor.log(`Є чернетка: надсилаю розширенню всі вільні слоти (${keys.length}), не лише нові`);
-        sendSlots(keys, m.free, false);
+        sendSlots(keys, m.free, false, true);
     }
 
     function onHello(version: string | undefined): void {
@@ -275,6 +277,7 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
                         case 'ext:settings':
                             return patch({
                                 autoBook: msg.autoBook,
+                                ...(msg.aggressiveBook !== undefined && { aggressiveBook: msg.aggressiveBook }),
                                 ...(msg.autoDraft !== undefined && { autoDraft: msg.autoDraft }),
                                 ...(msg.autoMonitor !== undefined && { autoMonitor: msg.autoMonitor }),
                                 ...(msg.alarmEnabled !== undefined && { alarmEnabled: msg.alarmEnabled }),

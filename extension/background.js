@@ -27,7 +27,7 @@ const VERIFY_THROTTLE_MS = 10 * 60 * 1000; // re-check a token the API rejected 
 const SELECTED_SOUND = { minMs: 30 * 1000, maxMs: 2 * 60 * 1000 };
 // alarmLeadMin: the reminder fires this many minutes before the current location opens new days
 // autoMonitor: after a login the app starts monitoring by itself (off until the person turns it on)
-const DEFAULT_SETTINGS = { paused: false, autoBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5 };
+const DEFAULT_SETTINGS = { paused: false, autoBook: false, aggressiveBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5 };
 const ALARM_LEAD_MIN = 1, ALARM_LEAD_MAX = 60;
 // When new days open the site is loaded by everyone who tries to book and answers many times
 // slower: the timeouts are generous and a failed selection starts over (see RETRYABLE)
@@ -55,6 +55,15 @@ const MAX_SELECT_ATTEMPTS = 5;
 // A booked slot clears its history. Kept in chrome.storage.local (`bookingHistory`, `pressLog`).
 const QUARANTINE_MS = [10, 30, 120, 360, 1440].map(minutes => minutes * 60 * 1000);
 const MAX_PRESSES_PER_HOUR = 12;
+// After a failed booking the next free slot is tried after this pause (see onBookResult)
+const ADVANCE_PAUSE_MS = 10 * 1000;
+// Aggressive booking (the owner's decision, 2026-10-18): no press limit, one press per slot, every
+// failure = a flat 5 min quarantine, the next slot after 2 s. Turned off when the session ends
+const AGGRESSIVE_QUARANTINE_MS = 5 * 60 * 1000;
+const AGGRESSIVE_ADVANCE_PAUSE_MS = 2 * 1000;
+// Failures after which the next slot is tried. no-outcome and alert too (the owner's decision,
+// 2026-10-18), although the site may have booked: then the person may get a second appointment
+const ADVANCE_ERRORS = new Set(['unavailable', 'alert', 'no-outcome']);
 const TRIES_IN_WINDOW = 6;
 const TRIES_OUTSIDE_WINDOW = 3;
 const WINDOW_BEFORE_MS = 2 * 60 * 1000;
@@ -210,6 +219,12 @@ function authMessage(auth, extra = {}) {
 // broken-glass sound, played by the app when it can, otherwise by the offscreen document
 async function onLoggedOut(auth, opts) {
     Telemetry.event('session.logged-out', { reason: auth.reason || null });
+    // Aggressive booking lasts one session: after a new login it is turned on again by hand
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    if (settings.aggressiveBook) {
+        Telemetry.event('user.aggressive-book', { enabled: false, from: 'session' });
+        await saveSettings({ aggressiveBook: false });
+    }
     chrome.notifications.create('login', {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
@@ -731,11 +746,12 @@ async function onAppMessage(msg) {
             Telemetry.event('app.slots-received', { count: (msg.slots || []).length, test: !!msg.test }, { test: !!msg.test });
             await chrome.storage.session.set({ lastSlots: { receivedAt: Date.now(), slots: msg.slots || [], range: msg.range || {}, test: !!msg.test } });
             // Not awaited: loading the draft takes up to a minute, other messages must not wait
-            if ((msg.slots || []).length) startSelection(msg.slots, !!msg.test);
+            if ((msg.slots || []).length) startSelection(msg.slots, !!msg.test, 1, { all: !!msg.all });
             return [{ type: 'ext:slots-received', count: (msg.slots || []).length }];
         case 'app:settings':
             // What the app shows: auto-booking, auto draft and the reminder before the opening
             if (msg.patch && typeof msg.patch.autoBook === 'boolean') Telemetry.event('user.auto-book', { enabled: msg.patch.autoBook, from: 'app' });
+            if (msg.patch && typeof msg.patch.aggressiveBook === 'boolean') Telemetry.event('user.aggressive-book', { enabled: msg.patch.aggressiveBook, from: 'app' });
             if (msg.patch) await saveSettings(msg.patch);
             return [];
         case 'app:login':
@@ -783,11 +799,11 @@ async function splitQuarantined(slots) {
     return { usable, skipped };
 }
 
-async function recordSlotFailure(slot, error) {
+async function recordSlotFailure(slot, error, aggressive = false) {
     const key = await slotKeyOf(slot);
     const { bookingHistory = {} } = await chrome.storage.local.get('bookingHistory');
     const fails = ((bookingHistory[key] && bookingHistory[key].fails) || 0) + 1;
-    const until = Date.now() + QUARANTINE_MS[Math.min(fails, QUARANTINE_MS.length) - 1];
+    const until = Date.now() + (aggressive ? AGGRESSIVE_QUARANTINE_MS : QUARANTINE_MS[Math.min(fails, QUARANTINE_MS.length) - 1]);
     bookingHistory[key] = { fails, until, error: String(error).split(':')[0].slice(0, 50), at: Date.now() };
     // old records go: a quarantine that ended a day ago is forgotten
     for (const [k, v] of Object.entries(bookingHistory)) if (v.until < Date.now() - 24 * 60 * 60 * 1000) delete bookingHistory[k];
@@ -829,22 +845,37 @@ async function setSelection(selection) {
 // One selection starts at a time. Until it is «running» it may wait minutes for a draft; slots
 // that arrive meanwhile (new ones, or the app offering all free slots to a new draft) join it
 // instead of starting a second selection in another tab
-let selectionStarting = null; // { test, slots } while a start is waiting
+let selectionStarting = null; // { test, fresh, all } while a start is waiting
 
 function slotKey(slot) { return `${slot.date} ${slot.time}`; }
 
-// New slots from the app (earliest first, already within the date range): open the draft,
-// go to the calendar and select the earliest one the site shows as free
-async function startSelection(slots, test, attempt = 1) {
+// The lists in order, each slot once: what comes first is tried first
+function mergeSlots(...lists) {
+    const seen = new Set();
+    return lists.flat().filter(slot => !seen.has(slotKey(slot)) && seen.add(slotKey(slot)));
+}
+
+// Slots that came while a selection was busy: tried on its next step (new ones first)
+async function keepWaitingSlots(slots, all) {
+    const { waitingSlots = { fresh: [], all: [] } } = await chrome.storage.session.get('waitingSlots');
+    if (all) waitingSlots.all = mergeSlots(waitingSlots.all, slots);
+    else waitingSlots.fresh = mergeSlots(slots, waitingSlots.fresh);
+    await chrome.storage.session.set({ waitingSlots });
+}
+
+// Slots from the app (earliest first, already within the date range): open the draft, go to the
+// calendar and select the first one the site shows as free. New slots go before the others:
+// before the rest of a chain of failed bookings and before all free slots the app offers to a
+// new draft (opts.all)
+async function startSelection(slots, test, attempt = 1, opts = {}) {
     if (selectionStarting) {
         if (selectionStarting.test === test) {
-            const known = new Set(selectionStarting.slots.map(slotKey));
-            selectionStarting.slots = [...selectionStarting.slots, ...slots.filter(s => !known.has(slotKey(s)))]
-                .sort((a, b) => slotKey(a).localeCompare(slotKey(b)));
+            if (opts.all) selectionStarting.all = mergeSlots(selectionStarting.all, slots);
+            else selectionStarting.fresh = mergeSlots(slots, selectionStarting.fresh);
         }
         return;
     }
-    const starting = selectionStarting = { test, slots };
+    const starting = selectionStarting = { test, fresh: opts.all ? [] : slots, all: opts.all ? slots : [] };
     const release = () => { if (selectionStarting === starting) selectionStarting = null; };
     try {
         return await runSelection(starting, attempt, release);
@@ -883,13 +914,28 @@ async function runSelection(starting, attempt, release) {
         if (expired(draft)) draft = null; // the creation failed: the old one is still stored
         if (draft) Telemetry.event('selection.stage', { stage: 'draft-made-for-slots', taskId: draft.taskId });
     }
-    if (selection && ['running', 'booking'].includes(selection.status) && now - selection.startedAt < SELECT_TIMEOUT_MS) return;
-    // The person may be pressing «Підтвердити» right now: do not switch the slot under them
-    if (selection && selection.status === 'selected' && now - selection.at < SELECTED_HOLD_MS) return;
+    const busy = (selection && ['running', 'booking'].includes(selection.status) && now - selection.startedAt < SELECT_TIMEOUT_MS)
+        // The person may be pressing «Підтвердити» right now: do not switch the slot under them
+        || (selection && selection.status === 'selected' && now - selection.at < SELECTED_HOLD_MS);
+    if (busy) {
+        if (!test) {
+            await keepWaitingSlots(starting.fresh, false);
+            await keepWaitingSlots(starting.all, true);
+        }
+        return;
+    }
     if (!draft) return selectionFailed({ status: 'failed', test, startedAt: now }, 'no-draft');
     // This draft is booked: the site turns it into a sent application
     if (selection && selection.status === 'booked' && selection.taskId === draft.taskId) return;
-    slots = starting.slots; // with the slots that joined while waiting for the draft
+    const chaining = !!(selection && selection.advancing && selection.slots);
+    if (test) slots = mergeSlots(starting.fresh, starting.all);
+    else {
+        // New slots first (those that came while busy, then these), then the rest of a chain of
+        // failed bookings, then all free slots offered to the draft
+        const { waitingSlots = { fresh: [], all: [] } } = await chrome.storage.session.get('waitingSlots');
+        await chrome.storage.session.remove('waitingSlots');
+        slots = mergeSlots(waitingSlots.fresh, starting.fresh, chaining ? selection.slots : [], waitingSlots.all, starting.all);
+    }
 
     // Slots that did not book recently are left alone (see QUARANTINE_MS)
     if (!test) {
@@ -899,7 +945,21 @@ async function runSelection(starting, attempt, release) {
         }
         if (!usable.length) {
             const until = Math.min(...skipped.map(s => s.until));
-            await sendToApps([{ type: 'ext:slot-failed', error: 'quarantined', text: `Слоти не бронювались: пропускаю до ${new Date(until).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}.`, test: false }]);
+            const untilText = new Date(until).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+            await sendToApps([{ type: 'ext:slot-failed', error: 'quarantined', text: `Слоти не бронювались: пропускаю до ${untilText}.`, test: false }]);
+            if (chaining) {
+                // A chain of failed bookings ran out of slots: the person has to know
+                Telemetry.event('selection.stage', { stage: 'chain-ended', slots: slots.length });
+                await playSound('selected', SELECTED_SOUND);
+                chrome.notifications.create('slot', {
+                    type: 'basic',
+                    iconUrl: 'icons/icon128.png',
+                    title: 'Жоден слот не забронювався',
+                    message: `Спробував усі вільні слоти (${slots.length}). Наступна спроба — з новими слотами або після ${untilText}.`,
+                    requireInteraction: true,
+                    priority: 2
+                });
+            }
             return setSelection({ status: 'skipped', error: 'quarantined', test, at: now, until });
         }
         slots = usable;
@@ -907,10 +967,12 @@ async function runSelection(starting, attempt, release) {
 
     const jobId = crypto.randomUUID();
     const pressesLeft = MAX_PRESSES_PER_HOUR - (await pressesLastHour()).length;
-    const autoBook = !!settings.autoBook && !test && pressesLeft > 0; // test slots are never booked
-    if (settings.autoBook && !test && pressesLeft <= 0) Telemetry.event('selection.stage', { stage: 'press-limit', limit: MAX_PRESSES_PER_HOUR });
-    const confirmTries = Math.min(await inBookingWindow() ? TRIES_IN_WINDOW : TRIES_OUTSIDE_WINDOW, Math.max(1, pressesLeft));
-    const current = await setSelection({ status: 'running', jobId, taskId: draft.taskId, test, autoBook, slots, attempt, startedAt: now, at: now });
+    const aggressive = !!settings.autoBook && !!settings.aggressiveBook && !test;
+    const autoBook = !!settings.autoBook && !test && (aggressive || pressesLeft > 0); // test slots are never booked
+    if (settings.autoBook && !aggressive && !test && pressesLeft <= 0) Telemetry.event('selection.stage', { stage: 'press-limit', limit: MAX_PRESSES_PER_HOUR });
+    // aggressive: one press per slot, then the next slot
+    const confirmTries = aggressive ? 1 : Math.min(await inBookingWindow() ? TRIES_IN_WINDOW : TRIES_OUTSIDE_WINDOW, Math.max(1, pressesLeft));
+    const current = await setSelection({ status: 'running', jobId, taskId: draft.taskId, test, autoBook, aggressive, slots, attempt, startedAt: now, at: now });
     release(); // from here a new start sees «running» and leaves this one alone
 
     // Load the draft again even if it is open on step 4: the calendar there may be old. Step 3 is
@@ -929,7 +991,7 @@ async function runSelection(starting, attempt, release) {
     };
     if (!await stillRunning()) return;
     await setSelection({ ...current, tabId: tab.id });
-    Telemetry.event('selection.started', { taskId: draft.taskId, slots: slots.length, autoBook, attempt }, { jobId, test });
+    Telemetry.event('selection.started', { taskId: draft.taskId, slots: slots.length, autoBook, aggressive, attempt }, { jobId, test });
 
     // Wait until the new page's econsul.js answers for this task
     await new Promise(r => setTimeout(r, 1500));
@@ -1043,23 +1105,50 @@ async function onSlotResult({ jobId, ok, slot, error, tried, booking }) {
     await sendToApps([{ type: 'ext:slot-selected', slot }]);
 }
 
-// From econsul.js: auto-booking pressed «Підтвердити». ok: the site said «Дякуємо»
+// From econsul.js: auto-booking pressed «Підтвердити». ok: the site said «Дякуємо». A failure
+// that is the site's answer (ADVANCE_ERRORS) puts the slot in quarantine and tries the next free
+// slot of the selection; any other failure (the page left the calendar, nothing to press) stops
 async function onBookResult({ jobId, slot, ok, error, text, presses }) {
     const { selection } = await chrome.storage.session.get('selection');
     if (!selection || selection.jobId !== jobId) return;
     const date = slot.date.split('-').reverse().join('.');
+    const code = String(error).split(':')[0].slice(0, 50);
+    const aggressive = !!selection.aggressive;
     Telemetry.event(ok ? 'booking.booked' : 'booking.failed', {
-        taskId: selection.taskId, date: slot.date, time: slot.time,
-        ...(ok ? {} : { error: String(error).split(':')[0].slice(0, 50) }),
+        taskId: selection.taskId, date: slot.date, time: slot.time, aggressive,
+        ...(ok ? {} : { error: code }),
         // what the site said when it answered with a message (not the page text: that has the applicant's data)
         ...(!ok && (error === 'alert' || error === 'unavailable') && text ? { message: String(text).slice(0, 300) } : {})
     }, { jobId, test: selection.test });
     await recordPresses(presses);
     let quarantine = null;
-    if (ok) await clearSlotHistory(slot);
-    else if (['unavailable', 'alert', 'no-outcome'].includes(String(error).split(':')[0])) quarantine = await recordSlotFailure(slot, error);
-    if (quarantine) Telemetry.event('selection.stage', { stage: 'quarantine-start', fails: quarantine.fails, until: new Date(quarantine.until).toISOString(), presses: presses || 0 }, { jobId, test: selection.test });
-    await setSelection({ ...selection, status: ok ? 'booked' : 'book-failed', slot, error: error || null, text: text || null, quarantineUntil: quarantine ? quarantine.until : null, at: Date.now() });
+    if (ok) {
+        await clearSlotHistory(slot);
+        await chrome.storage.session.remove('waitingSlots');
+    } else if (ADVANCE_ERRORS.has(code)) quarantine = await recordSlotFailure(slot, error, aggressive);
+    if (quarantine) Telemetry.event('selection.stage', { stage: 'quarantine-start', fails: quarantine.fails, until: new Date(quarantine.until).toISOString(), presses: presses || 0, aggressive }, { jobId, test: selection.test });
+
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    const advance = !ok && !selection.test && ADVANCE_ERRORS.has(code) && !!settings.autoBook && !settings.paused;
+    const ended = { ...selection, status: ok ? 'booked' : 'book-failed', slot, error: error || null, text: text || null, quarantineUntil: quarantine ? quarantine.until : null, advancing: advance, at: Date.now() };
+    await setSelection(ended);
+    const reason = `${SELECT_ERRORS[error] || error}${text ? ' ' + text.slice(0, 120) : ''}`;
+
+    if (advance) {
+        // Quietly on to the next slot: the person hears about it when one books or none does
+        const pause = aggressive ? AGGRESSIVE_ADVANCE_PAUSE_MS : ADVANCE_PAUSE_MS;
+        Telemetry.event('selection.stage', { stage: 'advance', error: code, left: selection.slots.length - 1, pauseMs: pause, aggressive }, { jobId, test: false });
+        await sendToApps([{ type: 'ext:slot-failed', error: code, text: `Не забронювалось ${date} ${slot.time}: ${reason} Пробую наступний слот.`, test: false }]);
+        setTimeout(() => serial(async () => {
+            // New slots (or the person) started another selection meanwhile: it carries this chain on
+            const { selection: now } = await chrome.storage.session.get('selection');
+            if (!now || now.jobId !== jobId || now.status !== 'book-failed') return;
+            // Not awaited: startSelection may wait for a draft, whose messages go through serial
+            startSelection([], false, 1, { all: true });
+        }), pause);
+        return;
+    }
+
     // Either way the person has to look: the result comes by email, or the slot waits for them
     await playSound('selected', SELECTED_SOUND);
     chrome.notifications.create('slot', {
@@ -1068,11 +1157,13 @@ async function onBookResult({ jobId, slot, ok, error, text, presses }) {
         title: ok ? `Заброньовано ${date} о ${slot.time}` : `Не вдалося забронювати ${date} о ${slot.time}`,
         message: ok
             ? 'Сайт прийняв заявку. Підтвердження прийде на email.'
-            : `${SELECT_ERRORS[error] || error}${text ? ' ' + text.slice(0, 120) : ''} Слот лишився вибраним, можна натиснути «Підтвердити» самому.${quarantine ? ` Автоматично цей слот пропускаю до ${new Date(quarantine.until).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}.` : ''}`,
+            : `${reason} Слот лишився вибраним, можна натиснути «Підтвердити» самому.${quarantine ? ` Автоматично цей слот пропускаю до ${new Date(quarantine.until).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}.` : ''}`,
         requireInteraction: true,
         priority: 2
     });
-    await sendToApps([{ type: ok ? 'ext:slot-booked' : 'ext:slot-selected', slot }]);
+    await sendToApps([ok
+        ? { type: 'ext:slot-booked', slot }
+        : { type: 'ext:slot-failed', error: code, text: `Не забронювалось ${date} ${slot.time}: ${reason} Слот лишився вибраним.`, test: false }]);
 }
 
 async function showSelectionTab() {
@@ -1128,7 +1219,7 @@ async function stopSounds(force) {
 // Only known settings of the right type get in; the alarm lead is a whole number of minutes
 function cleanSettingsPatch(patch = {}) {
     const clean = {};
-    for (const key of ['paused', 'autoBook', 'autoDraft', 'autoMonitor', 'alarmEnabled']) if (typeof patch[key] === 'boolean') clean[key] = patch[key];
+    for (const key of ['paused', 'autoBook', 'aggressiveBook', 'autoDraft', 'autoMonitor', 'alarmEnabled']) if (typeof patch[key] === 'boolean') clean[key] = patch[key];
     const lead = Math.round(Number(patch.alarmLeadMin));
     if (patch.alarmLeadMin != null && Number.isFinite(lead)) clean.alarmLeadMin = Math.min(ALARM_LEAD_MAX, Math.max(ALARM_LEAD_MIN, lead));
     return clean;
@@ -1146,7 +1237,7 @@ async function saveSettings(patch) {
 async function settingsMessage() {
     const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
     const all = { ...DEFAULT_SETTINGS, ...settings };
-    return { type: 'ext:settings', autoBook: !!all.autoBook, paused: !!all.paused, autoDraft: all.autoDraft !== false, autoMonitor: !!all.autoMonitor, alarmEnabled: all.alarmEnabled !== false, alarmLeadMin: all.alarmLeadMin };
+    return { type: 'ext:settings', autoBook: !!all.autoBook, aggressiveBook: !!all.aggressiveBook, paused: !!all.paused, autoDraft: all.autoDraft !== false, autoMonitor: !!all.autoMonitor, alarmEnabled: all.alarmEnabled !== false, alarmLeadMin: all.alarmLeadMin };
 }
 
 // ---- Popup ----
@@ -1181,6 +1272,7 @@ async function onPopupMessage(msg) {
         case 'popup:settings':
             if (msg.patch && typeof msg.patch.paused === 'boolean') Telemetry.event('user.pause', { paused: msg.patch.paused, from: 'popup' });
             if (msg.patch && typeof msg.patch.autoBook === 'boolean') Telemetry.event('user.auto-book', { enabled: msg.patch.autoBook, from: 'popup' });
+            if (msg.patch && typeof msg.patch.aggressiveBook === 'boolean') Telemetry.event('user.aggressive-book', { enabled: msg.patch.aggressiveBook, from: 'popup' });
             await saveSettings(msg.patch);
             return {};
         default:

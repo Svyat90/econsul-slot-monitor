@@ -337,6 +337,15 @@ extension/
 | розширення → застосунок | `ext:settings` | ще поля `autoDraft`, `autoMonitor`, `alarmEnabled`, `alarmLeadMin` (необов'язкові: старе розширення їх не шле) |
 | застосунок → розширення | `app:settings` | `patch` із будь-яких з `autoBook`, `autoDraft`, `autoMonitor`, `alarmEnabled`, `alarmLeadMin` |
 | застосунок → розширення | `app:create-draft` | — (кнопка «Створити чернетку»; установа й послуга — з останнього `app:selection`) |
+
+Додано у v0.9.0 (перехід на наступний слот і агресивне бронювання, 2026-10-18):
+
+| Напрям | `type` | Дані |
+|---|---|---|
+| розширення → застосунок | `ext:settings` | ще поле `aggressiveBook` (необов'язкове) |
+| застосунок → розширення | `app:settings` | `patch` може містити `aggressiveBook` |
+| застосунок → розширення | `app:slots` | ще `all?: true` — усі вільні слоти, запропоновані новій чернетці; без нього — нові слоти, які пробуються першими |
+| розширення → застосунок | `ext:slot-failed` | тепер і на невдале бронювання (раніше — `ext:slot-selected`), `text` — причина й що далі |
 | розширення → застосунок | `ext:draft-job` | `{ status: 'running' \| 'failed' \| null, error?, text? }` — `null`: створення завершено чи його немає; `text` — причина українською (`DRAFT_ERRORS`) |
 | background → `econsul.js` | `create-draft`, `check-task` | `create-draft`: `{ jobId, selection }`; `check-task`: `{ taskId }` → `{ info }` (`GET /tasks/{id}`) |
 | `econsul.js` → background | `econsul:draft-result` | `{ jobId, ok, error }` |

@@ -47,6 +47,8 @@ export const extMessageSchema = z.discriminatedUnion('type', [
   ext('ext:slots-received', { count: z.number() }),
   ext('ext:settings', {
     autoBook: z.boolean(),
+    // v0.9: no press limit, one press per slot, 5 min quarantine; off when the session ends
+    aggressiveBook: z.boolean().optional(),
     paused: z.boolean(),
     // v0.5: a draft made after a login, and the alarm that makes one before the location opens
     autoDraft: z.boolean().optional(),
@@ -105,6 +107,8 @@ export const appMessageSchema = z.discriminatedUnion('type', [
     slots: z.array(appSlotSchema),
     range: z.object({ from: z.string().optional(), to: z.string().optional() }),
     test: z.boolean().optional(),
+    // every free slot offered to a new draft, not only new ones: tried after new slots
+    all: z.boolean().optional(),
   }),
   app('app:monitor', { audioReady: z.boolean(), monitor: monitorSchema }),
   app('app:received', { exp: z.number().nullable().optional(), draftUrl: z.string().optional() }),
@@ -115,6 +119,7 @@ export const appMessageSchema = z.discriminatedUnion('type', [
   app('app:settings', {
     patch: z.object({
       autoBook: z.boolean().optional(),
+      aggressiveBook: z.boolean().optional(),
       autoDraft: z.boolean().optional(),
       autoMonitor: z.boolean().optional(),
       alarmEnabled: z.boolean().optional(),

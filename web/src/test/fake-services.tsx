@@ -34,7 +34,7 @@ export const baseMonitorState: MonitorState = {
     tabTitleMarks: true,
 };
 
-export const baseExtensionState: ExtensionState = { connected: false, version: null, auth: null, autoBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5, draft: null, draftJob: null, alarm: null };
+export const baseExtensionState: ExtensionState = { connected: false, version: null, auth: null, autoBook: false, aggressiveBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5, draft: null, draftJob: null, alarm: null };
 
 export function createFakeServices(options: { monitor?: Partial<MonitorState>; extension?: Partial<ExtensionState>; now?: number } = {}) {
     let monitorState: MonitorState = { ...baseMonitorState, ...options.monitor };
