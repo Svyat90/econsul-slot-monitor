@@ -55,12 +55,14 @@ const MAX_SELECT_ATTEMPTS = 5;
 // A booked slot clears its history. Kept in chrome.storage.local (`bookingHistory`, `pressLog`).
 const QUARANTINE_MS = [10, 30, 120, 360, 1440].map(minutes => minutes * 60 * 1000);
 const MAX_PRESSES_PER_HOUR = 20;
-// After a failed booking the next free slot is tried after this pause (see onBookResult)
-const ADVANCE_PAUSE_MS = 10 * 1000;
+// The next slot of a chain is tried at once; a slot that was in quarantine before (it is tried
+// again) waits a random pause first, so the presses do not come at an even beat (the owner's
+// decision, 2026-10-18). Aggressive booking never waits
+const RETRY_SLOT_PAUSE_MIN_MS = 5 * 1000;
+const RETRY_SLOT_PAUSE_MAX_MS = 15 * 1000;
 // Aggressive booking (the owner's decision, 2026-10-18): no press limit, every failure = a flat
 // 5 min quarantine, the next slot at once. Turned off when the session ends
 const AGGRESSIVE_QUARANTINE_MS = 5 * 60 * 1000;
-const AGGRESSIVE_ADVANCE_PAUSE_MS = 2 * 1000;
 // Failures after which the next slot is tried. no-outcome and alert too (the owner's decision,
 // 2026-10-18), although the site may have booked: then the person may get a second appointment
 const ADVANCE_ERRORS = new Set(['unavailable', 'alert', 'no-outcome']);
@@ -858,6 +860,29 @@ function mergeSlots(...lists) {
     return lists.flat().filter(slot => !seen.has(slotKey(slot)) && seen.add(slotKey(slot)));
 }
 
+// The order the slots are tried in: new slots first, each group in random order (not the earliest
+// first: the end, the middle and the start of the range alike — the owner's decision, 2026-10-18)
+function tryOrder(slots, fresh) {
+    const freshKeys = new Set(fresh.map(slotKey));
+    const shuffle = list => {
+        const out = [...list];
+        for (let i = out.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [out[i], out[j]] = [out[j], out[i]];
+        }
+        return out;
+    };
+    return [...shuffle(slots.filter(s => freshKeys.has(slotKey(s)))), ...shuffle(slots.filter(s => !freshKeys.has(slotKey(s))))];
+}
+
+// A random pause before a slot that was in quarantine before; none for a slot tried the first time
+async function retryPause(slot, aggressive) {
+    if (aggressive || !slot) return 0;
+    const { bookingHistory = {} } = await chrome.storage.local.get('bookingHistory');
+    if (!bookingHistory[await slotKeyOf(slot)]) return 0;
+    return RETRY_SLOT_PAUSE_MIN_MS + Math.round(Math.random() * (RETRY_SLOT_PAUSE_MAX_MS - RETRY_SLOT_PAUSE_MIN_MS));
+}
+
 // Slots that came while a selection was busy: tried on its next step (new ones first)
 async function keepWaitingSlots(slots, all) {
     const { waitingSlots = { fresh: [], all: [] } } = await chrome.storage.session.get('waitingSlots');
@@ -983,6 +1008,7 @@ async function runSelection(starting, attempt, release) {
     // This draft is booked: the site turns it into a sent application
     if (selection && selection.status === 'booked' && selection.taskId === draft.taskId) return;
     const chaining = !!(selection && selection.advancing && selection.slots);
+    let fresh = starting.fresh;
     if (test) slots = mergeSlots(starting.fresh, starting.all);
     else {
         // New slots first (those that came while busy, then these), then the rest of a chain of
@@ -990,6 +1016,7 @@ async function runSelection(starting, attempt, release) {
         const { waitingSlots = { fresh: [], all: [] } } = await chrome.storage.session.get('waitingSlots');
         await chrome.storage.session.remove('waitingSlots');
         slots = mergeSlots(waitingSlots.fresh, starting.fresh, chaining ? selection.slots : [], waitingSlots.all, starting.all);
+        fresh = mergeSlots(waitingSlots.fresh, starting.fresh);
     }
 
     // Slots that did not book recently are left alone (see QUARANTINE_MS)
@@ -997,9 +1024,15 @@ async function runSelection(starting, attempt, release) {
         slots = await usableSlots(slots, chaining, now);
         if (!slots) return;
     }
+    slots = tryOrder(slots, fresh);
 
     const jobId = crypto.randomUUID();
     const { autoBook, aggressive, confirmTries, limitUntil } = await bookingPlan(settings, test);
+    const pauseMs = autoBook ? await retryPause(slots[0], aggressive) : 0;
+    if (pauseMs) {
+        Telemetry.event('selection.stage', { stage: 'retry-pause', pauseMs }, { jobId, test });
+        await new Promise(r => setTimeout(r, pauseMs));
+    }
     const current = await setSelection({ status: 'running', jobId, taskId: draft.taskId, test, autoBook, aggressive, limitUntil, slots, attempt, startedAt: now, at: now });
     release(); // from here a new start sees «running» and leaves this one alone
 
@@ -1166,8 +1199,7 @@ async function onBookResult({ jobId, slot, ok, error, text, presses, onCalendar 
 
     if (advance) {
         // Quietly on to the next slot: the person hears about it when one books or none does
-        const pause = aggressive ? AGGRESSIVE_ADVANCE_PAUSE_MS : ADVANCE_PAUSE_MS;
-        Telemetry.event('selection.stage', { stage: 'advance', error: code, left: selection.slots.length - 1, pauseMs: pause, aggressive }, { jobId, test: false });
+        Telemetry.event('selection.stage', { stage: 'advance', error: code, left: selection.slots.length - 1, aggressive }, { jobId, test: false });
         await sendToApps([{ type: 'ext:slot-failed', error: code, text: `Не забронювалось ${date} ${slot.time}: ${reason} Пробую наступний слот.`, test: false }]);
         // Still on the calendar: the next slot is clicked right there, without loading the draft
         // again (on a loaded site that takes the longest)
@@ -1181,7 +1213,7 @@ async function onBookResult({ jobId, slot, ok, error, text, presses, onCalendar 
             if (!now || now.jobId !== jobId || now.status !== 'book-failed') return;
             // Not awaited: startSelection may wait for a draft, whose messages go through serial
             startSelection([], false, 1, { all: true });
-        }), pause);
+        }), 0); // a pause, if any, comes before a slot tried again (retryPause)
         return { showBanner: false };
     }
 
@@ -1215,14 +1247,16 @@ async function nextOnCalendar(previous) {
     // New slots first (they came while booking), then the rest of the chain
     const { waitingSlots = { fresh: [], all: [] } } = await chrome.storage.session.get('waitingSlots');
     await chrome.storage.session.remove('waitingSlots');
-    const slots = await usableSlots(mergeSlots(waitingSlots.fresh, previous.slots, waitingSlots.all), true, now);
-    if (!slots) return { ended: true };
+    const usable = await usableSlots(mergeSlots(waitingSlots.fresh, previous.slots, waitingSlots.all), true, now);
+    if (!usable) return { ended: true };
+    const slots = tryOrder(usable, waitingSlots.fresh);
     const jobId = crypto.randomUUID();
     const { autoBook, aggressive, confirmTries, limitUntil } = await bookingPlan(settings, false);
     await setSelection({ status: 'running', jobId, taskId: previous.taskId, tabId: previous.tabId, test: false, autoBook, aggressive, limitUntil, slots, attempt: 1, startedAt: now, at: now });
     Telemetry.event('selection.started', { taskId: previous.taskId, slots: slots.length, autoBook, aggressive, attempt: 1, onCalendar: true }, { jobId, test: false });
-    // aggressive: right away; otherwise the same pause as between loads of the draft
-    return { next: { jobId, taskId: previous.taskId, slots, autoBook, confirmTries, note: limitUntil ? limitText(limitUntil) : null, pauseMs: aggressive ? 0 : ADVANCE_PAUSE_MS } };
+    const pauseMs = autoBook ? await retryPause(slots[0], aggressive) : 0;
+    if (pauseMs) Telemetry.event('selection.stage', { stage: 'retry-pause', pauseMs }, { jobId, test: false });
+    return { next: { jobId, taskId: previous.taskId, slots, autoBook, confirmTries, note: limitUntil ? limitText(limitUntil) : null, pauseMs } };
 }
 
 async function showSelectionTab() {

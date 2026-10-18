@@ -241,26 +241,22 @@ var EconsulPicker = (() => {
         if (state !== 'slots') return { error: state === 'left' ? 'step-stuck' : (state || 'calendar-not-loaded') };
         log('calendar loaded');
 
+        // Strictly in the given order (the background shuffles it), not grouped by date
         const tried = [];
-        const byDate = new Map();
-        for (const slot of slots) {
-            if (!byDate.has(slot.date)) byDate.set(slot.date, []);
-            byDate.get(slot.date).push(slot.time);
-        }
-        for (const [date, times] of byDate) {
-            if (!await openWeek(date)) { tried.push(`${date}: no week`); continue; }
+        const noWeek = new Set();
+        for (const { date, time } of slots) {
+            if (noWeek.has(date)) { tried.push(`${date} ${time}: no week`); continue; }
+            if (!await openWeek(date)) { noWeek.add(date); tried.push(`${date}: no week`); continue; }
             await expandDay(date);
-            for (const time of times) {
-                const el = findSlot(date, time);
-                if (!el) { tried.push(`${date} ${time}: absent`); continue; }
-                if (isBooked(el)) { tried.push(`${date} ${time}: booked`); continue; }
-                await clearSelection();
-                const target = findSlot(date, time);
-                if (target && !isSelected(target)) target.click();
-                const selected = await waitFor(() => { const t = findSlot(date, time); return t && isSelected(t) && t; }, 10000);
-                if (selected) return { slot: { date, time }, element: selected, tried };
-                tried.push(`${date} ${time}: click did not select`);
-            }
+            const el = findSlot(date, time);
+            if (!el) { tried.push(`${date} ${time}: absent`); continue; }
+            if (isBooked(el)) { tried.push(`${date} ${time}: booked`); continue; }
+            await clearSelection();
+            const target = findSlot(date, time);
+            if (target && !isSelected(target)) target.click();
+            const selected = await waitFor(() => { const t = findSlot(date, time); return t && isSelected(t) && t; }, 10000);
+            if (selected) return { slot: { date, time }, element: selected, tried };
+            tried.push(`${date} ${time}: click did not select`);
         }
         return { error: 'not-found', tried };
     }
