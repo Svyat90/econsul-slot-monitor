@@ -241,7 +241,7 @@ var EconsulPicker = (() => {
         if (state !== 'slots') return { error: state === 'left' ? 'step-stuck' : (state || 'calendar-not-loaded') };
         log('calendar loaded');
 
-        // Strictly in the given order (the background shuffles it), not grouped by date
+        // Strictly in the given order (the background's tryOrder: day by day, random within a day)
         const tried = [];
         const noWeek = new Set();
         for (const { date, time } of slots) {

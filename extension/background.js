@@ -58,8 +58,8 @@ const MAX_PRESSES_PER_HOUR = 20;
 // The next slot of a chain is tried at once; a slot that was in quarantine before (it is tried
 // again) waits a random pause first, so the presses do not come at an even beat (the owner's
 // decision, 2026-10-18). Aggressive booking never waits
-const RETRY_SLOT_PAUSE_MIN_MS = 5 * 1000;
-const RETRY_SLOT_PAUSE_MAX_MS = 15 * 1000;
+const RETRY_SLOT_PAUSE_MIN_MS = 1 * 1000;
+const RETRY_SLOT_PAUSE_MAX_MS = 5 * 1000;
 // Aggressive booking (the owner's decision, 2026-10-18): no press limit, every failure = a flat
 // 5 min quarantine, the next slot at once. Turned off when the session ends
 const AGGRESSIVE_QUARANTINE_MS = 5 * 60 * 1000;
@@ -860,8 +860,9 @@ function mergeSlots(...lists) {
     return lists.flat().filter(slot => !seen.has(slotKey(slot)) && seen.add(slotKey(slot)));
 }
 
-// The order the slots are tried in: new slots first, each group in random order (not the earliest
-// first: the end, the middle and the start of the range alike — the owner's decision, 2026-10-18)
+// The order the slots are tried in (the owner's decision, 2026-10-18): new slots first, then the
+// rest; in each group day by day, the earliest day first, and every slot of a day before the next
+// day; within a day in random order (the end, the middle and the start of the day alike)
 function tryOrder(slots, fresh) {
     const freshKeys = new Set(fresh.map(slotKey));
     const shuffle = list => {
@@ -872,7 +873,9 @@ function tryOrder(slots, fresh) {
         }
         return out;
     };
-    return [...shuffle(slots.filter(s => freshKeys.has(slotKey(s)))), ...shuffle(slots.filter(s => !freshKeys.has(slotKey(s))))];
+    const byDay = list => [...new Set(list.map(s => s.date))].sort()
+        .flatMap(date => shuffle(list.filter(s => s.date === date)));
+    return [...byDay(slots.filter(s => freshKeys.has(slotKey(s)))), ...byDay(slots.filter(s => !freshKeys.has(slotKey(s))))];
 }
 
 // A random pause before a slot that was in quarantine before; none for a slot tried the first time
