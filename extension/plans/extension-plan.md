@@ -312,7 +312,7 @@ extension/
 | застосунок → розширення | `app:hello` | — |
 | застосунок → розширення | `app:selection` | `{ selection: { institutionCode, institutionName, countryName, serviceCode, serviceName } }` |
 | застосунок → розширення | `app:auth-failed` | `{ status }` (401/403 від API) |
-| застосунок → розширення | `app:slots` | `{ slots: [{ date, time, consulIpnHash }], range: { from?, to? }, test? }` |
+| застосунок → розширення | `app:slots` | `{ slots: [{ date, time, consulIpnHash }], range: { from?, to? }, test? }`; нові слоти кожної перевірки, а для кожної нової чернетки розширення — усі вільні в діапазоні (з v0.8.2) |
 
 Додано під час етапів 1–2:
 

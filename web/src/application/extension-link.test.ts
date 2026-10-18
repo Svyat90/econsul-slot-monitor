@@ -211,6 +211,40 @@ describe('extension link', () => {
         expect(t.link.getState().draft?.url).toBe('https://x/y');
     });
 
+    it('a draft from the extension gets every free slot in range once; a next draft gets them again', () => {
+        const free = { keys: ['2026-10-30 09:00', '2026-11-02 10:00', '2026-11-01 09:00'], slotConsuls: {} } as never;
+        const t = setup({ running: true, free });
+        t.link.start();
+        t.receive({ type: 'ext:hello' });
+        t.sent.length = 0;
+        const slotsSent = () => t.sent.filter((m) => m.type === 'app:slots');
+
+        t.receive({ type: 'ext:draft', draft: { url: 'https://e-consul.gov.ua/tasks/a1/consularServiceInfo', createdAt: 7 } });
+        expect(slotsSent()).toEqual([{
+            type: 'app:slots',
+            slots: [{ date: '2026-11-01', time: '09:00' }, { date: '2026-11-02', time: '10:00' }],
+            range: { from: '2026-11-01' },
+            test: false,
+        }]);
+        // the same draft on another step: nothing again
+        t.receive({ type: 'ext:draft', draft: { url: 'https://e-consul.gov.ua/tasks/a1/dateAndTimeVisitInfo', createdAt: 7 } });
+        expect(slotsSent()).toHaveLength(1);
+        // the draft is gone, a new one comes (also after the extension reloads)
+        t.receive({ type: 'ext:draft', draft: null });
+        t.receive({ type: 'ext:draft', draft: { url: 'https://e-consul.gov.ua/tasks/b2/applicantInfo', createdAt: 8 } });
+        expect(slotsSent()).toHaveLength(2);
+    });
+
+    it('no free slots are offered while the monitor is stopped or has none in range', () => {
+        const t = setup({ running: false, free: { keys: ['2026-11-01 09:00'], slotConsuls: {} } as never });
+        t.link.start();
+        t.receive({ type: 'ext:hello' });
+        t.receive({ type: 'ext:draft', draft: { url: 'https://e-consul.gov.ua/tasks/a1/x', createdAt: 7 } });
+        t.setMonitorState({ running: true, free: { keys: ['2026-10-01 09:00'], slotConsuls: {} } as never });
+        t.receive({ type: 'ext:draft', draft: { url: 'https://e-consul.gov.ua/tasks/a2/x', createdAt: 8 } });
+        expect(t.types()).not.toContain('app:slots');
+    });
+
     it('a draft that vanished in the extension is dropped when the extension gave it, kept when pasted by hand', () => {
         const fromExtension = setup({}, { url: 'https://x/y', savedAt: 1, fromExtension: true });
         fromExtension.link.start();

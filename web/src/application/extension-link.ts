@@ -4,7 +4,7 @@
 // checks and contract parsing; this use case decides what each message means.
 import type { AppSlot } from '@/domain/contracts/extension-messages.ts';
 import { fastWindow } from '@/domain/monitoring/schedule.ts';
-import type { SlotKey } from '@/domain/monitoring/slots-diff.ts';
+import { inDateRange, type SlotKey } from '@/domain/monitoring/slots-diff.ts';
 import type { FreeSlots } from '@/domain/slots/free-slots.ts';
 import type { Monitor } from './monitor.ts';
 import type { Alerts, Clock, Draft, ExtensionBridge, Scheduler, SettingsStore, TimerHandle } from './ports.ts';
@@ -58,6 +58,7 @@ const SESSION_TITLE = '🔴 Сесія завершилась — Монітор
 const TEST_SLOTS: SlotKey[] = ['2027-03-31 09:50', '2027-03-31 10:10'];
 
 const displayDate = (date: string): string => date.split('-').reverse().join('.');
+const taskIdOf = (url: string): string => url.match(/\/tasks\/([^/]+)/)?.[1] ?? url;
 
 export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
     const { bridge, monitor, settings, alerts, clock, scheduler } = deps;
@@ -83,6 +84,10 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
     let started = false;
     // A login happened (not logged in -> logged in): the token that follows may start the monitor
     let startAfterToken = false;
+    // The extension's draft (task id) the current free slots were offered for. Only new slots go
+    // out with each check, so slots already free when a selection failed, when the extension
+    // reloaded or when the page reloaded would never reach a draft that appears later
+    let offeredFor: string | null = null;
 
     function patch(next: Partial<ExtensionState>): void {
         state = { ...state, ...next };
@@ -158,6 +163,21 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
         }
     }
 
+    // Once per draft of the extension: every free slot in the date range of the last check
+    function offerFreeSlots(): void {
+        const draft = state.draft;
+        if (!state.connected || !draft?.fromExtension) return;
+        const taskId = taskIdOf(draft.url);
+        if (taskId === offeredFor) return;
+        const m = monitor.getState();
+        if (!m.running || !m.free) return;
+        const keys = m.free.keys.filter((key) => inDateRange(key, m.dateRange));
+        if (keys.length === 0) return;
+        offeredFor = taskId;
+        monitor.log(`Є чернетка: надсилаю розширенню всі вільні слоти (${keys.length}), не лише нові`);
+        sendSlots(keys, m.free, false);
+    }
+
     function onHello(version: string | undefined): void {
         scheduler.clear(helloTimeout);
         helloTimeout = null;
@@ -199,6 +219,7 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
                 settings.saveDraft(null);
                 patch({ draft: null });
             }
+            offeredFor = null; // the next draft gets the free slots again
             return;
         }
         const prev = state.draft;
@@ -209,6 +230,7 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
         settings.saveDraft(saved);
         patch({ draft: saved });
         bridge.send({ type: 'app:received', draftUrl: draft.url });
+        offerFreeSlots();
     }
 
     return {
@@ -287,6 +309,7 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
                         reportSelection();
                     }
                     reportMonitor();
+                    offerFreeSlots();
                 }),
             ];
             hello();

@@ -826,9 +826,36 @@ async function setSelection(selection) {
     return selection;
 }
 
+// One selection starts at a time. Until it is «running» it may wait minutes for a draft; slots
+// that arrive meanwhile (new ones, or the app offering all free slots to a new draft) join it
+// instead of starting a second selection in another tab
+let selectionStarting = null; // { test, slots } while a start is waiting
+
+function slotKey(slot) { return `${slot.date} ${slot.time}`; }
+
 // New slots from the app (earliest first, already within the date range): open the draft,
 // go to the calendar and select the earliest one the site shows as free
 async function startSelection(slots, test, attempt = 1) {
+    if (selectionStarting) {
+        if (selectionStarting.test === test) {
+            const known = new Set(selectionStarting.slots.map(slotKey));
+            selectionStarting.slots = [...selectionStarting.slots, ...slots.filter(s => !known.has(slotKey(s)))]
+                .sort((a, b) => slotKey(a).localeCompare(slotKey(b)));
+        }
+        return;
+    }
+    const starting = selectionStarting = { test, slots };
+    const release = () => { if (selectionStarting === starting) selectionStarting = null; };
+    try {
+        return await runSelection(starting, attempt, release);
+    } finally {
+        release();
+    }
+}
+
+async function runSelection(starting, attempt, release) {
+    const { test } = starting;
+    let slots;
     // A draft is being made (the tab is on steps 1–3): wait for it instead of reloading the tab
     for (let i = 0; i < 480; i++) {
         const { draftJob } = await chrome.storage.session.get('draftJob');
@@ -862,6 +889,7 @@ async function startSelection(slots, test, attempt = 1) {
     if (!draft) return selectionFailed({ status: 'failed', test, startedAt: now }, 'no-draft');
     // This draft is booked: the site turns it into a sent application
     if (selection && selection.status === 'booked' && selection.taskId === draft.taskId) return;
+    slots = starting.slots; // with the slots that joined while waiting for the draft
 
     // Slots that did not book recently are left alone (see QUARANTINE_MS)
     if (!test) {
@@ -883,6 +911,7 @@ async function startSelection(slots, test, attempt = 1) {
     if (settings.autoBook && !test && pressesLeft <= 0) Telemetry.event('selection.stage', { stage: 'press-limit', limit: MAX_PRESSES_PER_HOUR });
     const confirmTries = Math.min(await inBookingWindow() ? TRIES_IN_WINDOW : TRIES_OUTSIDE_WINDOW, Math.max(1, pressesLeft));
     const current = await setSelection({ status: 'running', jobId, taskId: draft.taskId, test, autoBook, slots, attempt, startedAt: now, at: now });
+    release(); // from here a new start sees «running» and leaves this one alone
 
     // Load the draft again even if it is open on step 4: the calendar there may be old. Step 3 is
     // opened directly (the address of step 4 shows step 4 for a moment and goes back to step 3);
