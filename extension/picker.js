@@ -226,9 +226,11 @@ var EconsulPicker = (() => {
 
     // slots: [{ date: 'YYYY-MM-DD', time: 'HH:MM' }], earliest first. Selects the first one the
     // calendar shows as free. Returns { slot, element } or { error, tried }
-    async function pick(slots, log = () => {}) {
+    // opts.onCalendar: the next slot of a chain on the calendar this page already shows
+    async function pick(slots, log = () => {}, opts = {}) {
         let state = null;
-        for (let round = 1; round <= 3; round++) {
+        if (opts.onCalendar && onCalendar() && slotButtons(document).length) state = 'slots';
+        for (let round = 1; round <= 3 && state !== 'slots'; round++) {
             const reached = await reachCalendar(log);
             if (reached.error) return reached;
             log('calendar step, waiting for slots');
@@ -299,11 +301,14 @@ var EconsulPicker = (() => {
     // answer or silence: a booking that may be going through must not be repeated
     const CONFIRM_TRIES = 6; // the default; the background passes fewer outside the opening window
     const CONFIRM_PAUSE_MS = 8000;
+    const READY_WAIT_MS = 15000; // «Підтвердити» becomes active after the slot is saved
     const ANSWER_WAIT_MS = 240000; // a loaded site may take minutes to answer a booking: not an error yet
 
     async function confirm(slot, log = () => {}, tries = CONFIRM_TRIES) {
         let presses = 0;
-        let error = checkReady(slot);
+        // Right after the click on the slot the site saves it and «Підтвердити» is not active yet
+        let error = null;
+        await waitFor(() => !(error = checkReady(slot)), READY_WAIT_MS);
         if (error) return { error };
         // The person watching sees the button being pressed and the site's answer next to it
         document.getElementById('finish-button').scrollIntoView({ block: 'center', behavior: 'smooth' });

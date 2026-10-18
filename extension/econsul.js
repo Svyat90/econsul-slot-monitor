@@ -146,15 +146,26 @@
     // Content script messages show in the page's DevTools console
     const log = text => console.info('[e-Consul Helper]', text);
 
-    async function selectSlot({ jobId, taskId, slots, autoBook, confirmTries }) {
+    // select-slot, then each next step of a chain of failed bookings the background hands back
+    // (the next slot on the same calendar, without loading the draft again)
+    async function selectSlot(message) {
         if (job) return;
+        let next = message, onCalendar = false;
+        while (next) {
+            if (next.pauseMs) await new Promise(r => setTimeout(r, next.pauseMs));
+            next = await selectOne(next, onCalendar);
+            onCalendar = true;
+        }
+    }
+
+    async function selectOne({ jobId, taskId, slots, autoBook, confirmTries }, onCalendar) {
         job = jobId;
-        log(`select-slot: ${slots.length} slot(s), earliest ${slots[0].date} ${slots[0].time}${autoBook ? ', auto-booking' : ''}`);
+        log(`select-slot: ${slots.length} slot(s), first ${slots[0].date} ${slots[0].time}${autoBook ? ', auto-booking' : ''}${onCalendar ? ', on this calendar' : ''}`);
         removeBanner();
         let result;
         try {
             if (!location.pathname.startsWith(`/tasks/${taskId}`)) result = { error: 'wrong-task' };
-            else result = await EconsulPicker.pick(slots, log);
+            else result = await EconsulPicker.pick(slots, log, { onCalendar });
         } catch (e) {
             result = { error: 'exception: ' + e.message };
         }
@@ -171,13 +182,15 @@
                 booked = { error: 'exception: ' + e.message };
             }
             job = null;
-            // Not booked: the background either moves on to the next slot (no banner: the page
-            // reloads in a moment) or leaves this slot selected for the person to press
-            const reply = await send({ type: 'econsul:book-result', jobId, slot: result.slot, ...booked });
+            // Not booked: the background moves on to the next slot (on this calendar: `next`; or
+            // by loading the draft again: no banner) or leaves this slot for the person to press
+            const onCalendarNow = EconsulPicker.currentStep() === EconsulPicker.CALENDAR_STEP && !document.getElementById('next-step-button');
+            const reply = await send({ type: 'econsul:book-result', jobId, slot: result.slot, ...booked, onCalendar: onCalendarNow });
+            if (!booked.ok && reply && reply.next && onCalendarNow) return reply.next;
             if (!booked.ok && reply && reply.showBanner && EconsulPicker.currentStep() === EconsulPicker.CALENDAR_STEP) {
-                showBanner(result.slot, EconsulPicker.findSlot(result.slot.date, result.slot.time));
+                showBanner(result.slot, EconsulPicker.findSlot(result.slot.date, result.slot.time), reply.reason);
             }
-            return;
+            return null;
         }
         job = null;
         if (result.slot) {
@@ -186,6 +199,7 @@
         } else {
             send({ type: 'econsul:slot-result', jobId, ok: false, error: result.error, tried: result.tried || [] });
         }
+        return null;
     }
 
     // ---- Draft creation ----
@@ -233,7 +247,8 @@
     const SPEAKER = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"></path></svg>';
     const ARROW = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3E4C5B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>';
 
-    function showBanner(slot, slotElement) {
+    // stopped: why auto-booking gave this slot back to the person
+    function showBanner(slot, slotElement, stopped = null) {
         removeBanner();
         const style = document.createElement('style');
         style.textContent = STYLE;
@@ -247,6 +262,7 @@
                 <button type="button" class="ech-mute">Вимкнути звук</button>
             </div>`;
         root.querySelector('.ech-title').textContent = 'Вибрано: ' + slotLabel(slot);
+        if (stopped) root.querySelector('.ech-hint').textContent = `Автобронювання зупинилось: ${stopped} Натисніть «Підтвердити» самі`;
         document.documentElement.append(style, root);
 
         const arrow = document.createElement('span');
