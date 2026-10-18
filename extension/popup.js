@@ -191,6 +191,11 @@ function render() {
     if (document.activeElement !== $('autoBook')) $('autoBook').checked = !!settings.autoBook;
     if (document.activeElement !== $('aggressiveBook')) $('aggressiveBook').checked = !!settings.aggressiveBook;
     $('aggressiveBook').disabled = !settings.autoBook;
+    // The usual mode's hourly limit (aggressive booking has none): how much is used, and a reset
+    const { used, max, until } = state.presses || { used: 0, max: 12, until: null };
+    $('pressesText').textContent = until ? `Ліміт ${used} з ${max} вичерпано · до ${hhmm(until)}` : `Натискань за годину: ${used} з ${max}`;
+    $('pressesText').classList.toggle('error', !!until);
+    $('resetPressesBtn').disabled = used === 0;
     if (document.activeElement !== $('autoDraft')) $('autoDraft').checked = settings.autoDraft !== false;
     if (document.activeElement !== $('autoMonitor')) $('autoMonitor').checked = !!settings.autoMonitor;
     $('pauseLabel').textContent = settings.paused ? 'Відновити' : 'Призупинити';
@@ -264,6 +269,10 @@ $('pauseBtn').addEventListener('click', async () => {
 });
 $('autoBook').addEventListener('change', async event => {
     await send('popup:settings', { patch: { autoBook: event.target.checked } });
+    refresh();
+});
+$('resetPressesBtn').addEventListener('click', async () => {
+    await send('popup:reset-presses');
     refresh();
 });
 $('aggressiveBook').addEventListener('change', async event => {

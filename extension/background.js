@@ -825,6 +825,21 @@ async function pressesLastHour() {
     return pressLog.filter(at => at > Date.now() - 60 * 60 * 1000);
 }
 
+// The person resets the hourly limit. A slot that was only selected because of it is booked
+// now: the selection starts over with its slots (the draft loads again, «Підтвердити» is pressed)
+async function resetPresses(from) {
+    const used = (await pressesLastHour()).length;
+    await chrome.storage.local.set({ pressLog: [] });
+    Telemetry.event('user.reset-presses', { used, from });
+    const { selection } = await chrome.storage.session.get('selection');
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    if (selection && selection.status === 'selected' && selection.limitUntil && settings.autoBook && !settings.paused && selection.slots) {
+        await setSelection({ ...selection, status: 'failed', error: 'limit-reset', at: Date.now() });
+        // Not awaited: startSelection may wait for a draft, whose messages go through serial
+        startSelection(selection.slots, false);
+    }
+}
+
 async function recordPresses(count) {
     if (!count) return;
     const recent = await pressesLastHour();
@@ -1306,7 +1321,9 @@ async function onPopupMessage(msg) {
             const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
             const { token, ...publicAuth } = auth; // the popup does not need the token itself
             const alarm = await chrome.alarms.get('release-alarm');
-            return { version: VERSION, auth: { ...publicAuth, hasToken: !!token }, app, appConnected: await isAppConnected(), lastSlots, draft, sound, selection, draftJob, draftAlarmAt: alarm ? alarm.scheduledTime : null, selectErrors: SELECT_ERRORS, draftErrors: DRAFT_ERRORS, settings };
+            const presses = await pressesLastHour();
+            const pressInfo = { used: presses.length, max: MAX_PRESSES_PER_HOUR, until: presses.length >= MAX_PRESSES_PER_HOUR ? Math.min(...presses) + 60 * 60 * 1000 : null };
+            return { version: VERSION, auth: { ...publicAuth, hasToken: !!token }, app, appConnected: await isAppConnected(), lastSlots, draft, sound, selection, draftJob, draftAlarmAt: alarm ? alarm.scheduledTime : null, selectErrors: SELECT_ERRORS, draftErrors: DRAFT_ERRORS, settings, presses: pressInfo };
         }
         case 'popup:login':
             await openWorkTab(LOGIN_URL);
@@ -1324,6 +1341,9 @@ async function onPopupMessage(msg) {
         case 'popup:mute':
             Telemetry.event('user.mute', { from: 'popup' });
             await stopSounds(true);
+            return {};
+        case 'popup:reset-presses':
+            await resetPresses('popup');
             return {};
         case 'popup:settings':
             if (msg.patch && typeof msg.patch.paused === 'boolean') Telemetry.event('user.pause', { paused: msg.patch.paused, from: 'popup' });
