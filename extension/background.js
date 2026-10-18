@@ -821,13 +821,32 @@ async function resetPresses(from) {
     const used = (await pressesLastHour()).length;
     await chrome.storage.local.set({ pressLog: [] });
     Telemetry.event('user.reset-presses', { used, from });
+    await bookSelectedNow('limit-reset');
+}
+
+// Auto-booking became possible (turned on, aggressive turned on, the limit reset) while a slot is
+// selected and waits for the person: press «Підтвердити» for it right away on its calendar. If the
+// tab cannot do it (closed, busy), the selection starts over with its slots and books the usual way
+async function bookSelectedNow(reason) {
     const { selection } = await chrome.storage.session.get('selection');
+    if (!selection || selection.status !== 'selected' || selection.test || !selection.slot || selection.autoBook) return;
     const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
-    if (selection && selection.status === 'selected' && selection.limitUntil && settings.autoBook && !settings.paused && selection.slots) {
-        await setSelection({ ...selection, status: 'failed', error: 'limit-reset', at: Date.now() });
-        // Not awaited: startSelection may wait for a draft, whose messages go through serial
-        startSelection(selection.slots, false);
-    }
+    if (settings.paused) return;
+    const { autoBook, aggressive, confirmTries, limitUntil } = await bookingPlan(settings, false);
+    if (!autoBook) return; // still off, or the limit holds it back (the banner says so)
+    const jobId = crypto.randomUUID();
+    const now = Date.now();
+    const booking = { ...selection, status: 'booking', jobId, autoBook, aggressive, limitUntil, startedAt: now, at: now };
+    await setSelection(booking);
+    await stopSounds(true);
+    Telemetry.event('selection.stage', { stage: 'book-selected', reason, taskId: selection.taskId, date: selection.slot.date, time: selection.slot.time, aggressive }, { jobId, test: false });
+    const reply = selection.tabId != null
+        ? await chrome.tabs.sendMessage(selection.tabId, { type: 'confirm-slot', jobId, slot: selection.slot, confirmTries }).catch(() => null)
+        : null;
+    if (reply && reply.ok) return;
+    await setSelection({ ...booking, status: 'failed', error: 'tab-left', at: Date.now() });
+    // Not awaited: startSelection may wait for a draft, whose messages go through serial
+    if (selection.slots) startSelection(selection.slots, false);
 }
 
 async function recordPresses(count) {
@@ -1355,6 +1374,8 @@ async function saveSettings(patch) {
     if ('alarmEnabled' in clean || 'alarmLeadMin' in clean) await scheduleReleaseAlarm();
     await renderBadge();
     await sendToApps([await settingsMessage()]);
+    // Turned on now: the slot selected by hand is booked at once (see bookSelectedNow)
+    if (clean.autoBook === true || clean.aggressiveBook === true || clean.paused === false) await bookSelectedNow('settings');
 }
 
 async function settingsMessage() {

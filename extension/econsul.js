@@ -173,24 +173,7 @@
         if (result.tried && result.tried.length) log('tried: ' + result.tried.join('; '));
         if (result.slot && autoBook) {
             send({ type: 'econsul:slot-result', jobId, ok: true, slot: result.slot, tried: result.tried, booking: true });
-            let booked;
-            try {
-                log('auto-booking: pressing «Підтвердити»');
-                booked = await EconsulPicker.confirm(result.slot, log, confirmTries);
-                log('auto-booking result: ' + JSON.stringify(booked));
-            } catch (e) {
-                booked = { error: 'exception: ' + e.message };
-            }
-            job = null;
-            // Not booked: the background moves on to the next slot (on this calendar: `next`; or
-            // by loading the draft again: no banner) or leaves this slot for the person to press
-            const onCalendarNow = EconsulPicker.currentStep() === EconsulPicker.CALENDAR_STEP && !document.getElementById('next-step-button');
-            const reply = await send({ type: 'econsul:book-result', jobId, slot: result.slot, ...booked, onCalendar: onCalendarNow });
-            if (!booked.ok && reply && reply.next && onCalendarNow) return reply.next;
-            if (!booked.ok && reply && reply.showBanner && EconsulPicker.currentStep() === EconsulPicker.CALENDAR_STEP) {
-                showBanner(result.slot, EconsulPicker.findSlot(result.slot.date, result.slot.time), reply.reason);
-            }
-            return null;
+            return book(jobId, result.slot, confirmTries);
         }
         job = null;
         if (result.slot) {
@@ -200,6 +183,38 @@
             send({ type: 'econsul:slot-result', jobId, ok: false, error: result.error, tried: result.tried || [] });
         }
         return null;
+    }
+
+    // Auto-booking presses «Підтвердити» for the selected slot. Returns the next step of the chain
+    // to select on this calendar, or null
+    async function book(jobId, slot, confirmTries) {
+        let booked;
+        try {
+            log('auto-booking: pressing «Підтвердити»');
+            booked = await EconsulPicker.confirm(slot, log, confirmTries);
+            log('auto-booking result: ' + JSON.stringify(booked));
+        } catch (e) {
+            booked = { error: 'exception: ' + e.message };
+        }
+        job = null;
+        // Not booked: the background moves on to the next slot (on this calendar: `next`; or
+        // by loading the draft again: no banner) or leaves this slot for the person to press
+        const onCalendarNow = EconsulPicker.currentStep() === EconsulPicker.CALENDAR_STEP && !document.getElementById('next-step-button');
+        const reply = await send({ type: 'econsul:book-result', jobId, slot, ...booked, onCalendar: onCalendarNow });
+        if (!booked.ok && reply && reply.next && onCalendarNow) return reply.next;
+        if (!booked.ok && reply && reply.showBanner && EconsulPicker.currentStep() === EconsulPicker.CALENDAR_STEP) {
+            showBanner(slot, EconsulPicker.findSlot(slot.date, slot.time), reply.reason);
+        }
+        return null;
+    }
+
+    // Auto-booking was turned on (or the press limit reset) while a slot waits on the banner for
+    // the person: press «Підтвердити» for it now, then go on like any auto-booking
+    async function confirmSelected({ jobId, slot, confirmTries }) {
+        job = jobId;
+        removeBanner();
+        const next = await book(jobId, slot, confirmTries);
+        if (next) selectSlot(next, true);
     }
 
     // ---- Draft creation ----
@@ -366,6 +381,12 @@
             if (!token) sendResponse({ info: null });
             else fetchTaskInfo(message.taskId, token).then(info => sendResponse({ info }));
             return true;
+        }
+        if (message.type === 'confirm-slot') {
+            const busy = !!job;
+            if (!busy) confirmSelected(message);
+            sendResponse({ ok: !busy });
+            return;
         }
         if (message.type === 'select-slot') {
             selectSlot(message);
