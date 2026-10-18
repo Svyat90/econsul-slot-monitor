@@ -78,6 +78,8 @@ const SELECT_ERRORS = {
     'calendar-not-loaded': 'Календар не завантажився.',
     'not-found': 'Нових слотів у календарі вже немає.',
     'timeout': 'Вибір слота не завершився вчасно.',
+    'draft-gone': 'Чернетки вже немає на сайті: створюю нову й вибираю слот у ній.',
+    'tab-left': 'Вкладку вибору слота закрито або в ній відкрито іншу сторінку.',
     // Auto-booking (picker.js, confirm)
     'not-on-calendar': 'Сторінка пішла з календаря до бронювання.',
     'slot-not-selected': 'Слот перестав бути вибраним.',
@@ -163,6 +165,7 @@ chrome.alarms.onAlarm.addListener(alarm => {
 chrome.tabs.onRemoved.addListener(async tabId => {
     const { workTabId } = await chrome.storage.session.get('workTabId');
     if (workTabId === tabId) await chrome.storage.session.remove('workTabId');
+    serial(() => onSelectionTabLeft(tabId, null));
 });
 
 // ---- Auth state ----
@@ -289,6 +292,7 @@ async function onSiteTask({ url, taskId, step, info }, tab) {
             Telemetry.event('draft.gone', { taskId, reason: info.missing ? 'missing' : info.finished ? 'finished' : 'deleted' });
             await chrome.storage.session.remove('draft');
             await sendToApps([{ type: 'ext:draft', draft: null }]);
+            await onSelectionDraftGone(taskId);
         }
         return;
     }
@@ -834,6 +838,10 @@ async function startSelection(slots, test, attempt = 1) {
     const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
     let { selection, draft } = await chrome.storage.session.get(['selection', 'draft']);
     const now = Date.now();
+    // The site deletes a draft a day after creation: an expired one is no draft (picking in it
+    // ends on the site's error page)
+    const expired = d => !!(d && d.expiresAt && d.expiresAt <= Date.now());
+    if (expired(draft)) draft = null;
     if (settings.paused) return setSelection({ status: 'skipped', error: 'paused', test, at: now });
     // Slots came before any draft (a login started the monitor, the draft is not made yet): make
     // it now and go on with these slots when it is ready, instead of failing with «no draft»
@@ -845,6 +853,7 @@ async function startSelection(slots, test, attempt = 1) {
             await new Promise(r => setTimeout(r, 1000));
         }
         ({ draft } = await chrome.storage.session.get('draft'));
+        if (expired(draft)) draft = null; // the creation failed: the old one is still stored
         if (draft) Telemetry.event('selection.stage', { stage: 'draft-made-for-slots', taskId: draft.taskId });
     }
     if (selection && ['running', 'booking'].includes(selection.status) && now - selection.startedAt < SELECT_TIMEOUT_MS) return;
@@ -884,6 +893,12 @@ async function startSelection(slots, test, attempt = 1) {
     if (tab) tab = await chrome.tabs.update(tab.id, { active: true, url: openUrl });
     else tab = await chrome.tabs.create({ url: openUrl, active: true });
     await chrome.windows.update(tab.windowId, { focused: true });
+    // Still this selection: the tab may already have reported the draft gone (onSelectionDraftGone)
+    const stillRunning = async () => {
+        const { selection: latest } = await chrome.storage.session.get('selection');
+        return !!(latest && latest.jobId === jobId && latest.status === 'running');
+    };
+    if (!await stillRunning()) return;
     await setSelection({ ...current, tabId: tab.id });
     Telemetry.event('selection.started', { taskId: draft.taskId, slots: slots.length, autoBook, attempt }, { jobId, test });
 
@@ -897,6 +912,7 @@ async function startSelection(slots, test, attempt = 1) {
         reply = null;
         await new Promise(r => setTimeout(r, 1000));
     }
+    if (!await stillRunning()) return;
     if (!reply) return selectionFailed({ ...current, tabId: tab.id }, 'tab-not-ready');
     Telemetry.event('selection.stage', { stage: 'tab-ready', taskId: draft.taskId, durationMs: Date.now() - now }, { jobId, test });
     await chrome.tabs.sendMessage(tab.id, { type: 'select-slot', jobId, taskId: draft.taskId, slots, autoBook, confirmTries }).catch(() => null);
@@ -920,7 +936,8 @@ async function selectionFailed(selection, error, tried = []) {
             // A newer selection (new slots, the person's own work) took over meanwhile
             const { selection: now } = await chrome.storage.session.get('selection');
             if (!now || now.jobId !== selection.jobId || now.status !== 'retrying') return;
-            await startSelection(selection.slots, !!selection.test, attempt + 1);
+            // Not awaited: startSelection may wait for a new draft, whose messages go through serial
+            startSelection(selection.slots, !!selection.test, attempt + 1);
         }), pause);
         return;
     }
@@ -936,10 +953,47 @@ async function selectionFailed(selection, error, tried = []) {
     });
 }
 
+// Ends a running selection without retrying it in the same draft and without the «Слот не
+// вибрано» notification: draft-gone starts it over in a new draft, tab-left is the person's doing
+async function endSelection(selection, error) {
+    Telemetry.event('selection.failed', {
+        error, taskId: selection.taskId || null,
+        durationMs: selection.startedAt ? Date.now() - selection.startedAt : null,
+        attempt: selection.attempt || 1
+    }, { jobId: selection.jobId, test: selection.test });
+    await setSelection({ ...selection, status: 'failed', error, at: Date.now() });
+    await sendToApps([{ type: 'ext:slot-failed', error, text: SELECT_ERRORS[error], test: !!selection.test }]);
+}
+
+// The site says the draft a selection works in is gone (404, sent, deleted): the page shows the
+// site's error and has no form, so the picker would wait for nothing and every retry, and the
+// draft creation, would wait for it. Start over: with no draft, startSelection makes a new one
+async function onSelectionDraftGone(taskId) {
+    const { selection } = await chrome.storage.session.get('selection');
+    if (!selection || selection.taskId !== taskId || !['running', 'retrying'].includes(selection.status)) return;
+    await endSelection(selection, 'draft-gone');
+    // Not awaited: it waits for the new draft, whose messages go through serial
+    if (selection.slots && selection.slots.length) startSelection(selection.slots, !!selection.test);
+}
+
+// The tab of a running selection was closed or left the application (the person took over):
+// nothing will report a result, and a «running» selection blocks draft creation for minutes
+async function onSelectionTabLeft(tabId, url) {
+    const { selection } = await chrome.storage.session.get('selection');
+    if (!selection || selection.status !== 'running' || selection.tabId !== tabId) return;
+    if (url && url.includes(`/tasks/${selection.taskId}`)) return;
+    await endSelection(selection, 'tab-left');
+}
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.url) serial(() => onSelectionTabLeft(tabId, changeInfo.url));
+});
+
 // From econsul.js: the result of select-slot. booking: auto-booking presses «Підтвердити» next
 async function onSlotResult({ jobId, ok, slot, error, tried, booking }) {
     const { selection } = await chrome.storage.session.get('selection');
-    if (!selection || selection.jobId !== jobId) return;
+    // A selection already ended here (its draft is gone, its tab left) is not retried
+    if (!selection || selection.jobId !== jobId || selection.status !== 'running') return;
     if (!ok) return selectionFailed(selection, error, tried);
     Telemetry.event('selection.selected', {
         taskId: selection.taskId, date: slot.date, time: slot.time, autoBook: !!booking,
