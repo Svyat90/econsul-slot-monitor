@@ -84,6 +84,30 @@ describe('MonitoringView', () => {
         expect(event.compareDocumentPosition(check) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
+    it('auto-booking: the selected slot does not ask to press, a failed booking shows the reason', async () => {
+        setup((history) => {
+            history.checks.mockResolvedValue({ entries: [checkEntry], nextCursor: null, total: 1 });
+            history.extensionEvents.mockResolvedValue({
+                entries: [
+                    { ...extEvent, id: 2, payload: { ...extEvent.payload, autoBook: true } },
+                    {
+                        ...extEvent,
+                        id: 3,
+                        clientId: '00000000-0000-4000-8000-000000000003',
+                        type: 'booking.failed',
+                        payload: { date: '2027-03-31', time: '09:50', error: 'unavailable', aggressive: true },
+                    },
+                ],
+                nextCursor: null,
+            });
+        });
+        expect(await screen.findByText(/31\.03\.2027 о 09:50 — бронює автоматично/)).toBeInTheDocument();
+        expect(screen.queryByText(/натисніть «Підтвердити»/)).not.toBeInTheDocument();
+        expect(screen.getByText('Не забронювалось')).toBeInTheDocument();
+        expect(screen.getByText(/31\.03\.2027 о 09:50 — сайт: «Сервіс недоступний»/)).toBeInTheDocument();
+        expect(screen.getByText('агресивно')).toBeInTheDocument();
+    });
+
     it('hides extension events under the filters other than "Усі" and marks test events', async () => {
         const user = userEvent.setup();
         setup((history) => {

@@ -71,27 +71,63 @@ function PendingRow({ kind, startedAt }: { kind: CheckKind; startedAt: number })
     );
 }
 
-function eventText(event: StoredExtensionEvent): { title: string; note?: string } {
+// Error codes of the extension (SELECT_ERRORS in extension/background.js), short
+const EXTENSION_ERRORS: Record<string, string> = {
+    'no-draft': 'немає чернетки',
+    'tab-not-ready': 'сторінка чернетки не відповіла',
+    'wrong-task': 'у вкладці інша заявка',
+    'form-not-loaded': 'форма заявки не завантажилась',
+    'next-disabled': '«Далі» неактивна',
+    'step-stuck': 'сайт не перейшов до календаря',
+    unavailable: 'сайт: «Сервіс недоступний»',
+    'no-time': 'сайт: вільного часу немає',
+    'calendar-not-loaded': 'календар не завантажився',
+    'not-found': 'слотів у календарі вже немає',
+    timeout: 'не завершилось вчасно',
+    'draft-gone': 'чернетки вже немає, створюю нову',
+    'tab-left': 'вкладку закрито чи покинуто',
+    'not-on-calendar': 'сторінка пішла з календаря',
+    'slot-not-selected': 'слот перестав бути вибраним',
+    'several-selected': 'вибрано кілька слотів',
+    'no-confirm-button': 'немає кнопки «Підтвердити»',
+    alert: 'сайт показав повідомлення',
+    'left-calendar': 'сайт пішов з календаря без «Дякуємо»',
+    'no-outcome': 'сайт не відповів за 240 с',
+};
+
+const errorText = (code: string | null): string | undefined => (code ? (EXTENSION_ERRORS[code] ?? code) : undefined);
+
+function eventText(event: StoredExtensionEvent): { title: string; note?: string; failed?: boolean } {
     // The extension writes the slot as payload.date ('2027-03-31') and payload.time ('09:50')
     const { date, time } = event.payload;
     const slotFrom = typeof date === 'string' && typeof time === 'string' ? `${date}T${time}` : null;
+    const slot = slotFrom ? slotWhen(slotFrom) : null;
     const error = typeof event.payload.error === 'string' ? event.payload.error : null;
     switch (event.type) {
         case 'selection.selected':
-            return { title: 'Розширення вибрало слот', note: `${slotFrom ? `${slotWhen(slotFrom)} ` : ''}у чернетці — натисніть «Підтвердити»` };
+            // with auto-booking the extension presses «Підтвердити» itself right after
+            return event.payload.autoBook === true
+                ? { title: 'Розширення вибрало слот', note: `${slot ? `${slot} ` : ''}— бронює автоматично` }
+                : { title: 'Розширення вибрало слот', note: `${slot ? `${slot} ` : ''}у чернетці — натисніть «Підтвердити»` };
         case 'selection.failed':
-            return { title: 'Розширення не вибрало слот', note: error ?? undefined };
+            return { title: 'Розширення не вибрало слот', note: errorText(error) };
         case 'booking.booked':
-            return { title: 'Розширення забронювало слот', note: slotFrom ? slotWhen(slotFrom) : undefined };
+            return { title: 'Розширення забронювало слот', note: slot ?? undefined };
+        case 'booking.failed':
+            return { title: 'Не забронювалось', note: [slot, errorText(error)].filter(Boolean).join(' — '), failed: true };
         default:
             return { title: 'Сесію e-Consul завершено', note: 'розширення вийшло з сесії' };
     }
 }
 
 function EventRow({ event }: { event: StoredExtensionEvent }) {
-    const { title, note } = eventText(event);
-    const tags: Tag[] = [{ text: 'розширення' }, ...(event.test ? [{ text: 'тест' }] : [])];
-    return <LogRow time={formatTime(event.occurredAt)} dot="event" title={title} note={note} tags={tags} duration="" />;
+    const { title, note, failed } = eventText(event);
+    const tags: Tag[] = [
+        { text: 'розширення' },
+        ...(event.payload.aggressive === true ? [{ text: 'агресивно' }] : []),
+        ...(event.test ? [{ text: 'тест' }] : []),
+    ];
+    return <LogRow time={formatTime(event.occurredAt)} dot={failed ? 'error' : 'event'} title={title} note={note} tags={tags} duration="" />;
 }
 
 export function CheckLog() {

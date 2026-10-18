@@ -14,7 +14,7 @@ export const extensionEventTypes = [
     'selection.started', 'selection.stage', 'selection.selected', 'selection.failed',
     'booking.confirm-clicked', 'booking.booked', 'booking.failed',
     'app.slots-received', 'alarm.fired',
-    'user.mute', 'user.pause', 'user.auto-book', 'user.test-sound', 'user.new-draft',
+    'user.mute', 'user.pause', 'user.auto-book', 'user.aggressive-book', 'user.test-sound', 'user.new-draft',
 ] as const;
 
 export const extensionEventSchema = z.object({

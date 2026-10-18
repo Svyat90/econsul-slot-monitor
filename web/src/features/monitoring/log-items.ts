@@ -3,7 +3,7 @@
 import type { StoredCheckEntry } from '@contracts/checks.ts';
 import type { StoredExtensionEvent } from '@contracts/extension-events.ts';
 
-export const SHOWN_EVENT_TYPES = ['selection.selected', 'selection.failed', 'booking.booked', 'session.logged-out'] as const;
+export const SHOWN_EVENT_TYPES = ['selection.selected', 'selection.failed', 'booking.booked', 'booking.failed', 'session.logged-out'] as const;
 
 export type LogItem =
     | { kind: 'check'; at: string; key: string; entry: StoredCheckEntry }
