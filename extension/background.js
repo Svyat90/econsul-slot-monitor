@@ -49,25 +49,21 @@ const MAX_SELECT_ATTEMPTS = 5;
 // - A press of «Підтвердити» answered «unavailable» (or any failure) puts the SLOT in quarantine;
 //   every next failure makes it longer: 10 min, 30 min, 2 h, 6 h, 24 h. It is skipped (not even
 //   selected) until then, also across restarts of the monitor, which announces it again as new.
-// - Outside the opening of new days a try is 3 presses, in the window (2 min before to 20 min after
-//   the opening) 6: then the site is loaded and a slot may really come through.
+// - One press per slot, then the next slot (the owner's decision, 2026-10-18; it was 3 presses,
+//   6 around the opening of new days): a failure moves on instead of pressing the same slot again.
 // - At most MAX_PRESSES_PER_HOUR presses over all slots; over that, slots are selected but not booked.
 // A booked slot clears its history. Kept in chrome.storage.local (`bookingHistory`, `pressLog`).
 const QUARANTINE_MS = [10, 30, 120, 360, 1440].map(minutes => minutes * 60 * 1000);
-const MAX_PRESSES_PER_HOUR = 12;
+const MAX_PRESSES_PER_HOUR = 20;
 // After a failed booking the next free slot is tried after this pause (see onBookResult)
 const ADVANCE_PAUSE_MS = 10 * 1000;
-// Aggressive booking (the owner's decision, 2026-10-18): no press limit, one press per slot, every
-// failure = a flat 5 min quarantine, the next slot after 2 s. Turned off when the session ends
+// Aggressive booking (the owner's decision, 2026-10-18): no press limit, every failure = a flat
+// 5 min quarantine, the next slot at once. Turned off when the session ends
 const AGGRESSIVE_QUARANTINE_MS = 5 * 60 * 1000;
 const AGGRESSIVE_ADVANCE_PAUSE_MS = 2 * 1000;
 // Failures after which the next slot is tried. no-outcome and alert too (the owner's decision,
 // 2026-10-18), although the site may have booked: then the person may get a second appointment
 const ADVANCE_ERRORS = new Set(['unavailable', 'alert', 'no-outcome']);
-const TRIES_IN_WINDOW = 6;
-const TRIES_OUTSIDE_WINDOW = 3;
-const WINDOW_BEFORE_MS = 2 * 60 * 1000;
-const WINDOW_AFTER_MS = 20 * 60 * 1000;
 const RETRY_PAUSE_MS = 5 * 1000;
 // The same for creating a draft: the site may be slow, or a login may still be settling
 const DRAFT_RETRYABLE = new Set(['tab-not-ready', 'form-not-loaded', 'country-not-found', 'country-not-found-missing', 'institution-not-found', 'institution-not-found-missing', 'service-not-found', 'service-not-found-missing', 'check-timeout', 'unavailable', 'next-disabled', 'step-stuck', 'timeout']);
@@ -778,14 +774,6 @@ async function slotKeyOf(slot) {
     return `${selection ? selection.institutionCode : '?'}|${slot.date}|${slot.time}`;
 }
 
-// Is the booking window open: shortly before the opening of new days, and a while after it?
-async function inBookingWindow() {
-    const { nextRelease, lastOpenAt } = await chrome.storage.local.get(['nextRelease', 'lastOpenAt']);
-    const now = Date.now();
-    if (nextRelease && nextRelease.at - now <= WINDOW_BEFORE_MS && now - nextRelease.at <= WINDOW_AFTER_MS) return true;
-    return !!(lastOpenAt && now >= lastOpenAt && now - lastOpenAt <= WINDOW_AFTER_MS);
-}
-
 // Splits slots into those that may be tried now and those still in quarantine
 async function splitQuarantined(slots) {
     const { bookingHistory = {} } = await chrome.storage.local.get('bookingHistory');
@@ -941,8 +929,8 @@ async function bookingPlan(settings, test) {
     const limited = !!settings.autoBook && !aggressive && !test && pressesLeft <= 0;
     if (limited) Telemetry.event('selection.stage', { stage: 'press-limit', limit: MAX_PRESSES_PER_HOUR });
     const limitUntil = limited ? Math.min(...presses) + 60 * 60 * 1000 : null;
-    // aggressive: one press per slot, then the next slot
-    const confirmTries = aggressive ? 1 : Math.min(await inBookingWindow() ? TRIES_IN_WINDOW : TRIES_OUTSIDE_WINDOW, Math.max(1, pressesLeft));
+    // one press per slot in both modes: a failure moves on to the next slot
+    const confirmTries = 1;
     return { autoBook, aggressive, confirmTries, limitUntil };
 }
 
