@@ -305,6 +305,8 @@ var EconsulPicker = (() => {
         let presses = 0;
         let error = checkReady(slot);
         if (error) return { error };
+        // The person watching sees the button being pressed and the site's answer next to it
+        document.getElementById('finish-button').scrollIntoView({ block: 'center', behavior: 'smooth' });
         await sleep(SAVE_PAUSE_MS);
         let last = null;
         for (let attempt = 1; attempt <= tries; attempt++) {
@@ -313,7 +315,9 @@ var EconsulPicker = (() => {
             const before = new Set(alertTexts());
             const hadUnavailable = !!unavailableText();
             log(`confirm: «Підтвердити» (${attempt}/${tries})`);
-            document.getElementById('finish-button').click();
+            const finish = document.getElementById('finish-button');
+            finish.scrollIntoView({ block: 'center' }); // React may have re-rendered it since
+            finish.click();
             presses++;
             const clickedAt = Date.now();
             const outcome = await waitFor(() => {

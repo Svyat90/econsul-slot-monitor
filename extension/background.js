@@ -1146,7 +1146,7 @@ async function onBookResult({ jobId, slot, ok, error, text, presses }) {
             // Not awaited: startSelection may wait for a draft, whose messages go through serial
             startSelection([], false, 1, { all: true });
         }), pause);
-        return;
+        return { showBanner: false };
     }
 
     // Either way the person has to look: the result comes by email, or the slot waits for them
@@ -1164,6 +1164,7 @@ async function onBookResult({ jobId, slot, ok, error, text, presses }) {
     await sendToApps([ok
         ? { type: 'ext:slot-booked', slot }
         : { type: 'ext:slot-failed', error: code, text: `Не забронювалось ${date} ${slot.time}: ${reason} Слот лишився вибраним.`, test: false }]);
+    return { showBanner: !ok }; // econsul.js: the slot waits for the person's «Підтвердити»
 }
 
 async function showSelectionTab() {

@@ -171,9 +171,12 @@
                 booked = { error: 'exception: ' + e.message };
             }
             job = null;
-            // Not booked: leave the slot selected with the banner, the person can still press
-            if (!booked.ok && EconsulPicker.currentStep() === EconsulPicker.CALENDAR_STEP) showBanner(result.slot, EconsulPicker.findSlot(result.slot.date, result.slot.time));
-            send({ type: 'econsul:book-result', jobId, slot: result.slot, ...booked });
+            // Not booked: the background either moves on to the next slot (no banner: the page
+            // reloads in a moment) or leaves this slot selected for the person to press
+            const reply = await send({ type: 'econsul:book-result', jobId, slot: result.slot, ...booked });
+            if (!booked.ok && reply && reply.showBanner && EconsulPicker.currentStep() === EconsulPicker.CALENDAR_STEP) {
+                showBanner(result.slot, EconsulPicker.findSlot(result.slot.date, result.slot.time));
+            }
             return;
         }
         job = null;
