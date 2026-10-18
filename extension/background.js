@@ -916,14 +916,24 @@ async function usableSlots(slots, chaining, now) {
 }
 
 // Whether «Підтвердити» is pressed and how many times (see MAX_PRESSES_PER_HOUR, aggressive booking)
+// limitUntil: auto-booking is on but the hourly limit is used up: the slot is only selected, and
+// the person is told why and until when (the oldest press of the hour drops out then)
 async function bookingPlan(settings, test) {
-    const pressesLeft = MAX_PRESSES_PER_HOUR - (await pressesLastHour()).length;
+    const presses = await pressesLastHour();
+    const pressesLeft = MAX_PRESSES_PER_HOUR - presses.length;
     const aggressive = !!settings.autoBook && !!settings.aggressiveBook && !test;
     const autoBook = !!settings.autoBook && !test && (aggressive || pressesLeft > 0); // test slots are never booked
-    if (settings.autoBook && !aggressive && !test && pressesLeft <= 0) Telemetry.event('selection.stage', { stage: 'press-limit', limit: MAX_PRESSES_PER_HOUR });
+    const limited = !!settings.autoBook && !aggressive && !test && pressesLeft <= 0;
+    if (limited) Telemetry.event('selection.stage', { stage: 'press-limit', limit: MAX_PRESSES_PER_HOUR });
+    const limitUntil = limited ? Math.min(...presses) + 60 * 60 * 1000 : null;
     // aggressive: one press per slot, then the next slot
     const confirmTries = aggressive ? 1 : Math.min(await inBookingWindow() ? TRIES_IN_WINDOW : TRIES_OUTSIDE_WINDOW, Math.max(1, pressesLeft));
-    return { autoBook, aggressive, confirmTries };
+    return { autoBook, aggressive, confirmTries, limitUntil };
+}
+
+function limitText(limitUntil) {
+    const at = new Date(limitUntil).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+    return `Ліміт ${MAX_PRESSES_PER_HOUR} натискань на годину вичерпано — автобронювання відновиться о ${at}.`;
 }
 
 async function runSelection(starting, attempt, release) {
@@ -986,8 +996,8 @@ async function runSelection(starting, attempt, release) {
     }
 
     const jobId = crypto.randomUUID();
-    const { autoBook, aggressive, confirmTries } = await bookingPlan(settings, test);
-    const current = await setSelection({ status: 'running', jobId, taskId: draft.taskId, test, autoBook, aggressive, slots, attempt, startedAt: now, at: now });
+    const { autoBook, aggressive, confirmTries, limitUntil } = await bookingPlan(settings, test);
+    const current = await setSelection({ status: 'running', jobId, taskId: draft.taskId, test, autoBook, aggressive, limitUntil, slots, attempt, startedAt: now, at: now });
     release(); // from here a new start sees «running» and leaves this one alone
 
     // Load the draft again even if it is open on step 4: the calendar there may be old. Step 3 is
@@ -1021,7 +1031,8 @@ async function runSelection(starting, attempt, release) {
     if (!await stillRunning()) return;
     if (!reply) return selectionFailed({ ...current, tabId: tab.id }, 'tab-not-ready');
     Telemetry.event('selection.stage', { stage: 'tab-ready', taskId: draft.taskId, durationMs: Date.now() - now }, { jobId, test });
-    await chrome.tabs.sendMessage(tab.id, { type: 'select-slot', jobId, taskId: draft.taskId, slots, autoBook, confirmTries }).catch(() => null);
+    const note = limitUntil ? limitText(limitUntil) : null; // the banner says why the person presses
+    await chrome.tabs.sendMessage(tab.id, { type: 'select-slot', jobId, taskId: draft.taskId, slots, autoBook, confirmTries, note }).catch(() => null);
 }
 
 async function selectionFailed(selection, error, tried = []) {
@@ -1113,7 +1124,7 @@ async function onSlotResult({ jobId, ok, slot, error, tried, booking }) {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
         title: `Вибрано слот ${date} о ${slot.time}`,
-        message: 'Натисніть «Підтвердити» на сторінці e-consul, щоб забронювати.',
+        message: `${selection.limitUntil ? limitText(selection.limitUntil) + ' ' : ''}Натисніть «Підтвердити» на сторінці e-consul, щоб забронювати.`,
         requireInteraction: true,
         priority: 2
     });
@@ -1135,7 +1146,8 @@ async function onBookResult({ jobId, slot, ok, error, text, presses, onCalendar 
         // what the site said when it answered with a message (not the page text: that has the applicant's data)
         ...(!ok && (error === 'alert' || error === 'unavailable') && text ? { message: String(text).slice(0, 300) } : {})
     }, { jobId, test: selection.test });
-    await recordPresses(presses);
+    // The hourly limit guards the usual mode; aggressive presses (no limit) do not use it up
+    if (!aggressive) await recordPresses(presses);
     let quarantine = null;
     if (ok) {
         await clearSlotHistory(slot);
@@ -1203,11 +1215,11 @@ async function nextOnCalendar(previous) {
     const slots = await usableSlots(mergeSlots(waitingSlots.fresh, previous.slots, waitingSlots.all), true, now);
     if (!slots) return { ended: true };
     const jobId = crypto.randomUUID();
-    const { autoBook, aggressive, confirmTries } = await bookingPlan(settings, false);
-    await setSelection({ status: 'running', jobId, taskId: previous.taskId, tabId: previous.tabId, test: false, autoBook, aggressive, slots, attempt: 1, startedAt: now, at: now });
+    const { autoBook, aggressive, confirmTries, limitUntil } = await bookingPlan(settings, false);
+    await setSelection({ status: 'running', jobId, taskId: previous.taskId, tabId: previous.tabId, test: false, autoBook, aggressive, limitUntil, slots, attempt: 1, startedAt: now, at: now });
     Telemetry.event('selection.started', { taskId: previous.taskId, slots: slots.length, autoBook, aggressive, attempt: 1, onCalendar: true }, { jobId, test: false });
     // aggressive: right away; otherwise the same pause as between loads of the draft
-    return { next: { jobId, taskId: previous.taskId, slots, autoBook, confirmTries, pauseMs: aggressive ? 0 : ADVANCE_PAUSE_MS } };
+    return { next: { jobId, taskId: previous.taskId, slots, autoBook, confirmTries, note: limitUntil ? limitText(limitUntil) : null, pauseMs: aggressive ? 0 : ADVANCE_PAUSE_MS } };
 }
 
 async function showSelectionTab() {

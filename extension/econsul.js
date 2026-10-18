@@ -158,7 +158,7 @@
         }
     }
 
-    async function selectOne({ jobId, taskId, slots, autoBook, confirmTries }, onCalendar) {
+    async function selectOne({ jobId, taskId, slots, autoBook, confirmTries, note }, onCalendar) {
         job = jobId;
         log(`select-slot: ${slots.length} slot(s), first ${slots[0].date} ${slots[0].time}${autoBook ? ', auto-booking' : ''}${onCalendar ? ', on this calendar' : ''}`);
         removeBanner();
@@ -194,7 +194,7 @@
         }
         job = null;
         if (result.slot) {
-            showBanner(result.slot, result.element);
+            showBanner(result.slot, result.element, null, note);
             send({ type: 'econsul:slot-result', jobId, ok: true, slot: result.slot, tried: result.tried });
         } else {
             send({ type: 'econsul:slot-result', jobId, ok: false, error: result.error, tried: result.tried || [] });
@@ -248,7 +248,8 @@
     const ARROW = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3E4C5B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>';
 
     // stopped: why auto-booking gave this slot back to the person
-    function showBanner(slot, slotElement, stopped = null) {
+    // note: why the person presses although auto-booking is on (the hourly limit)
+    function showBanner(slot, slotElement, stopped = null, note = null) {
         removeBanner();
         const style = document.createElement('style');
         style.textContent = STYLE;
@@ -263,6 +264,7 @@
             </div>`;
         root.querySelector('.ech-title').textContent = 'Вибрано: ' + slotLabel(slot);
         if (stopped) root.querySelector('.ech-hint').textContent = `Автобронювання зупинилось: ${stopped} Натисніть «Підтвердити» самі`;
+        else if (note) root.querySelector('.ech-hint').textContent = `${note} Натисніть «Підтвердити» самі`;
         document.documentElement.append(style, root);
 
         const arrow = document.createElement('span');

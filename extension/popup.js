@@ -241,7 +241,7 @@ function selectionRow(now) {
         case 'book-failed':
             return { ...base, kind: 'fail', title: 'Не забронювалось', note: `${selectErrors[selection.error] || selection.error}${selection.text ? ' ' + selection.text.slice(0, 160) : ''}` };
         case 'selected':
-            return { ...base, title: `${test}Вибрано слот`, note: 'натисніть «Підтвердити» на сайті' };
+            return { ...base, title: `${test}Вибрано слот`, note: selection.limitUntil ? `ліміт натискань: автобронювання з ${hhmm(selection.limitUntil)} · натисніть «Підтвердити» на сайті` : 'натисніть «Підтвердити» на сайті' };
         case 'skipped':
             return { ...base, title: `${test}Слот пропущено`, note: selection.error === 'quarantined' ? `не бронюється, пропускаю до ${selection.until ? hhmm(selection.until) : '…'}` : 'пауза', slots: '' };
         default:
