@@ -31,7 +31,7 @@
     // raise a false "session ended" alert
     const NO_TOKEN_GRACE_MS = 10 * 1000;
     // An existing application: /tasks/{taskId} or /tasks/{taskId}/{stepId}. Same rule as
-    // DRAFT_URL_RE in slots.html
+    // DRAFT_URL_RE in web/src/domain/booking/booking-url.ts
     const TASK_PATH_RE = /^\/tasks\/(?!create\/|create$|my-tasks)([^/?#]+)(?:\/([^/?#]+))?/;
 
     let lastToken, lastSentAt = 0, noTokenSince = null, lastHref = null;

@@ -1,5 +1,5 @@
 {
-  "about": "Довідник локацій e-consul.gov.ua для slots.html. Джерело: e-queue-register public-get-countries, public-get-institutions, public-get-services-and-time; свята: функція holidays зі схеми document-templates/161374001. Знято 2026-10-08. Див. docs/booking.md.",
+  "about": "Довідник локацій e-consul.gov.ua. Джерело: e-queue-register public-get-countries, public-get-institutions, public-get-services-and-time; свята: функція holidays зі схеми document-templates/161374001. Знято 2026-10-08. Див. docs/booking.md.",
   "generatedAt": "2026-10-08",
   "holidays": {
     "all": [

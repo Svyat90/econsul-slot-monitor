@@ -249,7 +249,8 @@ Chrome) не видно `EconsulPicker`. Але `console.info` зі скрипт
 - Сервер на порту 3000 може належати іншій сесії (`gov-server`): він віддає `slots.html` прямо з
   диска, тож зміни видно в ньому одразу. Для тестів — `python3 -m http.server 3001` і копія
   розширення, де `localhost:3000` замінено на `3001`. `POST /schedule-log` там дає 501 — це очікувано.
-  Go в системі не встановлено.
+  Go в системі не встановлено. (Оновлено 2026-10-21: `slots.html`, `main.go` і `POST /schedule-log`
+  видалено; застосунок тепер віддає `server/`, а розширення працює з `localhost:4000`.)
 - e-consul, `auth/me`, `GET /tasks/{id}` — заглушки через `page.setRequestInterception`; для
   `my.e-consul.gov.ua` треба відповідати й на CORS preflight (`OPTIONS`, заголовок `token`).
   `callExternalReader` у застосунку підміняється з `page.evaluate`.

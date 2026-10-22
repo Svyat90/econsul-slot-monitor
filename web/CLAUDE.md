@@ -1,7 +1,7 @@
 # web — карта для агента
 
 Застосунок моніторингу слотів: Vite + React + TypeScript (SPA) на `localhost:3000/`. Замінив
-`slots.html` (той тимчасово на `/old`, план — [web-rewrite-plan.md](../docs/plans/web-rewrite-plan.md)).
+старий `slots.html` ([web-rewrite-plan.md](../docs/plans/web-rewrite-plan.md)).
 Запуск, команди й файли — [README.md](README.md). Як працює (сторінки, моніторинг, журнали) —
 [../docs/booking.md](../docs/booking.md) §9.
 

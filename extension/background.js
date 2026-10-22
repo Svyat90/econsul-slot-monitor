@@ -836,7 +836,7 @@ async function renderBadge(auth) {
     await chrome.action.setTitle({ title: auth.loggedIn === false ? 'e-Consul Helper: увійдіть на e-consul' : 'e-Consul Helper' });
 }
 
-// ---- App (slots.html on localhost:4000) ----
+// ---- App (web/ on localhost:4000) ----
 
 async function appTabs() {
     return chrome.tabs.query({ url: APP_ORIGIN + '/*' });

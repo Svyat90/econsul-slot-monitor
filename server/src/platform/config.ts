@@ -6,7 +6,7 @@ export interface Config {
     host: string;
     port: number;
     databaseUrl: string;
-    repoRoot: string; // slots.html (at /old) and web/dist (at /) are served from here
+    repoRoot: string;
     locationsPath: string;
     webDistPath: string; // the only directory @fastify/static may serve
 }

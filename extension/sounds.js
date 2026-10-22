@@ -1,10 +1,10 @@
-// Sound generators (Web Audio, no files). The glass sound is the same as playSessionSound()
-// in slots.html: keep the two copies in sync. The three alerts must be easy to tell apart:
+// Sound generators (Web Audio, no files). The glass sound is the same as in
+// web/src/adapters/alerts/sounds.ts: keep the two copies in sync. The three alerts must be easy to tell apart:
 // chime = new slots, double beeps = slot selected, broken glass = session ended, soft low
 // two-note "ding-dong" = draft saved (calm: nothing to do right now), three bell strokes = a
 // reminder before the location opens (log in / start the monitor).
 const EconsulSounds = (() => {
-    // Free slots: bright rising chime (A5–C#6–E6), three times. Same as playSlotSound() in slots.html
+    // Free slots: bright rising chime (A5–C#6–E6), three times. Same as the app's new-slots sound (web/src/adapters/alerts)
     function chime(ctx) {
         const notes = [[880, 0.15], [1109, 0.15], [1319, 0.3], [0, 0.25]];
         let at = ctx.currentTime + 0.05;

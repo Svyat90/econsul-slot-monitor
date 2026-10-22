@@ -251,10 +251,9 @@ branch on `error.message` text or on HTTP status outside the `econsul-api` adapt
 | Presentation | React Testing Library over a fake monitor store | jsdom |
 | End to end | real Chrome + extension, as in `docs/insights.md` → «Тестування» | a live session; **never book** |
 
-**Port check for the algorithm.** While `slots.html` still exists, a domain change
-to `slots/` or `monitoring/` is accepted only if, for the same fixtures and `nowMs`,
-it returns the same free slots as the old page, and `docs/booking.md` §11 still
-holds. If testing a rule forces you to open a browser, the rule is in the wrong ring.
+**Algorithm check.** A domain change to `slots/` or `monitoring/` is accepted only
+if the fixture tests (same fixtures and `nowMs`) still pass and `docs/booking.md`
+§11 still holds (the old `slots.html` it was ported from was deleted 2026-10-21). If testing a rule forces you to open a browser, the rule is in the wrong ring.
 
 ## 9. Enforcement
 

@@ -306,8 +306,8 @@
 ## 9. Як працює програма зараз
 
 Застосунок — модуль `web/` (Vite + React + TypeScript), який віддає сервер `server/` (Fastify +
-Postgres у Docker) на `http://localhost:3000`. Старий `slots.html` до видалення відкривається на
-`/old` (план переписування, [етап 8](plans/web-rewrite-plan.md)).
+Postgres у Docker) на `http://localhost:3000`. Старий `slots.html` видалено 2026-10-21
+([план переписування](plans/web-rewrite-plan.md), S8.T5).
 
 | Шлях | Призначення |
 |---|---|
@@ -335,7 +335,7 @@ Postgres у Docker) на `http://localhost:3000`. Старий `slots.html` до
 
 Без вибраної установи «Слоти» й «Моніторинг» показують порожній стан із посиланням на
 «Налаштування». Вибір, інтервал, діапазон дат, чернетка й мітка заголовка зберігаються в
-`localStorage` під тими самими ключами, що в `slots.html` (`slots.selection`, `slots.interval`,
+`localStorage` під ключами (`slots.selection`, `slots.interval`,
 `slots.dateRange`, `slots.draft`, `slots.schedule.<код>`, `slots.tabTitleMarks`).
 
 ### Моніторинг
@@ -459,8 +459,9 @@ Postgres у Docker) на `http://localhost:3000`. Старий `slots.html` до
 | Сторінки | `web/src/features/{slots,monitoring,settings,status,banners}` |
 | Маршрути й журнали сервера | `server/src/modules/*` |
 
-Що поведінка збігається зі старим `slots.html`, перевіряє `pnpm --dir web run reconcile` на записаних
-відповідях ([web/docs/fixtures.md](../web/docs/fixtures.md)).
+Що поведінка збігалася зі старим `slots.html`, до його видалення перевіряла звірка на записаних
+відповідях (54 збіги, 2026-10-09); тепер алгоритм тримають тести домену на фікстурах
+([web/docs/fixtures.md](../web/docs/fixtures.md)).
 
 ## 10. Файл locations.json
 
@@ -522,7 +523,7 @@ const services = {}, minutes = {};
 svcs.forEach(s => { services[s.serviceNumber] = s.serviceName;
   (minutes[s.consularInstitutionId] ||= {})[s.serviceNumber] = Number(s.serviceTime); });
 const out = {
-  about: 'Довідник локацій e-consul.gov.ua для slots.html. Див. docs/booking.md.',
+  about: 'Довідник локацій e-consul.gov.ua. Див. docs/booking.md.',
   generatedAt: new Date().toISOString().slice(0, 10),
   holidays: { all: ['2026-12-25'], byService: { 1: ['2026-11-21..2026-11-27'], 60: ['2026-11-21..2026-11-27'], 62: ['2026-11-21..2026-11-27'] } },
   services,
@@ -544,7 +545,7 @@ a.download = 'locations.json'; a.click();
 1. **Еталон сайту.** На сторінці e-consul перехоплюється повідомлення, яке календар передає своєму
    worker'у (розділ 13). Для кожного дня з нього рахуються вільні слоти тією самою перевіркою, що
    виконує worker. Для Г'юстона результат додатково звірено візуально з календарем на кроці 4.
-2. **Програма.** Код функцій з `slots.html` виконується на свіжих відповідях API для тієї самої
+2. **Програма.** Код функцій програми (тоді — `slots.html`, тепер `web/src/domain/slots`) виконується на свіжих відповідях API для тієї самої
    установи з параметрами з довідника — тим самим шляхом, яким дані отримує сама програма.
 3. Порівнюються список днів (консул, дата, час відкриття) і список вільних слотів по днях.
 
@@ -868,7 +869,7 @@ https://e-consul.gov.ua/tasks/create/161374/161374001
 План розширення Chrome, яке створюватиме чернетку й вибиратиме слот, —
 [extension/plans/extension-plan.md](../extension/plans/extension-plan.md).
 
-Константи `BOOKING_URL`, `DRAFT_URL_RE`, `DRAFT_TTL_MS` у `slots.html`. Якщо сайт змінить номер
+Константи `BOOKING_URL`, `DRAFT_URL_RE` — у `web/src/domain/booking/booking-url.ts`. Якщо сайт змінить номер
 процесу, його видно в адресі сторінки після «Запис на візит» → «Створити».
 
 ### 14.7. Чи заповнювати чернетку прямими запитами до API

@@ -9,9 +9,8 @@ last_updated: 2026-10-09
 
 ## Current focus
 
-- In progress: план `docs/plans/web-rewrite-plan.md` виконано до етапу 8 включно, крім S8.T5
-  (видалення `slots.html`, `main.go`, старих маршрутів) — після дня моніторингу на новому
-  застосунку (рішення користувача 2026-10-09).
+- Done: план `docs/plans/web-rewrite-plan.md` виконано повністю; S8.T5 (видалення `slots.html`,
+  `main.go`, старих маршрутів) — 2026-10-21.
 - Open questions: none
 - Next steps: користувач перевіряє новий застосунок наживо (розширення 0.4.0, моніторинг на `/`);
   потім S8.T5.

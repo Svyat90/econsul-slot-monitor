@@ -3,7 +3,7 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import { describe, expect, it, vi } from 'vitest';
 import type { ScheduleLogEntry } from '../../contracts/schedule-log.ts';
 import type { ScheduleLogRepository } from './repository.ts';
-import { scheduleLogApiRoutes, scheduleLogLegacyRoutes } from './routes.ts';
+import { scheduleLogApiRoutes } from './routes.ts';
 
 const entry: ScheduleLogEntry = {
     time: '2026-10-09T10:00:00.000Z',
@@ -22,30 +22,13 @@ function fakeRepository(overrides: Partial<ScheduleLogRepository> = {}): Schedul
     };
 }
 
-async function build(plugin: typeof scheduleLogLegacyRoutes, repository = fakeRepository()) {
+async function build(plugin: typeof scheduleLogApiRoutes, repository = fakeRepository()) {
     const app = Fastify();
     app.setValidatorCompiler(validatorCompiler);
     app.setSerializerCompiler(serializerCompiler);
     await app.register(plugin, { repository });
     return { app, repository };
 }
-
-describe('POST /schedule-log (legacy)', () => {
-    it('stores a valid entry and answers 204', async () => {
-        const { app, repository } = await build(scheduleLogLegacyRoutes);
-        const res = await app.inject({ method: 'POST', url: '/schedule-log', payload: entry });
-        expect(res.statusCode).toBe(204);
-        expect(repository.insertMany).toHaveBeenCalledWith([entry]);
-    });
-
-    it('rejects an unknown key such as token and stores nothing', async () => {
-        const { app, repository } = await build(scheduleLogLegacyRoutes);
-        const res = await app.inject({ method: 'POST', url: '/schedule-log', payload: { ...entry, token: 'x' } });
-        expect(res.statusCode).toBeGreaterThanOrEqual(400);
-        expect(res.statusCode).toBeLessThan(500);
-        expect(repository.insertMany).not.toHaveBeenCalled();
-    });
-});
 
 describe('POST /api/schedule-log', () => {
     it('stores a batch in one call and answers 204', async () => {

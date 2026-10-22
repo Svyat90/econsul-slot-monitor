@@ -22,8 +22,7 @@ when the user asks for a session wrap-up or a retrospective.
 ## The files
 
 Every module keeps its own file at `<module>/docs/insights.md`; the root
-`docs/insights.md` holds what concerns several modules, plus the legacy `slots.html`
-while it exists. All are in Ukrainian like the rest of the
+`docs/insights.md` holds what concerns several modules. All are in Ukrainian like the rest of the
 docs. Each is split into `##` sections by area; each entry is a `###` heading with
 the date in parentheses, followed by short prose, bullets or a table.
 

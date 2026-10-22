@@ -1,19 +1,10 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import {
     scheduleLogBatchSchema,
-    scheduleLogEntrySchema,
     scheduleLogPageSchema,
     scheduleLogQuerySchema,
 } from '../../contracts/schedule-log.ts';
 import type { ScheduleLogRepository } from './repository.ts';
-
-// Legacy route of main.go that slots.html still calls: one entry per request. Removed in stage 8.
-export const scheduleLogLegacyRoutes: FastifyPluginAsyncZod<{ repository: ScheduleLogRepository }> = async (app, { repository }) => {
-    app.post('/schedule-log', { schema: { body: scheduleLogEntrySchema } }, async (request, reply) => {
-        await repository.insertMany([request.body]);
-        return reply.code(204).send();
-    });
-};
 
 export const scheduleLogApiRoutes: FastifyPluginAsyncZod<{ repository: ScheduleLogRepository }> = async (app, { repository }) => {
     app.post('/api/schedule-log', { schema: { body: scheduleLogBatchSchema } }, async (request, reply) => {

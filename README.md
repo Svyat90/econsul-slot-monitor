@@ -12,8 +12,6 @@ Chrome вибирає знайдений слот у чернетці заявк
 | [`server/`](server/README.md) | Сервер Fastify + Postgres: віддає сторінку, довідник і зберігає журнали | [server/README.md](server/README.md) |
 | [`extension/`](extension/README.md) | Розширення Chrome «e-Consul Helper» | [extension/README.md](extension/README.md) |
 
-Старий `slots.html` тимчасово відкривається на `/old`, доки новий застосунок не пройде день моніторингу ([план](docs/plans/web-rewrite-plan.md), етап 8).
-
 ## Запуск
 
 ```sh

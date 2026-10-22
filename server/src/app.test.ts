@@ -66,33 +66,13 @@ describe('static files', () => {
         }
     });
 
-    it('serves slots.html at /old and redirects /old/', async () => {
-        const app = await buildWith(dist);
-        const res = await app.inject({ url: '/old' });
-        expect(res.statusCode).toBe(200);
-        expect(res.headers['content-type']).toContain('text/html');
-        expect(res.body).toBe(readFileSync(`${config.repoRoot}slots.html`, 'utf8'));
-        const slash = await app.inject({ url: '/old/' });
-        expect(slash.statusCode).toBe(301);
-        expect(slash.headers.location).toBe('/old');
-    });
-
-    it('serves the locations reference as JSON', async () => {
-        const app = await buildWith(dist);
-        const res = await app.inject({ url: '/locations.json' });
-        expect(res.statusCode).toBe(200);
-        expect(res.headers['content-type']).toContain('application/json');
-        expect(res.body).toBe(readFileSync(config.locationsPath, 'utf8'));
-    });
-
-    it('answers 503 with a hint without dist, while /old and /api still work', async () => {
+    it('answers 503 with a hint without dist, while /api still works', async () => {
         const app = await buildWith(join(dist, 'nope'));
         for (const url of ['/', '/slots']) {
             const res = await app.inject({ url });
             expect(res.statusCode, url).toBe(503);
             expect(res.body).toContain('pnpm --dir web build');
         }
-        expect((await app.inject({ url: '/old' })).statusCode).toBe(200);
         expect((await app.inject({ url: '/api/health' })).statusCode).toBe(200);
     });
 });
@@ -122,7 +102,7 @@ describe('/api', () => {
     });
 });
 
-describe('POST /schedule-log', () => {
+describe('POST /api/schedule-log through the app error handler', () => {
     const entry = {
         time: '2026-10-09T10:00:00.000Z',
         institutionCode: 'NYC',
@@ -133,14 +113,14 @@ describe('POST /schedule-log', () => {
 
     it('stores a valid entry and answers 204', async () => {
         const { app, insertMany } = await build();
-        const res = await app.inject({ method: 'POST', url: '/schedule-log', payload: entry });
+        const res = await app.inject({ method: 'POST', url: '/api/schedule-log', payload: { entries: [entry] } });
         expect(res.statusCode).toBe(204);
         expect(insertMany).toHaveBeenCalledTimes(1);
     });
 
     it('answers 422 with issues for an unknown key and stores nothing', async () => {
         const { app, insertMany } = await build();
-        const res = await app.inject({ method: 'POST', url: '/schedule-log', payload: { ...entry, token: 'x' } });
+        const res = await app.inject({ method: 'POST', url: '/api/schedule-log', payload: { entries: [entry], token: 'x' } });
         expect(res.statusCode).toBe(422);
         expect(res.json()).toMatchObject({ error: expect.any(String), issues: expect.any(Array) });
         expect(insertMany).not.toHaveBeenCalled();
@@ -155,7 +135,7 @@ describe('POST /schedule-log', () => {
                 },
             },
         }));
-        const res = await app.inject({ method: 'POST', url: '/schedule-log', payload: entry });
+        const res = await app.inject({ method: 'POST', url: '/api/schedule-log', payload: { entries: [entry] } });
         expect(res.statusCode).toBe(500);
         expect(res.body).not.toContain('secret db detail');
     });

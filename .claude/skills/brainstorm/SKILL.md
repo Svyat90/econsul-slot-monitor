@@ -73,7 +73,7 @@ Compare:
    (`extension/plans/extension-plan.md`) — what is agreed and what is left;
 3. `docs/booking.md` (the site, the API, the algorithm, the app's features) and
    the module's `docs/` (`extension/docs/how-it-works.md`, `extension/docs/design/`);
-4. the code: `web/`, `server/`, `extension/`, `server/data/locations.json` (and the legacy `slots.html` while it exists).
+4. the code: `web/`, `server/`, `extension/`, `server/data/locations.json`.
 
 Curated sources come first because they may already answer the question; the
 code settles what they leave open. Keep the search proportional: this is a
