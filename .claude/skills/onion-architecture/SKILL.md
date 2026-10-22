@@ -21,7 +21,7 @@ Those are outer rings that plug in.
    (§14). Domain code must match it; a change in behaviour is a change to that doc.
 3. `extension/plans/extension-plan.md` §8 — the message protocol between the app
    and the extension. It is a contract, not an implementation detail.
-4. `docs/insights.md` and `<module>/docs/insights.md` (`extension/docs/insights.md`)
+4. root `INSIGHTS.md` and `<module>/INSIGHTS.md` (`extension/INSIGHTS.md`)
    — known traps (React re-rendering the site, `chrome.storage.session` cleared on
    reload, the token appearing seconds after load).
 5. The module's own `CLAUDE.md`, `README.md`, `docs/` and `plans/`.
@@ -249,7 +249,7 @@ branch on `error.message` text or on HTTP status outside the `econsul-api` adapt
 | Application | unit tests with fake ports and a fake `Scheduler`/`Clock` | nothing |
 | Infrastructure | adapter tests with a stubbed `fetch` / `window` | jsdom at most |
 | Presentation | React Testing Library over a fake monitor store | jsdom |
-| End to end | real Chrome + extension, as in `docs/insights.md` → «Тестування» | a live session; **never book** |
+| End to end | real Chrome + extension, as in root `INSIGHTS.md` → «Тестування» | a live session; **never book** |
 
 **Algorithm check.** A domain change to `slots/` or `monitoring/` is accepted only
 if the fixture tests (same fixtures and `nowMs`) still pass and `docs/booking.md`
@@ -296,13 +296,13 @@ infrastructure     modules/<m>/repository.ts (Drizzle) · db/** (schema, client,
 - Routes validate with zod (`.strict()` bodies), call one method, return a contract
   type. No Drizzle import in routes or services; no `reply` outside routes.
 - A batch insert is one statement; idempotent on `client_id`
-  (`drizzle-orm-patterns` → "In this project").
+  (`server/docs/conventions.md` › Drizzle).
 - The server never calls e-Consul and never receives the token (section 2).
 - Tests: repositories against real Postgres (`*.it.test.ts`), routes with
   `app.inject()`, pure summary rules without a DB.
 
-Fastify, Drizzle and table details: `fastify-best-practices`, `drizzle-orm-patterns`,
-`postgresql-table-design` — each has an "In this project" section.
+Fastify, Drizzle and table details: the plugin skills `fastify-best-practices`,
+`drizzle-orm-patterns`, `postgresql-table-design`, applied as `server/docs/conventions.md` says.
 
 ## 12. How to answer
 

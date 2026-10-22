@@ -29,7 +29,7 @@ pnpm --dir server start
 | Документ | Про що |
 |---|---|
 | [booking.md](docs/booking.md) | Як працює запис на сайті, API, алгоритм вільних слотів, застосунок, бронювання |
-| [insights.md](docs/insights.md) | Неочевидна поведінка, що стосується кількох модулів |
+| [INSIGHTS.md](INSIGHTS.md) | Неочевидна поведінка, що стосується кількох модулів |
 | [brainstorm/ideas.md](docs/brainstorm/ideas.md) | Чернетка ідей і рішень щодо переписування |
 | [plans/web-rewrite-plan.md](docs/plans/web-rewrite-plan.md) | План переписування застосунку (`web/`, `server/`, розширення) |
 

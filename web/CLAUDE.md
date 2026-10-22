@@ -8,7 +8,7 @@
 ## Перед відповіддю
 
 Спершу шукайте в `docs/` і `plans/` цього модуля, у [../docs/booking.md](../docs/booking.md) (сайт,
-API, алгоритм слотів) і в `docs/insights.md` модуля й кореня. Потім — код.
+API, алгоритм слотів) і в `INSIGHTS.md` модуля й кореня. Потім — код.
 
 ## Неочевидні правила
 
@@ -23,10 +23,13 @@ API, алгоритм слотів) і в `docs/insights.md` модуля й к�
   `/fonts/...`: Vite сам додає `base` (`/`).
 - Перед комітом: `pnpm test`, `typecheck`, `lint`, `arch:check`. Правило, що не спрацьовує, доводять
   тимчасовим файлом-порушником (`.claude/skills/onion-architecture/references/enforcement.md`).
-- TypeScript 6, не 7: лінтерам потрібен JS API компілятора (`server/docs/insights.md`).
+- TypeScript 6, не 7: лінтерам потрібен JS API компілятора (`server/INSIGHTS.md`).
 
 ## Читати, коли
 
+- [docs/conventions.md](docs/conventions.md) — перед кодом компонентів, хуків, сховищ: як скіли
+  `react-best-practices` і `frontend-ui-architecture` застосовуються тут (Vite без Next.js, сховище
+  моніторингу, таймери поза React, де константи).
 - [docs/design/README.md](docs/design/README.md) — перед будь-якою зміною інтерфейсу; знімки — еталон.
 - [../docs/plans/web-rewrite-plan.md](../docs/plans/web-rewrite-plan.md) — етапи переписування й
   що вже зроблено.

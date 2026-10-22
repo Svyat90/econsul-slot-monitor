@@ -1,6 +1,6 @@
 ---
 name: engineering-insights
-description: "Reads and maintains this repo's insights files — <module>/docs/insights.md per module (extension/docs/insights.md, web/docs/insights.md, server/docs/insights.md) and docs/insights.md for cross-module findings — non-obvious behaviour of e-consul.gov.ua, Chrome, the extension, the web app, the server and the tools. Use at the start of any task that touches the web app (web/), extension/, server/ or testing in Chrome — read the module's file and the root one before answering — and again when a task ends, to add non-obvious findings (traps, dead ends, site quirks, tool quirks) as dated entries. Also use when the user mentions insights, інсайти, learnings, wrap-up or retrospective, asks what was learned, or asks to prune the file."
+description: "Reads and maintains this repo's insights files — <module>/INSIGHTS.md per module (extension/INSIGHTS.md, web/INSIGHTS.md, server/INSIGHTS.md) and the root INSIGHTS.md for cross-module findings — non-obvious behaviour of e-consul.gov.ua, Chrome, the extension, the web app, the server and the tools. Use at the start of any task that touches the web app (web/), extension/, server/ or testing in Chrome — read the module's file and the root one before answering — and again when a task ends, to add non-obvious findings (traps, dead ends, site quirks, tool quirks) as dated entries. Also use when the user mentions insights, інсайти, learnings, wrap-up or retrospective, asks what was learned, or asks to prune the file."
 ---
 
 # Engineering Insights
@@ -21,30 +21,30 @@ when the user asks for a session wrap-up or a retrospective.
 
 ## The files
 
-Every module keeps its own file at `<module>/docs/insights.md`; the root
-`docs/insights.md` holds what concerns several modules. All are in Ukrainian like the rest of the
+Every module keeps its own file at `<module>/INSIGHTS.md`; the root
+`INSIGHTS.md` holds what concerns several modules. All are in Ukrainian like the rest of the
 docs. Each is split into `##` sections by area; each entry is a `###` heading with
 the date in parentheses, followed by short prose, bullets or a table.
 
 | Work touched | File → section |
 |---|---|
-| `extension/**`, behaviour of e-consul.gov.ua pages under the extension | `extension/docs/insights.md` → `## Розширення Chrome` |
-| testing the extension (puppeteer, stubs, ports) | `extension/docs/insights.md` → `## Тестування` |
-| the web app (`web/**`), UI, monitoring | `web/docs/insights.md` (create it with the first entry) |
-| `server/**`: Fastify, Drizzle, Postgres, the request log | `server/docs/insights.md` (create it with the module) |
-| e-Consul API responses, the slot algorithm, time zones, day releases | `docs/insights.md` → `## Сайт і API e-Consul` (create on first entry) |
-| the app ↔ extension protocol, app ↔ server contracts | `docs/insights.md` → `## Між модулями` (create on first entry) |
-| Claude in Chrome, tools used across modules | `docs/insights.md` → `## Тестування` / `## Інструменти` |
+| `extension/**`, behaviour of e-consul.gov.ua pages under the extension | `extension/INSIGHTS.md` → `## Розширення Chrome` |
+| testing the extension (puppeteer, stubs, ports) | `extension/INSIGHTS.md` → `## Тестування` |
+| the web app (`web/**`), UI, monitoring | `web/INSIGHTS.md` (create it with the first entry) |
+| `server/**`: Fastify, Drizzle, Postgres, the request log | `server/INSIGHTS.md` (create it with the module) |
+| e-Consul API responses, the slot algorithm, time zones, day releases | `INSIGHTS.md` (root) → `## Сайт і API e-Consul` (create on first entry) |
+| the app ↔ extension protocol, app ↔ server contracts | `INSIGHTS.md` (root) → `## Між модулями` (create on first entry) |
+| Claude in Chrome, tools used across modules | `INSIGHTS.md` (root) → `## Тестування` / `## Інструменти` |
 
 A new file starts with a `#` title, one paragraph saying what belongs there and a
-link back to `docs/insights.md`. A new section is added only when no existing one
+link back to `INSIGHTS.md` (root). A new section is added only when no existing one
 fits; never rename or remove one. An entry goes into exactly one file — never
 paste it twice; when it spans modules, it goes to the root file.
 
 ## Mode: read
 
 1. Pick the module(s) the request touches, using the table above.
-2. Read that module's `docs/insights.md` and the root `docs/insights.md` in full
+2. Read that module's `INSIGHTS.md` and the root `INSIGHTS.md` in full
    (they are small).
 3. State in one line what was read and which entries bear on this task — or that
    none do.

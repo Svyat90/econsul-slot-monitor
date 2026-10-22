@@ -22,20 +22,21 @@ e-consul.gov.ua, стежить за ними й передає знайдене
 |---|---|
 | `CLAUDE.md` | Карта для агента: неочевидні правила модуля, що не чіпати, що читати й коли — з посиланнями на документацію |
 | `README.md` | Для людей: що робить модуль, як запустити, файли, як пов'язаний з іншими, перелік документації |
-| `docs/` | Документація саме цього модуля; `docs/insights.md` — його неочевидна поведінка |
+| `INSIGHTS.md` | Неочевидна поведінка модуля (скіл `engineering-insights`) |
+| `docs/` | Документація саме цього модуля |
 | `plans/` | Плани робіт саме цього модуля |
 
-Коренева `docs/` — лише те, що стосується кількох модулів: `booking.md` (сайт, API, алгоритм
-слотів, застосунок), `insights.md` (спільні інсайти), `brainstorm/` (ідеї та рішення),
+Кореневий `INSIGHTS.md` — спільні інсайти. Коренева `docs/` — лише те, що стосується кількох модулів: `booking.md` (сайт, API, алгоритм
+слотів, застосунок), `conventions.md` (як скіли плагінів застосовуються тут), `brainstorm/` (ідеї та рішення),
 `plans/` (плани на кілька модулів, коли з'являться). Новий модуль створюється одразу з цими
 чотирма елементами; правила модуля не повторюються тут.
 
 ## Перед відповіддю
 
-- Визначте модуль, якого стосується запит, і прочитайте його `docs/insights.md` та кореневий
-  `docs/insights.md` (скіл `engineering-insights`); одним рядком скажіть, що з них стосується задачі.
+- Визначте модуль, якого стосується запит, і прочитайте його `INSIGHTS.md` та кореневий
+  `INSIGHTS.md` (скіл `engineering-insights`); одним рядком скажіть, що з них стосується задачі.
 - Шукайте відповідь спершу в `docs/` і `plans/` модуля та в кореневій `docs/`, потім у коді.
-- Після задачі — допишіть неочевидне в `insights.md` модуля або кореневий (той самий скіл).
+- Після задачі — допишіть неочевидне в `INSIGHTS.md` модуля або кореневий (той самий скіл).
 
 ## Правила для всіх модулів
 
@@ -46,15 +47,32 @@ e-consul.gov.ua, стежить за ними й передає знайдене
 - Нічого не бронювати й не ставати в чергу очікування під час розробки чи тестів.
 - Документація українською. Змінили поведінку модуля — оновіть його `docs/` у тому самому коміті.
 
-## Агенти (`.claude/agents/`)
+## Агенти й скіли
 
-`implementer` (одна задача плану), `plan-verifier` (чи виконано план), `architecture-reviewer`
-(кільця й межі). Як план виконується — `docs/plans/README.md`.
+Загальний процес і загальні знання дають плагіни маркетплейсу `dev-digest-ai-marketplace`
+(увімкнені в `.claude/settings.json`); знання про цей проєкт — у `CLAUDE.md` модулів, `docs/` і
+`.claude/paved-path.json` (пакети, перевірки, що не чіпати, сигнали для рев'ю).
 
-## Скіли (`.claude/skills/`)
+- `sdd-engineering`: агенти `spec-creator` → `implementation-planner` → `implementer` (через скіл
+  `run-plan`) → `plan-verifier`; скіл `workflow-retro`. Як план виконується — `docs/plans/README.md`.
+- `architecture-review`: агент `architecture-reviewer`. `research-tools`: агент `researcher`.
+- `engineering-paved-path`: скіли `react-best-practices`, `react-testing-library`,
+  `frontend-ui-architecture`, `fastify-best-practices`, `drizzle-orm-patterns`,
+  `postgresql-table-design`, `zod`, `typescript-expert`, `security`, `pr-self-review`, `review-kit`.
+  Як вони застосовуються тут — [docs/conventions.md](docs/conventions.md),
+  [web/docs/conventions.md](web/docs/conventions.md), [server/docs/conventions.md](server/docs/conventions.md);
+  де вони розходяться зі скілом, діють ці файли.
+- Локальні скіли (`.claude/skills/`), налаштовані під проєкт і важливіші за однойменні плагінні:
+  `onion-architecture` (кільця `web/` і `server/`), `engineering-insights`, `brainstorm`.
 
-Процес: `brainstorm`, `engineering-insights`.
-Архітектура: `onion-architecture`, `frontend-ui-architecture`.
-Фронтенд: `react-best-practices`, `react-testing-library`.
-Бекенд і база: `fastify-best-practices`, `drizzle-orm-patterns`, `postgresql-table-design`.
-Загальне: `typescript-expert`, `zod`, `security`, `mermaid-diagram`.
+Правила для агентів, що пишуть код (додаток до правил вище):
+
+- Інсайти — у `<модуль>/INSIGHTS.md` і кореневому `INSIGHTS.md` (так їх шукають і агенти плагінів).
+- Жодного запиту до `e-consul.gov.ua` / `my.e-consul.gov.ua` з коду, тесту, скрипта чи браузера;
+  тести — на записаних відповідях (`web/src/domain/__fixtures__/`) і заглушках.
+- Токен сесії — ніде: ні в коді, фікстурах, логах, назвах тестів, знімках, базі, журналі запитів.
+  Лише адаптер `econsul-api` кладе його в заголовок `token`, і лише до `my.e-consul.gov.ua`.
+- Код у `web/src/domain/slots/` і `web/src/domain/monitoring/` відтворює `docs/booking.md` §6–7 і §9;
+  зміна поведінки там без явного рішення в плані — дефект плану.
+- Агенти не запускають `pnpm install`, `docker`, `db:migrate` і сервери; модуль `extension/` не має
+  тестів — перевірка `node --check` і ручні кроки.

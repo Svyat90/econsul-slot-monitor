@@ -1,7 +1,7 @@
 # Як працює розширення e-Consul Helper
 
 Опис зробленого (v0.8.0). Як сайт і застосунок працюють загалом — [booking.md](../../docs/booking.md);
-що ще лишилось — [план](../plans/extension-plan.md); неочевидна поведінка — [insights.md](insights.md).
+що ще лишилось — [план](../plans/extension-plan.md); неочевидна поведінка — [INSIGHTS.md](../INSIGHTS.md).
 
 Розширення Chrome у теці `extension/` (Manifest V3). Етапи 1–4 [плану](../plans/extension-plan.md):
 воно передає програмі токен сесії, сповіщає, коли треба увійти, **саме створює чернетку** (кроки 1–3,
@@ -13,7 +13,7 @@
 Встановлення: `chrome://extensions` → «Режим розробника» → «Завантажити розпаковане» → тека
 `extension/`. Після змін у коді — **обов'язково** кнопка ⟳ на картці розширення: background і
 content scripts Chrome бере з диска лише тоді, перезавантаження вкладок їх не оновлює
-([insights.md](insights.md)). Відкриті вкладки e-consul і `localhost:4000` отримують скрипти заново
+([INSIGHTS.md](../INSIGHTS.md)). Відкриті вкладки e-consul і `localhost:4000` отримують скрипти заново
 самі. Попап показує плашку, якщо `version` у `manifest.json` на диску новіша за завантажену, тому при
 змінах background чи content scripts версію треба піднімати.
 

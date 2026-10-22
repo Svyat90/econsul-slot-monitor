@@ -16,7 +16,7 @@ work), `docs/plans/` (agreed cross-module plans) and each module's `docs/` and
 - The file is a draft. Never cite it as a requirement, never copy its content into
   a `plans/` or `docs/` folder on your own. When an idea is ready, offer a
   plan as a separate step and wait for the user.
-- Never write to any `insights.md`. That belongs to `engineering-insights`.
+- Never write to any `INSIGHTS.md`. That belongs to `engineering-insights`.
 - Read `docs/brainstorm/ideas.md` before comparing anything. No file read, no
   comparison.
 - Write to the file only in `record` mode, after the user confirms the outcome.
@@ -67,8 +67,8 @@ Compare:
 
 **1. Search order.** Look in this order and stop when you have enough to compare:
 
-1. `docs/insights.md` and the touched module's `docs/insights.md`
-   (`extension/docs/insights.md`) — traps already paid for;
+1. `INSIGHTS.md` (root) and the touched module's `INSIGHTS.md`
+   (`extension/INSIGHTS.md`) — traps already paid for;
 2. `docs/plans/` (cross-module) and the module's `plans/`
    (`extension/plans/extension-plan.md`) — what is agreed and what is left;
 3. `docs/booking.md` (the site, the API, the algorithm, the app's features) and

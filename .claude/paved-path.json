@@ -1,0 +1,119 @@
+{
+  "base": "main",
+  "zod": 4,
+  "packages": {
+    "web": {
+      "dir": "web",
+      "area": "frontend",
+      "checks": {
+        "typecheck": "pnpm run typecheck",
+        "lint": "pnpm run lint",
+        "arch-check": "pnpm run arch:check"
+      }
+    },
+    "server": {
+      "dir": "server",
+      "area": "backend",
+      "checks": {
+        "typecheck": "pnpm run typecheck",
+        "arch-check": "pnpm run arch:check"
+      }
+    },
+    "extension": {
+      "dir": "extension",
+      "area": "frontend",
+      "checks": {}
+    }
+  },
+  "doNotTouch": [
+    "web/docs/design/",
+    "extension/docs/design/design-a.html",
+    "extension/fonts/",
+    "web/dist/"
+  ],
+  "generated": [
+    {
+      "path": "server/src/db/migrations/",
+      "source": "server/src/db/schema/",
+      "by": "pnpm --dir server run db:generate"
+    }
+  ],
+  "coupled": [
+    {
+      "a": "extension/background.js",
+      "symbolA": "*",
+      "b": "extension/manifest.json",
+      "symbolB": "*",
+      "why": "Chrome takes background and content-script changes only after ⟳; the popup asks for it by version (extension/CLAUDE.md)"
+    },
+    {
+      "a": "web/src/domain/contracts/extension-messages.ts",
+      "symbolA": "*",
+      "b": "extension/plans/extension-plan.md",
+      "symbolB": "*",
+      "why": "the app ↔ extension protocol is a contract: a type or field changes in the app, the extension and §8 together"
+    }
+  ],
+  "signals": [
+    {
+      "id": "impure-domain",
+      "path": "^web/src/(domain|application)/.*\\.ts$",
+      "pattern": "Date\\.now|new Date\\(\\)|Math\\.random|(^|[^A-Za-z.])fetch\\(|localStorage|window\\.|document\\.|chrome\\.|setTimeout|setInterval|Notification",
+      "message": "clock, randomness or I/O in the core; inject Clock/Random/ports (onion-architecture)"
+    },
+    {
+      "id": "framework-in-core",
+      "path": "^web/src/(domain|application)/",
+      "pattern": "from ['\"](react|.*/(adapters|features|app)/)",
+      "message": "the core imports React, an adapter or the UI"
+    },
+    {
+      "id": "fetch-in-ui",
+      "path": "^web/src/(features|app)/",
+      "pattern": "(^|[^A-Za-z.])fetch\\(|e-consul\\.gov\\.ua|external_reader|localStorage|postMessage",
+      "message": "I/O in the UI; go through the monitor store or an adapter (web/docs/conventions.md)"
+    },
+    {
+      "id": "adapter-in-ui",
+      "path": "^web/src/(features|app)/(?!providers\\.tsx)",
+      "pattern": "from ['\"].*adapters/",
+      "message": "the UI imports an adapter; only the composition root (providers.tsx) does"
+    },
+    {
+      "id": "loop-in-effect",
+      "path": "^web/src/.*\\.tsx$",
+      "pattern": "setInterval|setTimeout",
+      "message": "a timer in a component: a loop in useEffect double-runs in Strict Mode; long loops live in a store"
+    },
+    {
+      "id": "server-calls-econsul",
+      "path": "^server/",
+      "pattern": "e-consul\\.gov\\.ua|external_reader",
+      "message": "the server never calls e-Consul (server/CLAUDE.md)"
+    },
+    {
+      "id": "orm-outside-repo",
+      "path": "^server/src/modules/[^/]+/(routes|service)\\.ts$",
+      "pattern": "drizzle-orm|db/schema|db/client",
+      "message": "Drizzle only in repository.ts and src/db/**"
+    },
+    {
+      "id": "token-leak",
+      "path": ".*",
+      "pattern": "(console\\.|log\\(|insert\\(|values\\(|JSON\\.stringify).*token|token.*(console\\.|log\\(|insert\\(|values\\()",
+      "message": "the session token must never reach a log, a table or our server (docs/conventions.md › Безпека)"
+    },
+    {
+      "id": "open-postmessage",
+      "path": "^(web|extension)/",
+      "pattern": "postMessage\\([^)]*['\"]\\*['\"]",
+      "message": "postMessage with '*'; target window.location.origin and check origin and source"
+    },
+    {
+      "id": "autobook",
+      "path": "^extension/",
+      "pattern": "finish-button|Підтвердж",
+      "message": "a «Підтвердити» path must check autoBook at the moment of the click; «Підтверджую» and the waiting queue are never clicked"
+    }
+  ]
+}

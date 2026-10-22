@@ -8,7 +8,7 @@
 ## Перед відповіддю
 
 Спершу шукайте в `docs/` і `plans/` цього модуля, у [плані](../docs/plans/web-rewrite-plan.md) §5 і
-в `docs/insights.md` модуля й кореня. Потім — код.
+в `INSIGHTS.md` модуля й кореня. Потім — код.
 
 ## Неочевидні правила
 
@@ -46,9 +46,10 @@
 
 - [../docs/plans/web-rewrite-plan.md](../docs/plans/web-rewrite-plan.md) §5 — таблиці, маршрути,
   поведінка без бази; §7 — етапи.
-- Скіли `fastify-best-practices`, `drizzle-orm-patterns`, `postgresql-table-design` — розділ
-  «In this project» перед будь-яким кодом сервера; `security` — перед маршрутом, що приймає дані.
+- [docs/conventions.md](docs/conventions.md) — перед будь-яким кодом сервера: як скіли
+  `fastify-best-practices`, `drizzle-orm-patterns`, `postgresql-table-design` застосовуються тут;
+  [../docs/conventions.md](../docs/conventions.md) › «Безпека» — перед маршрутом, що приймає дані.
 - [../extension/plans/extension-plan.md](../extension/plans/extension-plan.md) — що й коли надсилає
   розширення (етап 7 плану).
-- `docs/insights.md` — перед нетривіальною роботою; після неї — дописати неочевидне скілом
+- [INSIGHTS.md](INSIGHTS.md) — перед нетривіальною роботою; після неї — дописати неочевидне скілом
   `engineering-insights`.

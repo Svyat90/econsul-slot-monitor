@@ -55,9 +55,9 @@
 | Документ | Про що |
 |---|---|
 | [docs/how-it-works.md](docs/how-it-works.md) | Поведінка розширення: сесія, чернетка, вибір слота, перевірка без справжніх даних |
-| [docs/insights.md](docs/insights.md) | Неочевидна поведінка Chrome, сайту й інструментів тестування |
+| [INSIGHTS.md](INSIGHTS.md) | Неочевидна поведінка Chrome, сайту й інструментів тестування |
 | [docs/design/README.md](docs/design/README.md) | Дизайн A: макети, токени, як перезібрати сторінку дизайну |
 | [plans/extension-plan.md](plans/extension-plan.md) | План: рішення, архітектура, протокол повідомлень, етапи, що лишилось |
 
 Спільне з іншими модулями — у [../docs/](../docs/): як працює сайт і API ([booking.md](../docs/booking.md)),
-спільні інсайти ([insights.md](../docs/insights.md)).
+спільні інсайти ([INSIGHTS.md](../INSIGHTS.md)).
