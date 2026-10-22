@@ -346,6 +346,7 @@ extension/
 | застосунок → розширення | `app:monitor` | у `monitor` ще `dateRange: { from, to }` (`null` — без межі): слоти, які розширення бере з календаря саме, лише в цьому діапазоні |
 | розширення → застосунок | `ext:settings` | ще поле `releaseStrike` (застосунок його поки не показує, чекбокс — у попапі) |
 | background → `econsul.js` | `release-strike` | `{ jobId, taskId, at }` — «Далі» на кроці 3 рівно в `at`; `ping` відповідає ще `pageSince` (`performance.timeOrigin` сторінки) |
+| background ↔ `econsul.js` | `econsul:draft-result` → `{ scan }` | (v0.14.7) `econsul:draft-result` несе ще `taskId`; відповідь `{ scan: { jobId, range } }` — шукати вільні слоти нової чернетки; `econsul:scan-result` `{ jobId, error, searches, slots }` → `{ next }` або `{}` |
 | `econsul.js` → background | `econsul:strike-result` | `{ jobId, error, clickedAt, slots, lastDay }` → відповідь `{ next }` (дані `select-slot` для вибору на тому самому календарі) або `{}` |
 
 Додано у v0.9.0 (перехід на наступний слот і агресивне бронювання, 2026-10-18):

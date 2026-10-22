@@ -34,10 +34,11 @@ const ALARM_LEAD_MIN = 1, ALARM_LEAD_MAX = 60;
 // slow site) when «Далі» is pressed at the moment (2 min: the owner's decision, 2026-10-21; it was 30 s)
 const STRIKE_LEAD_MS = 2 * 60 * 1000;
 const STRIKE_LATE_MS = 60 * 1000; // woke up later than this after the opening: no strike
-// «Далі» this long after the opening, not at it: the first strike (2026-10-20, «Далі» +1 ms) got «no
-// time» while the app found the new day's slots seconds later; half a second gives the API time to
-// serve the opened day (the owner's decision, 2026-10-20). lateMs in the journal counts from the opening
-const STRIKE_DELAY_MS = 500;
+// «Далі» this long after the opening. It was 500 ms (2026-10-20/21) on the theory that the API needs
+// a moment; the «no time» it was meant to avoid was the picker taking the waiting-queue button for
+// the site's answer (2026-10-22), so «Далі» is pressed at the moment again (the owner's decision,
+// 2026-10-22). lateMs in the journal counts from the opening
+const STRIKE_DELAY_MS = 0;
 // When new days open the site is loaded by everyone who tries to book and answers many times
 // slower: the timeouts are generous and a failed selection starts over (see RETRYABLE)
 const SELECT_TIMEOUT_MS = 10 * 60 * 1000; // a selection without a result by then has failed
@@ -332,8 +333,14 @@ async function onSiteTask({ url, taskId, step, info }, tab) {
     // each repeats its report. The newest application stays the draft: another one replaces it
     // only when it is known to be newer, or when we know nothing about the current one's age
     if (draft && !same && draft.createdAt && !(createdAt && createdAt > draft.createdAt)) return;
+    // The institution and service of a draft we made (the tab of the creation shows it); unknown
+    // for a draft the person made on the site
+    const { draftJob } = await chrome.storage.session.get('draftJob');
+    const made = !same && draftJob && draftJob.tabId === tab.id && draftJob.institutionCode ? draftJob : null;
     const next = {
         url, taskId, step,
+        institutionCode: same ? draft.institutionCode || null : made ? made.institutionCode : null,
+        serviceCode: same ? draft.serviceCode || null : made ? made.serviceCode : null,
         createdAt,
         expiresAt: createdAt ? createdAt + DRAFT_TTL_MS : null,
         foundAt: same ? draft.foundAt : Date.now(),
@@ -405,9 +412,18 @@ function draftFromEarlierDay(draft) {
     return !!(draft && draft.createdAt && new Date(draft.createdAt).toDateString() !== new Date().toDateString());
 }
 
-// Expired (the site deletes it a day after creation) or made on an earlier day
-function draftOutdated(draft) {
-    return !!(draft && ((draft.expiresAt && draft.expiresAt <= Date.now()) || draftFromEarlierDay(draft)));
+// Made for another institution or service than the app monitors now (the person changed them in
+// the app): its calendar never shows the app's slots, every selection in it ends «no time» (seen
+// 2026-10-22: Houston's slots tried in a Chicago draft). Known only for drafts we made
+function draftForOtherPlace(draft, appSelection) {
+    return !!(draft && draft.institutionCode && appSelection && appSelection.institutionCode
+        && (draft.institutionCode !== appSelection.institutionCode || draft.serviceCode !== appSelection.serviceCode));
+}
+
+// Expired (the site deletes it a day after creation), made on an earlier day, or (when the app's
+// selection is given) made for another institution or service
+function draftOutdated(draft, appSelection = null) {
+    return !!(draft && ((draft.expiresAt && draft.expiresAt <= Date.now()) || draftFromEarlierDay(draft) || draftForOtherPlace(draft, appSelection)));
 }
 
 // The site reset a draft (it opens on step 1 or 2, picker.js RESET_STEPS): it is forgotten, and
@@ -431,6 +447,10 @@ async function draftIsUsable() {
     if (draft.expiresAt && draft.expiresAt <= Date.now()) return false;
     if (draftFromEarlierDay(draft)) {
         Telemetry.event('draft.gone', { taskId: draft.taskId, reason: 'earlier-day' });
+        return false;
+    }
+    if (draftForOtherPlace(draft, await getAppSelection())) {
+        Telemetry.event('draft.gone', { taskId: draft.taskId, reason: 'other-place' });
         return false;
     }
     const tab = await findEconsulTab();
@@ -470,7 +490,7 @@ async function createDraft(reason, attempt = 1) {
     const appSelection = await getAppSelection();
     if (!appSelection) return draftFailed(job, 'no-selection');
 
-    await setDraftJob(job);
+    await setDraftJob({ ...job, institutionCode: appSelection.institutionCode, serviceCode: appSelection.serviceCode });
     Telemetry.event('draft.create-started', { reason, institution: appSelection.institutionCode, service: appSelection.serviceCode }, { jobId: job.jobId });
     let tab;
     if (reason === 'login') tab = await openWorkTab(NEW_APPLICATION_URL);
@@ -478,7 +498,7 @@ async function createDraft(reason, attempt = 1) {
         tab = await chrome.tabs.create({ url: NEW_APPLICATION_URL, active: true });
         await chrome.windows.update(tab.windowId, { focused: true });
     }
-    await setDraftJob({ ...job, tabId: tab.id });
+    await setDraftJob({ ...job, institutionCode: appSelection.institutionCode, serviceCode: appSelection.serviceCode, tabId: tab.id });
 
     // The site creates the task and moves to /tasks/{id}/applicantInfo; wait for econsul.js there
     await new Promise(r => setTimeout(r, 2500));
@@ -521,12 +541,94 @@ async function draftFailed(job, error) {
 }
 
 // From econsul.js: steps 1–3 are over (ok) or stopped with an error code
-async function onDraftResult({ jobId, ok, error }) {
+async function onDraftResult({ jobId, ok, error, taskId }) {
     const { draftJob } = await chrome.storage.session.get('draftJob');
-    if (!draftJob || draftJob.jobId !== jobId) return;
+    if (!draftJob || draftJob.jobId !== jobId) return {};
     if (!ok) return draftFailed(draftJob, error || 'step-stuck');
+    // The scan's selection is set before the job ends: a selection waiting for this draft
+    // (runSelection) then finds it busy and leaves its slots waiting instead of reloading the tab
+    const scan = await startDraftScan(draftJob, typeof taskId === 'string' ? taskId : null);
     // The draft itself arrives as the tab reports step 4 (onSiteTask)
     await setDraftJob({ ...draftJob, status: 'done', at: Date.now() });
+    return scan;
+}
+
+// A new draft stands on its calendar (step 4): its free slots are selected right there, booked
+// with auto-booking, in the usual order (date range, quarantine, day by day) — without waiting for
+// the monitor, which offers slots only once it runs and has checked (the owner's decision,
+// 2026-10-22). A «running» selection like the strike: the app's slots wait for it (waitingSlots).
+// Not when slots made the draft (runSelection goes on with them), nor during a booking or right
+// after a selection the person may be confirming
+async function startDraftScan(draftJob, taskId) {
+    if (!taskId || draftJob.reason === 'slots' || draftJob.tabId == null) return {};
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    if (settings.paused) return {};
+    const { selection } = await chrome.storage.session.get('selection');
+    const now = Date.now();
+    if (selection && ['running', 'booking'].includes(selection.status) && now - selection.startedAt < SELECT_TIMEOUT_MS) return {};
+    if (selection && selection.status === 'selected' && now - selection.at < SELECTED_HOLD_MS) return {};
+    const range = await appDateRange();
+    const { autoBook, aggressive, limitUntil } = await bookingPlan(settings, false);
+    const jobId = crypto.randomUUID();
+    await setSelection({ status: 'running', scan: true, jobId, taskId, tabId: draftJob.tabId, test: false, autoBook, aggressive, limitUntil, slots: [], attempt: 1, startedAt: now, at: now });
+    Telemetry.event('selection.started', { taskId, slots: 0, autoBook, aggressive, attempt: 1, scan: true }, { jobId, test: false });
+    return { scan: { jobId, range: { from: range.from || null, to: range.to || null } } };
+}
+
+// From econsul.js: the free slots of the new draft's calendar (see startDraftScan). Answers with
+// the slots to select there ({ next }): the app's new slots that came meanwhile first, then these,
+// then all the app's free slots
+async function onScanResult({ jobId, error, searches, slots: found }) {
+    const { selection } = await chrome.storage.session.get('selection');
+    if (!selection || selection.jobId !== jobId || selection.status !== 'running' || !selection.scan) return {};
+    const shown = cleanSlots(found);
+    const code = error ? String(error).split(':')[0].slice(0, 50) : null;
+    Telemetry.event('selection.stage', {
+        stage: 'draft-scan', taskId: selection.taskId, error: code, free: shown.length,
+        searches: typeof searches === 'string' && /^[a-z:,0-9-]*$/.test(searches) ? searches.slice(0, 300) : null
+    }, { jobId, test: false });
+    if (code) {
+        await strikeFailed(selection, code);
+        return {};
+    }
+    const range = await appDateRange();
+    const inRange = shown.filter(s => (!range.from || s.date >= range.from) && (!range.to || s.date <= range.to));
+    const { waitingSlots = { fresh: [], all: [] } } = await chrome.storage.session.get('waitingSlots');
+    if (!inRange.length && !waitingSlots.fresh.length && !waitingSlots.all.length) {
+        // No free slot in the draft: nothing to report, the monitor goes on as usual
+        await setSelection({ ...selection, status: 'skipped', error: 'no-free', at: Date.now() });
+        return {};
+    }
+    return selectOnCalendar(selection, mergeSlots(waitingSlots.fresh, inRange), mergeSlots(waitingSlots.fresh, inRange, waitingSlots.all));
+}
+
+function cleanSlots(found) {
+    const isDate = d => typeof d === 'string' && /^\d{4}-\d\d-\d\d$/.test(d);
+    return (Array.isArray(found) ? found : [])
+        .filter(s => s && isDate(s.date) && typeof s.time === 'string' && /^\d\d:\d\d$/.test(s.time))
+        .map(({ date, time }) => ({ date, time }));
+}
+
+// The selection on the calendar a strike or a draft scan has open: quarantine, the usual order
+// (fresh first) and the booking plan; answers the data of select-slot ({ next }) or {}
+async function selectOnCalendar(selection, fresh, candidates) {
+    await chrome.storage.session.remove('waitingSlots');
+    if (!candidates.length) {
+        await endSelection(selection, 'not-found');
+        return {};
+    }
+    const usable = await usableSlots(candidates, false, Date.now());
+    if (!usable) return {}; // all in quarantine: the selection is «skipped»
+    const slots = tryOrder(usable, fresh);
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    if (settings.paused) {
+        await setSelection({ status: 'skipped', error: 'paused', test: false, at: Date.now() });
+        return {};
+    }
+    const { autoBook, aggressive, confirmTries, limitUntil } = await bookingPlan(settings, false);
+    await setSelection({ ...selection, slots, autoBook, aggressive, limitUntil, at: Date.now() });
+    const { jobId, taskId } = selection;
+    return { next: { jobId, taskId, slots, autoBook, confirmTries, note: limitUntil ? limitText(limitUntil) : null } };
 }
 
 // A creation without a result for too long has failed (the tab was closed, the page froze)
@@ -655,6 +757,7 @@ async function runStrike(at) {
         if ((await getAuth()).loggedIn !== true) return skip('not-logged-in');
         const { selection, draft } = await chrome.storage.session.get(['selection', 'draft']);
         if (!draft || draftOutdated(draft)) return skip('no-draft');
+        if (draftForOtherPlace(draft, await getAppSelection())) return skip('other-place');
         const now = Date.now();
         // A booking under way is never interrupted, nor a slot the person may be booking right now
         if (selection && selection.status === 'booking' && now - selection.startedAt < SELECT_TIMEOUT_MS) return skip('booking');
@@ -729,23 +832,7 @@ async function onStrikeResult({ jobId, error, clickedAt, searches, requests, slo
     const inRange = shown.filter(s => (!range.from || s.date >= range.from) && (!range.to || s.date <= range.to));
     const opened = inRange.filter(s => s.date === lastDay);
     const { waitingSlots = { fresh: [], all: [] } } = await chrome.storage.session.get('waitingSlots');
-    await chrome.storage.session.remove('waitingSlots');
-    const candidates = mergeSlots(waitingSlots.fresh, opened, inRange, waitingSlots.all);
-    if (!candidates.length) {
-        await endSelection(selection, 'not-found');
-        return {};
-    }
-    const usable = await usableSlots(candidates, false, Date.now());
-    if (!usable) return {}; // all in quarantine: the selection is «skipped»
-    const slots = tryOrder(usable, mergeSlots(waitingSlots.fresh, opened));
-    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
-    if (settings.paused) {
-        await setSelection({ status: 'skipped', error: 'paused', test: false, at: Date.now() });
-        return {};
-    }
-    const { autoBook, aggressive, confirmTries, limitUntil } = await bookingPlan(settings, false);
-    await setSelection({ ...selection, slots, autoBook, aggressive, limitUntil, at: Date.now() });
-    return { next: { jobId, taskId: selection.taskId, slots, autoBook, confirmTries, note: limitUntil ? limitText(limitUntil) : null } };
+    return selectOnCalendar(selection, mergeSlots(waitingSlots.fresh, opened), mergeSlots(waitingSlots.fresh, opened, inRange, waitingSlots.all));
 }
 
 // A draft the site deletes a day after creation: the journal gets one `draft.gone` when that
@@ -1181,8 +1268,11 @@ async function runSelection(starting, attempt, release) {
     let { selection, draft } = await chrome.storage.session.get(['selection', 'draft']);
     const now = Date.now();
     // The site deletes a draft a day after creation: an expired one is no draft (picking in it
-    // ends on the site's error page); nor is one made on an earlier day (draftFromEarlierDay)
-    const expired = draftOutdated;
+    // ends on the site's error page); nor is one made on an earlier day (draftFromEarlierDay) or for
+    // another institution or service than the app's (draftForOtherPlace): a new one is made below
+    const appSelection = await getAppSelection();
+    const expired = d => draftOutdated(d, appSelection);
+    if (draftForOtherPlace(draft, appSelection)) Telemetry.event('draft.gone', { taskId: draft.taskId, reason: 'other-place' });
     if (expired(draft)) draft = null;
     if (settings.paused) return setSelection({ status: 'skipped', error: 'paused', test, at: now });
     // Slots came before any draft (a login started the monitor, the draft is not made yet): make
@@ -1654,6 +1744,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         else if (message.type === 'econsul:next-slot') handler = () => onNextSlot(message, sender.tab);
         else if (message.type === 'econsul:strike-result') handler = () => onStrikeResult(message);
         else if (message.type === 'econsul:draft-result') handler = () => onDraftResult(message);
+        else if (message.type === 'econsul:scan-result') handler = () => onScanResult(message);
         else if (message.type === 'econsul:request') handler = () => onSiteRequest(message);
         else if (message.type === 'econsul:confirm-clicked') handler = async () => {
             const { selection } = await chrome.storage.session.get('selection');

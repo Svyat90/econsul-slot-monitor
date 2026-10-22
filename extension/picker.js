@@ -18,7 +18,13 @@ var EconsulPicker = (() => {
     const CALENDAR_STEP = 'dateAndTimeVisitInfo';
     const WEEK_RE = /^(\d\d)\.(\d\d)\.(\d{4})\s*—\s*(\d\d)\.(\d\d)\.(\d{4})$/;
     const BOOKED_RE = /заброньовано/;
-    const NO_TIME_RE = /немає вільного часу|черг[уи] очікування/i;
+    // The site's «no time» message. «Записатись в чергу очікування» is not one: it is the finish
+    // button of step 4 while no slot is selected, there from the start of a search (the opening of
+    // 2026-10-22: «no time» 0–1 ms after step 4 appeared, eight times, while the site's calendar
+    // requests took 1–12 s and all answered 200)
+    const NO_TIME_RE = /немає вільного часу/i;
+    const QUEUE_RE = /черг[уи] очікування/i;
+    const SEARCHING_RE = /пошук активних слотів/i;
     const UNAVAILABLE_RE = /наразі недоступний|Сервіс недоступний/i;
 
     const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -123,7 +129,7 @@ var EconsulPicker = (() => {
     function onCalendar() {
         if (currentStep() !== CALENDAR_STEP || document.getElementById('next-step-button')) return false;
         return !!(document.getElementById('finish-button') || slotButtons(document).length
-            || /пошук активних слотів/i.test(mainText()) || NO_TIME_RE.test(mainText()) || UNAVAILABLE_RE.test(mainText()));
+            || SEARCHING_RE.test(mainText()) || NO_TIME_RE.test(mainText()) || QUEUE_RE.test(mainText()) || UNAVAILABLE_RE.test(mainText()));
     }
 
     // After «Далі» on `step`: true once the address changed or the site says «unavailable». The
@@ -184,19 +190,45 @@ var EconsulPicker = (() => {
     let searchLog = [];
 
     // 'left': the page went back to a step with «Далі» (see onCalendar), the caller presses it again
+    // «No time» is the site's answer only once its search is over: the search text was shown, or a
+    // calendar request of this search came back, and the message then stays NO_TIME_HOLD_MS. Without
+    // either for NO_TIME_MAX_WAIT_MS the message is taken as it is
     async function waitForCalendar() {
         const since = Date.now();
+        const sincePerf = performance.now();
+        let searched = false, noTimeSince = null;
         const state = await waitFor(() => {
             if (slotButtons(document).length) return 'slots';
             if (Date.now() - since > 3000 && STEPS_BEFORE_CALENDAR.includes(currentStep()) && document.getElementById('next-step-button')) return 'left';
             const text = mainText();
-            if (NO_TIME_RE.test(text)) return 'no-time';
+            if (SEARCHING_RE.test(text)) { searched = true; noTimeSince = null; return null; }
+            if (NO_TIME_RE.test(text)) {
+                const answered = searched || calendarRequests(sincePerf) > 0 || Date.now() - since > NO_TIME_MAX_WAIT_MS;
+                if (!answered) return null;
+                noTimeSince ??= Date.now();
+                return Date.now() - noTimeSince >= NO_TIME_HOLD_MS ? 'no-time' : null;
+            }
+            noTimeSince = null;
             if (UNAVAILABLE_RE.test(text)) return 'unavailable';
             return null;
         }, CALENDAR_WAIT_MS, 300);
         lastSearchMs = Date.now() - since;
-        searchLog.push(`${state || 'timeout'}:${lastSearchMs}`);
+        // «no-time:9400:r2s»: outcome, ms, calendar requests that came back, s = the search text was seen
+        searchLog.push(`${state || 'timeout'}:${lastSearchMs}:r${calendarRequests(sincePerf)}${searched ? 's' : ''}`);
         return state;
+    }
+    const NO_TIME_HOLD_MS = 1500;
+    const NO_TIME_MAX_WAIT_MS = 30 * 1000;
+
+    // The site's external_reader requests that came back since `sincePerf` (performance.now());
+    // a request in flight has no entry yet
+    function calendarRequests(sincePerf) {
+        try {
+            return performance.getEntriesByType('resource')
+                .filter(e => e.startTime >= sincePerf && /my\.e-consul\.gov\.ua\/external_reader/.test(e.name)).length;
+        } catch (e) {
+            return 0;
+        }
     }
     let lastSearchMs = null;
 
@@ -335,6 +367,45 @@ var EconsulPicker = (() => {
             }
         }
         return { slots, lastDay: days.length ? days.reduce((a, b) => (b > a ? b : a)) : null };
+    }
+
+    // The free slots of the calendar a new draft shows (step 4, nothing selected) within the date
+    // range { from, to }: week by week from the earliest, up to the first week with free slots in
+    // range (the usual order tries the earliest day first; the app's slots join the chain later).
+    // { slots: [{ date, time }], searches, error? }; a «no time» calendar is no slots, not an error
+    async function freeSlots(range = {}, log = () => {}) {
+        searchLog = [];
+        if (currentStep() !== CALENDAR_STEP) return { error: 'wrong-step', slots: [] };
+        const state = await waitForCalendar();
+        const searches = searchLog.join(',');
+        if (state === 'no-time') return { slots: [], searches };
+        if (state !== 'slots') return { error: state === 'left' ? 'step-stuck' : (state || 'calendar-not-loaded'), slots: [], searches };
+        const inRange = d => (!range.from || d >= range.from) && (!range.to || d <= range.to);
+        const weeks = weekChips()
+            .filter(w => (!range.to || w.from <= range.to) && (!range.from || w.to >= range.from))
+            .map(w => w.from).sort();
+        for (const from of weeks.length ? weeks : [null]) {
+            // The chips are drawn again after each click: find this week's chip anew
+            const week = from && weekChips().find(w => w.from === from);
+            if (week && !shownDays().some(d => week.from <= d && d <= week.to)) {
+                week.el.click();
+                await waitFor(() => shownDays().some(d => week.from <= d && d <= week.to), WEEK_WAIT_MS);
+            }
+            const slots = [];
+            const days = shownDays().filter(d => inRange(d) && (!week || (week.from <= d && d <= week.to))).sort();
+            for (const date of days) {
+                const group = await expandDay(date);
+                if (!group) continue;
+                for (const el of slotButtons(group)) {
+                    if (!isBooked(el)) slots.push({ date, time: el.getAttribute('aria-label').slice(0, 5) });
+                }
+            }
+            if (slots.length) {
+                log(`new draft: ${slots.length} free slot(s) in the week from ${from || days[0]}`);
+                return { slots, searches };
+            }
+        }
+        return { slots: [], searches };
     }
 
     async function openWeek(isoDate) {
@@ -503,5 +574,5 @@ var EconsulPicker = (() => {
         return last ? { ...last, presses } : { error: 'no-outcome', presses };
     }
 
-    return { pick, confirm, strike, lastWeekFreeSlots, findSlot, isSelected, currentStep, CALENDAR_STEP };
+    return { pick, confirm, strike, lastWeekFreeSlots, freeSlots, findSlot, isSelected, currentStep, CALENDAR_STEP };
 })();

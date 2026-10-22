@@ -261,7 +261,26 @@
         }
         log(result.error ? `draft not created: ${result.error}` : 'draft created (step 4, nothing selected)');
         draftJob = null;
-        send({ type: 'econsul:draft-result', jobId, ok: !result.error, error: result.error || null });
+        const taskId = (location.pathname.match(/^\/tasks\/([^/]+)\//) || [])[1] || null;
+        const reply = await send({ type: 'econsul:draft-result', jobId, ok: !result.error, error: result.error || null, taskId });
+        if (reply && reply.scan) draftScan(reply.scan);
+    }
+
+    // A new draft stands on its calendar: its free slots (within the app's date range) go to the
+    // background, which answers with the slots to select right here, as for the opening
+    async function draftScan({ jobId, range }) {
+        if (job) return;
+        job = jobId;
+        let result;
+        try {
+            result = await EconsulPicker.freeSlots(range || {}, log);
+        } catch (e) {
+            result = { error: 'exception: ' + e.message, slots: [] };
+        }
+        log(result.error ? `new draft: ${result.error}` : `new draft: ${result.slots.length} free slot(s)`);
+        job = null;
+        const reply = await send({ type: 'econsul:scan-result', jobId, error: result.error || null, searches: result.searches || null, slots: result.slots });
+        if (reply && reply.next) selectSlot(reply.next, true);
     }
 
     // Design A: blue banner on top with the selected slot, the alarm time and «Вимкнути
