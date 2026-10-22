@@ -4,6 +4,7 @@ import {
   clampIntervalBounds,
   fastWindow,
   planNextCheck,
+  QUIET_AT_RELEASE,
   type Release,
 } from './schedule.ts';
 
@@ -67,8 +68,25 @@ describe('planNextCheck', () => {
     expect(r.delayMs).toBe(1000);
   });
   it('ignores windows when fastChecks is off', () => {
-    const releases = [release(NOW + 60_000)];
+    const releases = [release(NOW + 100_000)];
     const r = planNextCheck({ nowMs: NOW, bounds, fastChecks: false, releases, random: () => 0 });
     expect(r).toEqual({ delayMs: 60_000, kind: 'scheduled' });
+  });
+  it('starts no check in the quiet window around the opening: moves it to its end', () => {
+    const at = NOW + 30_000;
+    const releases = [release(at)];
+    // a fast check due 20 s from now would start 10 s before the opening
+    const r = planNextCheck({ nowMs: NOW, bounds, fastChecks: true, releases, random: () => 1 });
+    expect(r).toEqual({ delayMs: at + QUIET_AT_RELEASE.afterMs - NOW, kind: 'fast' });
+  });
+  it('quiet window holds also without fast checks', () => {
+    const at = NOW + 60_000;
+    const r = planNextCheck({ nowMs: NOW, bounds, fastChecks: false, releases: [release(at)], random: () => 0 });
+    expect(r.delayMs).toBe(at + QUIET_AT_RELEASE.afterMs - NOW);
+  });
+  it('a check due just before the quiet window starts as planned', () => {
+    const at = NOW + 20_000 + QUIET_AT_RELEASE.beforeMs + 1;
+    const r = planNextCheck({ nowMs: NOW, bounds, fastChecks: true, releases: [release(at)], random: () => 1 });
+    expect(r).toEqual({ delayMs: 20_000, kind: 'fast' });
   });
 });

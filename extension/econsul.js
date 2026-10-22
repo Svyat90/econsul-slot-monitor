@@ -7,6 +7,9 @@
 // tab goes from step 3 to the calendar with «Далі», selects the earliest free slot of the
 // list (picker.js), shows a banner and highlights «Підтвердити».
 //
+// At the opening of new days (release-strike) it presses «Далі» on step 3 exactly at the moment
+// and hands the free slots of the new calendar to the background, which selects one right there.
+//
 // When the background asks (create-draft), it fills steps 1–3 of a new application from the
 // app's settings (creator.js) and stops on step 4 with nothing selected: that is the draft.
 //
@@ -217,6 +220,30 @@
         if (next) selectSlot(next, true);
     }
 
+    // The opening of new days: the background opened step 3 of the draft half a minute ahead.
+    // «Далі» exactly at `at` (picker.js strike), then the free slots of the last week go to the
+    // background, which answers with the slots to select on this calendar (its usual order, date
+    // range, quarantine and auto-booking)
+    async function releaseStrike({ jobId, taskId, at }) {
+        if (job) return;
+        job = jobId;
+        removeBanner();
+        let result, found = { slots: [], lastDay: null };
+        try {
+            if (!location.pathname.startsWith(`/tasks/${taskId}`)) result = { error: 'wrong-task' };
+            else {
+                result = await EconsulPicker.strike(at, log);
+                if (!result.error) found = await EconsulPicker.lastWeekFreeSlots();
+            }
+        } catch (e) {
+            result = { error: 'exception: ' + e.message };
+        }
+        log(result.error ? `opening: ${result.error}` : `opening: calendar loaded, ${found.slots.length} free slot(s) in the last week (last day ${found.lastDay})`);
+        job = null;
+        const reply = await send({ type: 'econsul:strike-result', jobId, error: result.error || null, clickedAt: result.clickedAt || null, searches: result.searches || null, requests: result.requests || null, slots: found.slots, lastDay: found.lastDay });
+        if (reply && reply.next) selectSlot(reply.next, true);
+    }
+
     // ---- Draft creation ----
 
     let draftJob = null; // the running create-draft
@@ -367,7 +394,8 @@
 
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.type === 'ping') {
-            sendResponse({ ok: true, taskId: (location.pathname.match(TASK_PATH_RE) || [])[1] || null, path: location.pathname, busy: !!job || !!draftJob });
+            // pageSince: when this page started loading, so the background tells it from the page before a navigation
+            sendResponse({ ok: true, taskId: (location.pathname.match(TASK_PATH_RE) || [])[1] || null, path: location.pathname, busy: !!job || !!draftJob, pageSince: performance.timeOrigin });
             return;
         }
         if (message.type === 'create-draft') {
@@ -390,6 +418,11 @@
         }
         if (message.type === 'select-slot') {
             selectSlot(message);
+            sendResponse({ ok: true, busy: job !== message.jobId });
+            return;
+        }
+        if (message.type === 'release-strike') {
+            releaseStrike(message);
             sendResponse({ ok: true, busy: job !== message.jobId });
             return;
         }

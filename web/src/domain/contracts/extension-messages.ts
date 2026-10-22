@@ -83,6 +83,8 @@ const monitorSchema = z.looseObject({
   stoppedBy: z.string().nullable().optional(),
   institution: z.string().nullable(),
   nextRelease: z.object({ at: z.number(), opening: z.string() }).nullable(), // opening: consulate time, '09:00'
+  // v0.14: the extension selects slots from the calendar itself at the opening, only within this range
+  dateRange: z.object({ from: z.string().nullable(), to: z.string().nullable() }).optional(),
 })
 
 // App -> extension

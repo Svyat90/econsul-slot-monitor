@@ -129,6 +129,8 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
                 stoppedBy: m.stoppedBy,
                 institution: m.selection ? m.selection.institution.name : null,
                 nextRelease: release ? { at: release.at, opening: release.opening } : null,
+                // the slots the extension takes from the calendar itself at the opening stay within it
+                dateRange: { from: m.dateRange.from, to: m.dateRange.to },
             },
         });
     }

@@ -354,7 +354,8 @@ describe('monitor', () => {
         expect(before.monitor.getState().nextKind).toBe('fast');
         expect(before.pending()).toEqual([30000]);
 
-        const off = setup({ startAt: at - 60000, random: 0 });
+        // 100 s before: the 60 s delay ends 40 s before the opening, outside its quiet window
+        const off = setup({ startAt: at - 100000, random: 0 });
         await ready(off);
         off.monitor.setFastChecks(false);
         await off.monitor.start();

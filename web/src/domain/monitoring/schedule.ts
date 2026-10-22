@@ -1,6 +1,11 @@
 // Check cadence: random interval, plus a short fast-check window around each day-opening moment.
 
 export const FAST_CHECKS = { beforeMs: 120000, afterMs: 180000, minSeconds: 15, maxSeconds: 20 } as const;
+// No check starts this close to an opening: at that moment the extension opens the calendar on the
+// site with the same token, and a check started a second before it (5–13 s at the opening) was in
+// flight with it on 2026-10-20, when the site's calendar answered «no time» at once. Fewer requests
+// from one account also keep it clear of looking like a bot (the owner's decision, 2026-10-20)
+export const QUIET_AT_RELEASE = { beforeMs: 15000, afterMs: 15000 } as const;
 export const MIN_INTERVAL_SECONDS = 10;
 export const SCHEDULE_REFRESH_MS = 1800000;
 export const RELEASE_LOOKAHEAD_DAYS = 8; // enough to get past weekends and holidays
@@ -32,7 +37,8 @@ export function fastWindow(
 }
 
 // Random delay from the interval bounds; inside a fast window 15–20 s, and a normal delay
-// that would run past the start of the next fast window is cut to that start
+// that would run past the start of the next fast window is cut to that start. A check that would
+// start in the quiet window of an opening (QUIET_AT_RELEASE) waits for its end
 export function planNextCheck(input: {
   nowMs: number;
   bounds: { min: number; max: number };
@@ -52,6 +58,14 @@ export function planNextCheck(input: {
       delayMs = Math.max(1000, next.at - FAST_CHECKS.beforeMs - nowMs);
       kind = 'fast';
     }
+  }
+  const startsAt = nowMs + delayMs;
+  const quiet = releases.find(
+    (r) => r.at - QUIET_AT_RELEASE.beforeMs <= startsAt && startsAt < r.at + QUIET_AT_RELEASE.afterMs,
+  );
+  if (quiet) {
+    delayMs = quiet.at + QUIET_AT_RELEASE.afterMs - nowMs;
+    kind = 'fast';
   }
   return { delayMs, kind };
 }

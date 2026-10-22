@@ -161,6 +161,7 @@ function render() {
     if (document.activeElement !== $('alarmEnabled')) $('alarmEnabled').checked = settings.alarmEnabled !== false;
     if (document.activeElement !== $('alarmLead')) $('alarmLead').value = settings.alarmLeadMin || 5;
     $('alarmLead').disabled = settings.alarmEnabled === false;
+    if (document.activeElement !== $('releaseStrike')) $('releaseStrike').checked = settings.releaseStrike !== false;
     const alarmNext = $('alarmNext');
     alarmNext.hidden = !(settings.alarmEnabled !== false);
     alarmNext.textContent = state.draftAlarmAt
@@ -236,6 +237,9 @@ function selectionRow(now) {
     const base = { at: selection.at || selection.startedAt, kind: '', marker: 'sq', slots: slot };
     switch (selection.status) {
         case 'running':
+            if (selection.strike && !(selection.slots && selection.slots.length)) {
+                return { ...base, title: 'Відкриття нових днів', note: selection.strike > now ? `«Далі» о ${hhmm(selection.strike)} · за ${formatSeconds(Math.ceil((selection.strike - now) / 1000))}` : 'чекаю календар…', slots: '' };
+            }
             return { ...base, title: `${test}Вибираю слот…`, note: `${Math.round((now - selection.startedAt) / 1000)} с`, slots: '' };
         case 'retrying':
             return { ...base, title: `${test}Сайт відповідає повільно`, note: `повторюю (спроба ${(selection.attempt || 1) + 1})`, slots: '' };
@@ -285,6 +289,10 @@ $('autoMonitor').addEventListener('change', async event => {
 });
 $('autoDraft').addEventListener('change', async event => {
     await send('popup:settings', { patch: { autoDraft: event.target.checked } });
+    refresh();
+});
+$('releaseStrike').addEventListener('change', async event => {
+    await send('popup:settings', { patch: { releaseStrike: event.target.checked } });
     refresh();
 });
 $('openDraftBtn').addEventListener('click', () => { send('popup:open-draft'); window.close(); });

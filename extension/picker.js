@@ -126,18 +126,36 @@ var EconsulPicker = (() => {
             || /пошук активних слотів/i.test(mainText()) || NO_TIME_RE.test(mainText()) || UNAVAILABLE_RE.test(mainText()));
     }
 
+    // After «Далі» on `step`: true once the address changed or the site says «unavailable». The
+    // site's own checks after «Далі» can take a while; without them nothing happening for
+    // STEP_MOVE_WAIT_MS means the click was not taken
+    async function waitMoved(step, log) {
+        let moved = !!await waitFor(() => currentStep() !== step || UNAVAILABLE_RE.test(mainText()) || null, STEP_MOVE_WAIT_MS);
+        if (!moved) log(`step ${step}: still here after ${STEP_MOVE_WAIT_MS / 1000} s${CHECKING_RE.test(mainText()) ? ', the site is checking' : ''}`);
+        if (!moved && CHECKING_RE.test(mainText())) moved = !!await waitFor(() => currentStep() !== step || UNAVAILABLE_RE.test(mainText()), CHECKS_WAIT_MS);
+        return moved;
+    }
+
+    // The draft is always opened on step 3. The site showing step 1 or 2 instead means it reset the
+    // draft: the morning after its creation it opened on step 1 (the owner's report, 2026-10-20),
+    // and «Далі» there would go on without the consent. The background makes a new draft
+    const RESET_STEPS = ['applicantInfo', 'placeOfVisitInfo'];
+
+    function formStep() {
+        const s = currentStep();
+        if (s === CALENDAR_STEP) return s;
+        if (STEPS_BEFORE_CALENDAR.includes(s) && document.getElementById('next-step-button')) return s;
+        return null;
+    }
+
     // Steps 1–3 → step 4. «Далі» there only saves the step and runs its checks. A click before
     // the form is filled from the saved document fails validation (the site logs
     // validation.errors and stays): wait for the page to settle and press again if needed
     async function reachCalendar(log) {
         for (let i = 0; i < 4; i++) {
-            const step = await waitFor(() => {
-                const s = currentStep();
-                if (s === CALENDAR_STEP) return s;
-                if (STEPS_BEFORE_CALENDAR.includes(s) && document.getElementById('next-step-button')) return s;
-                return null;
-            }, STEP_WAIT_MS);
+            const step = await waitFor(formStep, STEP_WAIT_MS);
             if (!step) return { error: 'form-not-loaded' };
+            if (i === 0 && RESET_STEPS.includes(step)) return { error: 'draft-reset' };
             if (step === CALENDAR_STEP) {
                 // do not trust the address alone: see onCalendar
                 await sleep(3000);
@@ -154,15 +172,7 @@ var EconsulPicker = (() => {
                 if (UNAVAILABLE_RE.test(mainText())) return { error: 'unavailable' };
                 log(`step ${step}: Далі (${attempt})`);
                 if (!await waitFor(clickNext, NEXT_CLICK_WAIT_MS)) return { error: 'next-disabled' };
-                // The site's own checks after «Далі» can take a while; without them nothing
-                // happening for 8 s means the click was not taken
-                moved = !!await waitFor(() => {
-                    if (currentStep() !== step) return true;
-                    if (UNAVAILABLE_RE.test(mainText())) return true;
-                    return null;
-                }, STEP_MOVE_WAIT_MS);
-                if (!moved) log(`step ${step}: still here after ${STEP_MOVE_WAIT_MS / 1000} s${CHECKING_RE.test(mainText()) ? ', the site is checking' : ''}`);
-                if (!moved && CHECKING_RE.test(mainText())) moved = !!await waitFor(() => currentStep() !== step || UNAVAILABLE_RE.test(mainText()), CHECKS_WAIT_MS);
+                moved = await waitMoved(step, log);
             }
             if (!moved) return { error: 'step-stuck' };
             if (currentStep() === step) return { error: 'unavailable' };
@@ -170,10 +180,13 @@ var EconsulPicker = (() => {
         return currentStep() === CALENDAR_STEP ? {} : { error: 'step-stuck' };
     }
 
+    // How each calendar search went («no-time:1250», «slots:8400»), for the journal of a strike
+    let searchLog = [];
+
     // 'left': the page went back to a step with «Далі» (see onCalendar), the caller presses it again
     async function waitForCalendar() {
         const since = Date.now();
-        return waitFor(() => {
+        const state = await waitFor(() => {
             if (slotButtons(document).length) return 'slots';
             if (Date.now() - since > 3000 && STEPS_BEFORE_CALENDAR.includes(currentStep()) && document.getElementById('next-step-button')) return 'left';
             const text = mainText();
@@ -181,6 +194,147 @@ var EconsulPicker = (() => {
             if (UNAVAILABLE_RE.test(text)) return 'unavailable';
             return null;
         }, CALENDAR_WAIT_MS, 300);
+        lastSearchMs = Date.now() - since;
+        searchLog.push(`${state || 'timeout'}:${lastSearchMs}`);
+        return state;
+    }
+    let lastSearchMs = null;
+
+    // «Немає вільного часу» this soon after step 4 appeared is not the site's answer. A real search
+    // fetches the schedule and the reserved slots and counts them in a worker: ~25 s on a calm site
+    // (2026-10-20), and those requests took 5–13 s at the opening. Yet at the opening the text came
+    // 1.25 s after «Далі», twice (the loaded site seems to show it when its requests fail)
+    const QUICK_NO_TIME_MS = 5000;
+
+    // «Назад» to step 3 and «Далі» again: a new search without loading the page. Step 3 is ready
+    // ~1 s after «Назад» and step 4 shows ~1 s after «Далі» (live, 2026-10-20); loading the draft
+    // takes ~15 s and more on a loaded site. Returns what waitForCalendar returns, or an error code
+    async function searchAgain(log) {
+        const back = document.getElementById('prev-step-button');
+        if (!back || currentStep() !== CALENDAR_STEP) return 'left';
+        back.click();
+        const ready = await waitFor(() => {
+            const next = document.getElementById('next-step-button');
+            return currentStep() === 'consularServiceInfo' && next && !next.disabled;
+        }, STEP_MOVE_WAIT_MS);
+        if (!ready) return 'step-stuck';
+        await waitForQuiet(document.querySelector('main') || document.body, 300, 3000);
+        log('search again: Далі');
+        if (!await waitFor(clickNext, NEXT_CLICK_WAIT_MS)) return 'next-disabled';
+        if (!await waitMoved('consularServiceInfo', log) || currentStep() !== CALENDAR_STEP) return 'left';
+        return waitForCalendar();
+    }
+
+    // ---- The opening of new days ----
+    // The site builds the calendar from the browser's clock (booking.md §6): a new day is in it
+    // only when step 4 is loaded after the day's opening moment. The background opens step 3 half
+    // a minute ahead; «Далі» is pressed exactly at the moment, not before and not after it
+    const STRIKE_STEP = 'consularServiceInfo';
+    // A timer alone may fire late: Chrome aligns the timers of a hidden or covered window to
+    // whole seconds. The last second before the moment is a busy wait instead
+    const SPIN_MS = 1000;
+
+    // Resolves when the clock reaches `at` (epoch ms): never before it, a few ms after it at most
+    async function waitUntil(at) {
+        const ahead = at - Date.now() - SPIN_MS;
+        if (ahead > 0) await sleep(ahead);
+        while (Date.now() < at) { /* the last second: busy wait */ }
+    }
+
+    // Time left before the busy wait, for the waits that must not run into the moment
+    function untilSpin(at) { return Math.max(0, at - Date.now() - SPIN_MS - 100); }
+
+    // Step 3 is on the page: get it ready, press «Далі» at `at` and wait for the calendar.
+    // { clickedAt } once it shows slots, or { error, clickedAt }. The page may come too late to
+    // fill the form before the moment (a slow site): then «Далі» is pressed at the moment anyway,
+    // and if the site does not take it, the usual way presses it again (reachCalendar)
+    async function strike(at, log = () => {}) {
+        const step = await waitFor(formStep, STEP_WAIT_MS);
+        if (!step) return { error: 'form-not-loaded' };
+        if (RESET_STEPS.includes(step)) return { error: 'draft-reset' };
+        if (step !== STRIKE_STEP) return { error: 'wrong-step' };
+        const age = performance.now();
+        if (age < MIN_PAGE_AGE_MS) await sleep(Math.min(MIN_PAGE_AGE_MS - age, untilSpin(at)));
+        await waitForQuiet(document.querySelector('main') || document.body, 1500, Math.min(15000, untilSpin(at)));
+        if (currentStep() !== STRIKE_STEP) return { error: 'wrong-step' };
+        await waitFor(() => { const b = document.getElementById('next-step-button'); return b && !b.disabled; }, untilSpin(at));
+        log(`opening: «Далі» at ${new Date(at).toLocaleTimeString()}`);
+        await waitUntil(at);
+        // Pressed at once when it is active; otherwise as soon as it becomes active
+        if (!clickNext() && !await waitFor(clickNext, NEXT_CLICK_WAIT_MS, 20)) return { error: 'next-disabled' };
+        const clickedAt = Date.now();
+        const clickedPerf = performance.now();
+        log(`opening: «Далі» pressed ${clickedAt - at} ms after the moment`);
+        // The site's own API requests after the click, «status:ms» each (0: not answered or not
+        // exposed): tells a refused or failed calendar request from a real «no time»
+        const siteRequests = () => {
+            try {
+                return performance.getEntriesByType('resource')
+                    .filter(e => e.startTime >= clickedPerf && /my\.e-consul\.gov\.ua\/external_reader/.test(e.name))
+                    .map(e => `${e.responseStatus || 0}:${Math.round(e.duration)}`).join(',');
+            } catch (e) {
+                return ''; // only for the journal: never stops the strike
+            }
+        };
+        searchLog = [];
+        const moved = await waitMoved(STRIKE_STEP, log);
+        let state = moved && currentStep() === CALENDAR_STEP ? await waitForCalendar() : 'left';
+        let rounds = 0;
+        for (;;) {
+            if (state === 'left' && rounds < 3) {
+                rounds++;
+                log(`opening: not on the calendar (round ${rounds}), the usual way`);
+                const reached = await reachCalendar(log);
+                if (reached.error) return { ...reached, clickedAt, searches: searchLog.join(',') };
+                state = await waitForCalendar();
+                continue;
+            }
+            // «No time» right after the opening, real or not, is searched again on this page: the
+            // slots of the new day are taken within a minute, a reload of the draft is too slow
+            if (state === 'no-time' && searchLog.length < STRIKE_SEARCHES && Date.now() < at + STRIKE_SEARCH_MS) {
+                log(`opening: «no time» after ${lastSearchMs} ms, searching again (${searchLog.length + 1})`);
+                state = await searchAgain(log);
+                continue;
+            }
+            break;
+        }
+        const searches = searchLog.join(',');
+        const requests = siteRequests();
+        if (state !== 'slots') return { error: state === 'left' ? 'step-stuck' : (state || 'calendar-not-loaded'), clickedAt, searches, requests };
+        return { clickedAt, searches, requests };
+    }
+    const STRIKE_SEARCHES = 8;           // calendar searches at the opening at most
+    const STRIKE_SEARCH_MS = 90 * 1000;  // ...and none started later than this after the moment
+
+    const DAY_RE = /,\s*(\d\d)\.(\d\d)\.(\d{4})$/;
+
+    // ISO dates of the day headers on the page («четвер, 01.04.2027»)
+    function shownDays() {
+        const days = [...document.querySelectorAll('main button')]
+            .map(b => b.textContent.trim().match(DAY_RE)).filter(Boolean)
+            .map(m => isoFromParts(m[1], m[2], m[3]));
+        return [...new Set(days)];
+    }
+
+    // The free slots of the last week of the calendar, where the opening adds the new day.
+    // { slots: [{ date, time }], lastDay: the last day of the calendar }
+    async function lastWeekFreeSlots() {
+        const chips = weekChips();
+        if (chips.length) {
+            const last = chips.reduce((a, b) => (b.to > a.to ? b : a));
+            last.el.click();
+            await waitFor(() => shownDays().some(d => last.from <= d && d <= last.to), WEEK_WAIT_MS);
+        }
+        const slots = [];
+        const days = shownDays();
+        for (const date of days) {
+            const group = await expandDay(date);
+            if (!group) continue;
+            for (const el of slotButtons(group)) {
+                if (!isBooked(el)) slots.push({ date, time: el.getAttribute('aria-label').slice(0, 5) });
+            }
+        }
+        return { slots, lastDay: days.length ? days.reduce((a, b) => (b > a ? b : a)) : null };
     }
 
     async function openWeek(isoDate) {
@@ -237,6 +391,10 @@ var EconsulPicker = (() => {
             state = await waitForCalendar();
             if (state !== 'left') break;
             log(`back on a step before the calendar (round ${round}): pressing «Далі» again`);
+        }
+        for (let again = 0; state === 'no-time' && lastSearchMs < QUICK_NO_TIME_MS && again < 2; again++) {
+            log(`«no time» after ${lastSearchMs} ms is too quick to be the site's answer: searching again`);
+            state = await searchAgain(log);
         }
         if (state !== 'slots') return { error: state === 'left' ? 'step-stuck' : (state || 'calendar-not-loaded') };
         log('calendar loaded');
@@ -345,5 +503,5 @@ var EconsulPicker = (() => {
         return last ? { ...last, presses } : { error: 'no-outcome', presses };
     }
 
-    return { pick, confirm, findSlot, isSelected, currentStep, CALENDAR_STEP };
+    return { pick, confirm, strike, lastWeekFreeSlots, findSlot, isSelected, currentStep, CALENDAR_STEP };
 })();

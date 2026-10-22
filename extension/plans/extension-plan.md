@@ -338,6 +338,15 @@ extension/
 | застосунок → розширення | `app:settings` | `patch` із будь-яких з `autoBook`, `autoDraft`, `autoMonitor`, `alarmEnabled`, `alarmLeadMin` |
 | застосунок → розширення | `app:create-draft` | — (кнопка «Створити чернетку»; установа й послуга — з останнього `app:selection`) |
 
+Додано у v0.14.0 («Далі» в момент відкриття, 2026-10-20; [how-it-works.md](../docs/how-it-works.md)):
+
+| Напрям | `type` | Дані |
+|---|---|---|
+| застосунок → розширення | `app:monitor` | у `monitor` ще `dateRange: { from, to }` (`null` — без межі): слоти, які розширення бере з календаря саме, лише в цьому діапазоні |
+| розширення → застосунок | `ext:settings` | ще поле `releaseStrike` (застосунок його поки не показує, чекбокс — у попапі) |
+| background → `econsul.js` | `release-strike` | `{ jobId, taskId, at }` — «Далі» на кроці 3 рівно в `at`; `ping` відповідає ще `pageSince` (`performance.timeOrigin` сторінки) |
+| `econsul.js` → background | `econsul:strike-result` | `{ jobId, error, clickedAt, slots, lastDay }` → відповідь `{ next }` (дані `select-slot` для вибору на тому самому календарі) або `{}` |
+
 Додано у v0.9.0 (перехід на наступний слот і агресивне бронювання, 2026-10-18):
 
 | Напрям | `type` | Дані |
