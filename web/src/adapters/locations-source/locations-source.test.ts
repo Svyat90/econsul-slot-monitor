@@ -4,7 +4,7 @@ import { createLocationsSource } from './locations-source.ts';
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
 describe('locations source', () => {
-    it('GETs /locations.json and parses it', async () => {
+    it('GETs /api/locations and parses it', async () => {
         const raw = {
             holidays: { all: ['2026-01-01'], byService: {} },
             services: { '1': 'Service' },
@@ -12,7 +12,7 @@ describe('locations source', () => {
         };
         const fetchFn = vi.fn(async () => json(raw));
         const locations = await createLocationsSource(fetchFn as unknown as typeof fetch).load();
-        expect(fetchFn).toHaveBeenCalledWith('/locations.json');
+        expect(fetchFn).toHaveBeenCalledWith('/api/locations');
         expect(locations.institutions[0]?.code).toBe('X');
     });
 
