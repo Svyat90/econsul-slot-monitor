@@ -51,7 +51,7 @@ const DRAFT_SOUND_MAX_AGE_MS = 20 * 60 * 1000; // «draft saved» sounds only fo
 // Errors that may be the site's load, not a lost slot: the selection starts over with a pause that
 // doubles (5, 10, 20, 40 s), up to MAX_SELECT_ATTEMPTS tries. Nothing else is retried: «not-found»
 // means the slot is gone, and a booking is never repeated
-const RETRYABLE = new Set(['tab-not-ready', 'form-not-loaded', 'next-disabled', 'step-stuck', 'unavailable', 'calendar-not-loaded', 'timeout']);
+const RETRYABLE = new Set(['tab-not-ready', 'form-not-loaded', 'next-disabled', 'step-stuck', 'unavailable', 'calendar-not-loaded', 'timeout', 'selection-not-cleared']);
 const MAX_SELECT_ATTEMPTS = 5;
 
 // Do not hammer the site with a slot that does not book (it may hang on the site's side or be a
@@ -98,6 +98,7 @@ const SELECT_ERRORS = {
     'no-time': 'Сайт показує, що вільного часу немає.',
     'calendar-not-loaded': 'Календар не завантажився.',
     'not-found': 'Нових слотів у календарі вже немає.',
+    'selection-not-cleared': 'Сайт не зняв попередній вибір слота.',
     'timeout': 'Вибір слота не завершився вчасно.',
     'draft-gone': 'Чернетки вже немає на сайті: створюю нову й вибираю слот у ній.',
     'draft-reset': 'Чернетка відкрилась не на кроці 3 (сайт її скинув): створюю нову.',
@@ -106,7 +107,7 @@ const SELECT_ERRORS = {
     // Auto-booking (picker.js, confirm)
     'not-on-calendar': 'Сторінка пішла з календаря до бронювання.',
     'slot-not-selected': 'Слот перестав бути вибраним.',
-    'several-selected': 'Вибрано кілька слотів, автоматично не бронюю.',
+    'several-selected': 'Вибрано кілька слотів і зайві не знялися, автоматично не бронюю.',
     'no-confirm-button': 'Немає активної кнопки «Підтвердити».',
     'alert': 'Сайт показав повідомлення.',
     'left-calendar': 'Сайт пішов з календаря без «Дякуємо».',

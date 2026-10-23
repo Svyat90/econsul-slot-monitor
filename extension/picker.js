@@ -9,7 +9,8 @@
 // - day header: <button> «четвер, 01.04.2027»; its grandparent holds the day's slots and
 //   the «Показати ще N слоти» / «Приховати» button
 // - slot: [role=button] with aria-label «09:00 - 09:10», booked ones add «- цей слот вже
-//   заброньовано». Selected: dark background. Several slots can be selected at once
+//   заброньовано». Selected: dark background. Several slots can be selected at once; clicking a
+//   selected slot unselects it
 // - once anything is selected (in any week), a checkbox «Зняти вибір усіх» unselects all
 // - clicking a slot saves the document (PUT /documents) but books nothing
 // var, not const: the background injects this file again into open tabs after a reload
@@ -441,12 +442,39 @@ var EconsulPicker = (() => {
         return group && group.querySelector('input[type=checkbox]');
     }
 
-    // Unselects slots chosen earlier, in any week (by hand or by an earlier run)
-    async function clearSelection() {
-        const box = clearAllBox();
-        if (!box) return;
-        box.click();
-        await waitFor(() => !clearAllBox(), 10000);
+    function selectedSlots() {
+        return slotButtons(document).filter(el => !isBooked(el) && isSelected(el));
+    }
+
+    // Unselects slots chosen earlier, in any week (by hand or by an earlier run). A loaded site may
+    // leave the old slot selected after «Зняти вибір усіх» (the opening of 2026-10-23: 09:40 stayed
+    // selected, 10:30 was added and «Підтвердити» saw two), so it checks and tries again, then
+    // clicks the shown selected slots one by one. Returns false when something is still selected
+    const CLEAR_WAIT_MS = 20000;
+    const cleared = () => !clearAllBox() && !selectedSlots().length;
+
+    async function clearSelection(log = () => {}) {
+        for (let round = 1; round <= 2 && !cleared(); round++) {
+            const box = clearAllBox();
+            if (!box) break;
+            box.click();
+            if (await waitFor(cleared, CLEAR_WAIT_MS)) return true;
+            log(`«Зняти вибір усіх» did not clear the selection (round ${round})`);
+        }
+        await unselect(selectedSlots(), log);
+        return cleared();
+    }
+
+    // Clicking a selected slot unselects it. The elements are looked up anew: the day is redrawn after each click
+    async function unselect(elements, log = () => {}) {
+        const labels = elements.map(el => el.getAttribute('aria-label'));
+        for (const label of labels) {
+            const el = selectedSlots().find(e => e.getAttribute('aria-label') === label);
+            if (!el) continue;
+            log(`unselecting ${label.slice(0, 5)}`);
+            el.click();
+            await waitFor(() => !selectedSlots().some(e => e.getAttribute('aria-label') === label), CLEAR_WAIT_MS);
+        }
     }
 
     // slots: [{ date: 'YYYY-MM-DD', time: 'HH:MM' }], earliest first. Selects the first one the
@@ -480,7 +508,7 @@ var EconsulPicker = (() => {
             const el = findSlot(date, time);
             if (!el) { tried.push(`${date} ${time}: absent`); continue; }
             if (isBooked(el)) { tried.push(`${date} ${time}: booked`); continue; }
-            await clearSelection();
+            if (!await clearSelection(log)) return { error: 'selection-not-cleared', tried };
             const target = findSlot(date, time);
             if (target && !isSelected(target)) target.click();
             const selected = await waitFor(() => { const t = findSlot(date, time); return t && isSelected(t) && t; }, 10000);
@@ -507,7 +535,7 @@ var EconsulPicker = (() => {
         if (currentStep() !== CALENDAR_STEP) return 'not-on-calendar';
         const shown = findSlot(slot.date, slot.time);
         if (!shown || !isSelected(shown)) return 'slot-not-selected';
-        if (slotButtons(document).filter(el => !isBooked(el) && isSelected(el)).length !== 1) return 'several-selected';
+        if (selectedSlots().length !== 1) return 'several-selected';
         const button = document.getElementById('finish-button');
         if (!button || button.disabled || button.textContent.trim() !== CONFIRM_TEXT) return 'no-confirm-button';
         return null;
@@ -534,6 +562,11 @@ var EconsulPicker = (() => {
         // Right after the click on the slot the site saves it and «Підтвердити» is not active yet
         let error = null;
         await waitFor(() => !(error = checkReady(slot)), READY_WAIT_MS);
+        if (error === 'several-selected') {
+            // Another slot stayed selected (a loaded site, or a click by the person): keep only this one
+            await unselect(selectedSlots().filter(el => !el.getAttribute('aria-label').startsWith(slot.time + ' - ')), log);
+            await waitFor(() => !(error = checkReady(slot)), READY_WAIT_MS);
+        }
         if (error) return { error };
         // The person watching sees the button being pressed and the site's answer next to it
         document.getElementById('finish-button').scrollIntoView({ block: 'center', behavior: 'smooth' });
