@@ -18,7 +18,7 @@ pnpm dev                        # Vite на :3000, /api → сервер на :3
 | `pnpm test` | Vitest + Testing Library (jsdom) |
 | `pnpm run typecheck` | `tsc --noEmit` |
 | `pnpm run lint` | ESLint; у `src/domain/` і `src/application/` заборонені `Date.now()`, `Math.random()`, таймери й браузерні глобали |
-| `pnpm run arch:check` | dependency-cruiser: кільця й межі ([onion-architecture](../.claude/skills/onion-architecture/SKILL.md)) |
+| `pnpm run arch:check` | dependency-cruiser: кільця й межі ([onion-architecture](../docs/architecture/onion.md)) |
 
 ## Файли
 

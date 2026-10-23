@@ -12,7 +12,7 @@ e-consul.gov.ua, стежить за ними й передає знайдене
 | `web/` | Застосунок: Vite + React + TypeScript (SPA) на `localhost:3000/` — [web/CLAUDE.md](web/CLAUDE.md) |
 | `server/` | Fastify + Drizzle + Postgres у Docker: віддає `web/` і API `/api/*` на `localhost:3000`; журнали запитів, резервувань, змін розкладу й подій розширення (зберігаються назавжди) — [server/CLAUDE.md](server/CLAUDE.md) |
 
-Рішення щодо переписування — у `docs/brainstorm/ideas.md` (IDEA-001…006), план і журнал виконання — `docs/plans/web-rewrite-plan.md`.
+Рішення щодо переписування — у `brainstorm/ideas.md` (IDEA-001…006), план і журнал виконання — `docs/plans/web-rewrite-plan.md`.
 
 ## Структура модуля
 
@@ -27,7 +27,7 @@ e-consul.gov.ua, стежить за ними й передає знайдене
 | `plans/` | Плани робіт саме цього модуля |
 
 Кореневий `INSIGHTS.md` — спільні інсайти. Коренева `docs/` — лише те, що стосується кількох модулів: `booking.md` (сайт, API, алгоритм
-слотів, застосунок), `conventions.md` (як скіли плагінів застосовуються тут), `brainstorm/` (ідеї та рішення),
+слотів, застосунок), `conventions.md` (як скіли плагінів застосовуються тут), `architecture/onion.md` (кільця `web/` і `server/`),
 `plans/` (плани на кілька модулів, коли з'являться). Новий модуль створюється одразу з цими
 чотирма елементами; правила модуля не повторюються тут.
 
@@ -62,8 +62,9 @@ e-consul.gov.ua, стежить за ними й передає знайдене
   Як вони застосовуються тут — [docs/conventions.md](docs/conventions.md),
   [web/docs/conventions.md](web/docs/conventions.md), [server/docs/conventions.md](server/docs/conventions.md);
   де вони розходяться зі скілом, діють ці файли.
-- Локальні скіли (`.claude/skills/`), налаштовані під проєкт і важливіші за однойменні плагінні:
-  `onion-architecture` (кільця `web/` і `server/`), `engineering-insights`, `brainstorm`.
+- Локальних скілів немає: усі скіли — з плагінів. Кільця `web/` і `server/` описує
+  [docs/architecture/onion.md](docs/architecture/onion.md), поверх скіла `onion-architecture`; де вони
+  розходяться, діє цей файл. Ідеї та рішення веде скіл `sdd-engineering:brainstorm` у `brainstorm/ideas.md`.
 
 Правила для агентів, що пишуть код (додаток до правил вище):
 

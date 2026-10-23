@@ -2,13 +2,13 @@
 
 Як загальні скіли плагіна `engineering-paved-path` (`react-best-practices`,
 `frontend-ui-architecture`) застосовуються саме тут; де вони розходяться, діє цей файл. Кільця й
-залежності — локальний скіл `onion-architecture`. Спільне з іншими модулями (Zod, безпека) —
+залежності — [../../docs/architecture/onion.md](../../docs/architecture/onion.md) поверх скіла `onion-architecture`. Спільне з іншими модулями (Zod, безпека) —
 [../../docs/conventions.md](../../docs/conventions.md). Перенесено з розділів «In this project»
 колишніх локальних скілів (2026-10-21).
 
 ## Що визначає розкладку
 
-- **Vite + React + TypeScript**, SPA з роутером (IDEA-006 у `docs/brainstorm/ideas.md`). **Next.js
+- **Vite + React + TypeScript**, SPA з роутером (IDEA-006 у `brainstorm/ideas.md`). **Next.js
   немає**: розділи скілів про App Router, `'use client'`, RSC і скіл `next-best-practices` тут не
   застосовуються — хіба як загальні ідеї розміщення.
 - Fastify (`server/`) віддає зібраний застосунок і API `/api/*`. У розробці Vite пересилає `/api` на
