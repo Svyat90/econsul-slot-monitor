@@ -2,7 +2,7 @@
 
 > **ЧЕРНЕТКА: неперевірені ідеї, НЕ вимоги.** Не вважайте цей файл джерелом правди.
 > Узгоджене — у `docs/`, `docs/plans/` і в `docs/` та `plans/` модулів.
-> Веде скіл `brainstorm`. Архів: `docs/brainstorm/archive.md`.
+> Веде скіл `sdd-engineering:brainstorm`. Архів: `brainstorm/archive.md`.
 
 next_id: 7
 last_updated: 2026-10-09

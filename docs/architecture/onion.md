@@ -1,13 +1,11 @@
----
-name: onion-architecture
-description: "Onion (clean / hexagonal, ports-and-adapters) architecture for the e-Consul slot monitor web app: which ring a piece of code belongs to, which way imports may point, where the slot algorithm, monitoring rules, e-Consul API calls, extension messaging, notifications, storage and the schedule log live, how time, randomness and the session token are handled, and how errors cross the rings. Use when porting logic out of slots.html, adding or restructuring a use case, port or adapter; when a component or hook calls fetch, Date.now(), Math.random(), localStorage, Notification or window.postMessage directly; when deciding where a function belongs; when reviewing a change for structure; or when the user mentions onion, clean or hexagonal architecture, layers, ports and adapters, dependency rule, use cases or domain logic — even if they never say 'architecture'. Not for React API details or folder layout of the UI (react-best-practices, frontend-ui-architecture cover those)."
-metadata:
-  version: 1.2.0
----
-
 # Onion Architecture (e-Consul slot monitor)
 
-One rule drives this skill: **source-code dependencies point inwards only.**
+> Project rules for the rings of `web/` and `server/`. They extend the plugin
+> skill `engineering-paved-path:onion-architecture`; where the two differ, this
+> document wins. Moved here from the former local skill `.claude/skills/onion-architecture`
+> (version 1.2.0); its history is in git.
+
+One rule drives this document: **source-code dependencies point inwards only.**
 The slot algorithm and the monitoring rules sit in the middle and know nothing
 about React, Vite, Fastify, `fetch`, the browser, the Chrome extension or the clock.
 Those are outer rings that plug in.
@@ -25,7 +23,7 @@ Those are outer rings that plug in.
    — known traps (React re-rendering the site, `chrome.storage.session` cleared on
    reload, the token appearing seconds after load).
 5. The module's own `CLAUDE.md`, `README.md`, `docs/` and `plans/`.
-6. `docs/brainstorm/ideas.md` — the decision log for the rewrite (stack, layout).
+6. `brainstorm/ideas.md` — the decision log for the rewrite (stack, layout).
    If it settled something this file contradicts, the recorded decision wins and
    this file is out of date: say so.
 

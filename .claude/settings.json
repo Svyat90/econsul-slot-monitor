@@ -1,4 +1,12 @@
 {
+  "extraKnownMarketplaces": {
+    "dev-digest-ai-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "Svyat90/dev-digest-ai-marketplace"
+      }
+    }
+  },
   "enabledPlugins": {
     "sdd-engineering@dev-digest-ai-marketplace": true,
     "engineering-paved-path@dev-digest-ai-marketplace": true,
