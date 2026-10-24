@@ -161,7 +161,7 @@
         }
     }
 
-    async function selectOne({ jobId, taskId, slots, autoBook, confirmTries, reconApi, note }, onCalendar) {
+    async function selectOne({ jobId, taskId, slots, autoBook, confirmTries, apiBook, note }, onCalendar) {
         job = jobId;
         log(`select-slot: ${slots.length} slot(s), first ${slots[0].date} ${slots[0].time}${autoBook ? ', auto-booking' : ''}${onCalendar ? ', on this calendar' : ''}`);
         removeBanner();
@@ -174,15 +174,11 @@
         }
         log(result.slot ? `selected ${result.slot.date} ${result.slot.time}` : `not selected: ${result.error}`);
         if (result.tried && result.tried.length) log('tried: ' + result.tried.join('; '));
-        if (result.slot && reconApi) {
-            // Direct-API-booking test, phase 1: the slot is selected (the site saved chosenSlots in the
-            // document), so read the document shape instead of pressing «Підтвердити». Nothing is booked.
-            // The selection is reported WITHOUT `booking`, so the background finalizes it as «selected»
-            // (not stuck in «booking»), which lets monitoring run the recon again after the hold.
-            await apiRecon(jobId, taskId, result.slot);
-            send({ type: 'econsul:slot-result', jobId, ok: true, slot: result.slot, tried: result.tried });
-            job = null;
-            return null;
+        if (result.slot && autoBook && apiBook) {
+            // Direct-API-booking test, phase 2: book with the site's own booking request instead of
+            // pressing «Підтвердити» (which also sends the application)
+            send({ type: 'econsul:slot-result', jobId, ok: true, slot: result.slot, tried: result.tried, booking: true });
+            return bookByApi(jobId, taskId, result.slot);
         }
         if (result.slot && autoBook) {
             send({ type: 'econsul:slot-result', jobId, ok: true, slot: result.slot, tried: result.tried, booking: true });
@@ -198,70 +194,95 @@
         return null;
     }
 
-    // Direct-API-booking test, phase 1 (read-only reconnaissance). The slot is already selected, so the
-    // site has saved it in the document (PUT /documents with chosenSlots). This reads GET /tasks/{id} and
-    // GET /documents/{id} and reports their REAL shapes — documentId, the path to chosenSlots and the real
-    // format of one chosen slot (times + consulIpnHash) — so phase 2 can build the booking request from
-    // verified fields instead of the reconstructed §14 ones. No PUT, no external-reader/check, nothing
-    // booked. Reports field names and the slot shape only — never the token or applicant personal data.
-    async function apiRecon(jobId, taskId, slot) {
+    const CHOSEN_WAIT_MS = 15000; // the site saves the clicked slot in the document a moment later
+    const CHOSEN_POLL_MS = 500;
+
+    // Direct-API-booking test, phase 2 (directApiBook, docs/booking.md §14.5). The slot is selected by a
+    // click, so the site itself saves it in the document (with the `calculated` fields only the site
+    // computes). Once GET /documents shows that slot in chosenSlots, this sends the site's booking check
+    // (§14.2) — the same request as «Підтвердити» — and, when it books, sends the application with
+    // validate?commit=true, as the site's finish does. The result goes the
+    // way of a «Підтвердити» press (econsul:book-result) plus an `api-recon` event (stage `book`) with the
+    // response shape — field names and the site's message, never the token or applicant data.
+    async function bookByApi(jobId, taskId, slot) {
         const token = readToken();
-        const out = { stage: 'recon' };
-        const firstString = (...v) => v.find(x => typeof x === 'string' && x) || null;
-        try {
+        const out = { stage: 'book' };
+        let booked;
+        const timed = async (kind, url, init) => {
             const startedAt = Date.now(), perfStart = performance.now();
-            const tr = await fetch(`${API}/tasks/${encodeURIComponent(taskId)}`, { headers: { token }, cache: 'no-store' });
-            reportRequest('tasks', startedAt, perfStart, tr.status);
-            out.taskStatus = tr.status;
+            const response = await fetch(url, { ...init, headers: { 'content-type': 'application/json', token }, cache: 'no-store' });
+            reportRequest(kind, startedAt, perfStart, response.status);
+            return response;
+        };
+        try {
+            log('api-book: waiting for the document to hold the slot');
+            const tr = await timed('tasks', `${API}/tasks/${encodeURIComponent(taskId)}`, {});
             const tj = tr.ok ? await tr.json() : null;
             const task = (tj && tj.data && !Array.isArray(tj.data) ? tj.data : tj) || {};
-            out.taskKeys = Object.keys(task).slice(0, 25).join(',') || null;
-            const docId = firstString(
-                task.documentId, task.documentID,
-                task.document && (task.document.id || task.document.documentId),
-                Array.isArray(task.documents) && task.documents[0] && (task.documents[0].id || task.documents[0].documentId),
-            );
-            out.docId = docId ? String(docId).slice(0, 48) : null;
-            // The site may save the chosen slot a moment after the click: read the document up to 3 times
-            for (let read = 1; docId && read <= 3; read++) {
-                if (read > 1) await new Promise(r => setTimeout(r, 2500));
-                const s2 = Date.now(), p2 = performance.now();
-                const dr = await fetch(`${API}/documents/${encodeURIComponent(docId)}`, { headers: { token }, cache: 'no-store' });
-                reportRequest('document', s2, p2, dr.status);
-                out.docStatus = dr.status;
-                out.docReads = read;
+            const docId = task.documentId ? String(task.documentId) : null;
+            if (!docId) booked = { error: 'api-no-document' };
+            const prefix = `${slot.date}T${slot.time}`;
+            const end = Date.now() + CHOSEN_WAIT_MS;
+            let saved = false;
+            for (out.docReads = 0; docId && !saved && Date.now() < end; out.docReads++) {
+                if (out.docReads) await new Promise(r => setTimeout(r, CHOSEN_POLL_MS));
+                const dr = await timed('document', `${API}/documents/${encodeURIComponent(docId)}`, {});
                 const dj = dr.ok ? await dr.json() : null;
                 const doc = (dj && dj.data ? dj.data : dj) || {};
-                const data = doc.data || doc;
-                out.docKeys = Object.keys(doc).slice(0, 25).join(',') || null;
-                // Field names only (no values): where the steps of the form live in the document
-                out.dataKeys = Object.keys(data).slice(0, 40).join(',').slice(0, 480) || null;
-                const visit = data.dateAndTimeVisitInfo;
-                out.visitKeys = visit && typeof visit === 'object' ? Object.keys(visit).slice(0, 25).join(',') : null;
-                const found = findKey(data, 'chosenSlots', 'data', 6);
-                out.chosenPath = found ? found.path : null;
-                out.hasVisitInfo = !!visit;
-                out.hasCalendar = !!(visit && visit.calendar);
-                const chosen = found && found.value;
-                out.chosenCount = Array.isArray(chosen) ? chosen.length : null;
-                // One chosen slot: times + consuls[{consulIpnHash}]. No applicant personal data in here.
-                out.chosenSample = Array.isArray(chosen) && chosen[0] ? JSON.stringify(chosen[0]).slice(0, 400) : null;
-                if (out.chosenCount) break;
+                const cal = doc.data && doc.data.dateAndTimeVisitInfo && doc.data.dateAndTimeVisitInfo.calendar;
+                const chosen = cal && Array.isArray(cal.chosenSlots) ? cal.chosenSlots : [];
+                saved = chosen.length === 1 && String(chosen[0].from || '').startsWith(prefix);
+            }
+            if (docId && !saved) booked = { error: 'api-not-saved' };
+            if (saved) {
+                log('api-book: public-check-and-book-appointments');
+                const body = { service: 'e-queue-register', method: 'public-check-and-book-appointments', path: 'dateAndTimeVisitInfo.externalReaderCheck_CreatingVisitAppointment' };
+                const checkStart = performance.now();
+                const cr = await timed('document', `${API}/documents/${encodeURIComponent(docId)}/external-reader/check`, { method: 'POST', body: JSON.stringify(body) });
+                out.checkStatus = cr.status;
+                out.checkMs = Math.round(performance.now() - checkStart);
+                const cj = await cr.json().catch(() => null);
+                const top = cj && typeof cj === 'object' ? cj : {};
+                out.respKeys = Object.keys(top).slice(0, 25).join(',') || null;
+                const inner = top.data && typeof top.data === 'object' && !Array.isArray(top.data) ? top.data : null;
+                out.dataKeys = inner ? Object.keys(inner).slice(0, 25).join(',') : null;
+                // The answer is the document: a booking adds `…CreatingVisitAppointment[0].data.regNumber`, a
+                // refusal the site's text in `…CreatingVisitAppointment_Error.error` (docs/booking.md §14.5)
+                const visit = inner && inner.data && inner.data.dateAndTimeVisitInfo;
+                const siteError = visit && visit.externalReaderCheck_CreatingVisitAppointment_Error && visit.externalReaderCheck_CreatingVisitAppointment_Error.error;
+                const record = visit && Array.isArray(visit.externalReaderCheck_CreatingVisitAppointment) && visit.externalReaderCheck_CreatingVisitAppointment[0];
+                out.hasRegNumber = !!(record && record.data && record.data.regNumber);
+                const err = top.error || top.errors || (inner && inner.error) || siteError;
+                const message = [err && (err.message || err), top.message].find(x => typeof x === 'string' && x) || null;
+                out.message = message ? message.slice(0, 300) : null;
+                if (cr.ok && !err) {
+                    booked = { ok: true, presses: 1, via: 'api' };
+                    // Send the application as the site's finish does (validate?commit=true finishes the task;
+                    // a POST /tasks/{id}/commit after it answers 404). «Підтвердити» after a booking by API would
+                    // book the slot again, fail and leave an error that blocks the application
+                    log('api-book: validate?commit=true');
+                    const vr = await timed('document', `${API}/documents/${encodeURIComponent(docId)}/validate?commit=true`, { method: 'POST', body: '{}' });
+                    const vj = await vr.json().catch(() => null);
+                    out.submitStatus = vr.status;
+                    const verr = vj && vj.error;
+                    booked.submitted = vr.ok && !verr;
+                    if (!booked.submitted) out.submitError = String((verr && (verr.message || verr)) || `HTTP ${vr.status}`).slice(0, 200);
+                }
+                else if (cr.status >= 500 || cr.status === 429) booked = { error: 'unavailable', text: out.message || `HTTP ${cr.status}`, presses: 1 };
+                else booked = { error: 'alert', text: out.message || `HTTP ${cr.status}`, presses: 1 };
             }
         } catch (e) {
-            out.error = ((e && e.message) || 'error').slice(0, 140);
+            booked = { error: 'exception: ' + ((e && e.message) || 'error').slice(0, 140) };
         }
-        log('api-recon: ' + JSON.stringify(out));
+        out.result = booked.ok ? 'ok' : booked.error;
+        log('api-book: ' + JSON.stringify(out));
         await send({ type: 'econsul:api-recon', jobId, slot, ...out });
-    }
-
-    // Depth-first search for a key; returns its dotted path and value, or null
-    function findKey(obj, key, path, depth) {
-        if (!obj || typeof obj !== 'object' || depth < 0) return null;
-        if (Object.prototype.hasOwnProperty.call(obj, key)) return { path: `${path}.${key}`, value: obj[key] };
-        for (const [k, v] of Object.entries(obj)) {
-            const found = findKey(v, key, Array.isArray(obj) ? `${path}[${k}]` : `${path}.${k}`, depth - 1);
-            if (found) return found;
+        job = null;
+        const onCalendarNow = EconsulPicker.currentStep() === EconsulPicker.CALENDAR_STEP && !document.getElementById('next-step-button');
+        const reply = await send({ type: 'econsul:book-result', jobId, slot, ...booked, onCalendar: onCalendarNow });
+        if (!booked.ok && reply && reply.next && onCalendarNow) return reply.next;
+        if (!booked.ok && reply && reply.showBanner && EconsulPicker.currentStep() === EconsulPicker.CALENDAR_STEP) {
+            showBanner(slot, EconsulPicker.findSlot(slot.date, slot.time), reply.reason);
         }
         return null;
     }

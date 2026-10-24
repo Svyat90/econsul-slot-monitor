@@ -6,6 +6,27 @@
 
 ## Розширення Chrome
 
+### Після бронювання по API «Підтвердити» ламає заявку; надсилає її `validate?commit=true` (2026-10-24)
+
+Бронювання запитом `check` (v0.14.14) спрацювало, але заявку не надіслало. «Підтвердити» людини після цього вдруге
+бронювало той самий слот, отримало 500 («Сервіс недоступний») і записало помилку в
+`dateAndTimeVisitInfo.externalReaderCheck_CreatingVisitAppointment_Error.error`. Правило `checkValid` кроку валить
+`validate` на **будь-якій** помилці там («Validation error.»). Помогло: `PUT /documents/{id}` з
+`{properties:[{path, value: null, previousValue}]}` (так сайт зберігає зміни: diff по шляхах) → `validate?commit=true`
+→ 200 і задача `finished: true`. Окремий `POST /tasks/{id}/commit` після цього дав 404 «Task not found»: задачу
+вже завершив `validate?commit=true`.
+
+Правило: бронюючи по API, одразу після успішного `check` робити `validate?commit=true` самим; людині не тиснути
+«Підтвердити» після бронювання по API.
+
+### `kind` запиту до сайту фільтрує ще й background (2026-10-24)
+
+`reportRequest(kind, …)` з `econsul.js` доходить до журналу лише з `kind` `auth`/`tasks`/`document`: `onSiteRequest`
+(`background.js`) мовчки відкидає решту, а сервер має свій enum. Тому `check` бронювання по API (v0.14.14) пишеться
+як `document`, а його статус і тривалість — у подію `api-recon` (`checkStatus`, `checkMs`).
+
+Правило: новий `kind` — у `onSiteRequest` **і** в enum сервера (+ перезапуск), інакше запит зникає без помилки.
+
 ### Сайт зберігає вибраний слот у документі із затримкою (2026-10-24)
 
 Перша `api-recon` (v0.14.12) прочитала `GET /documents/{id}` у ту ж секунду, що й `selection.selected`, і

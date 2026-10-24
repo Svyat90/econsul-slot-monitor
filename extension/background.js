@@ -95,6 +95,8 @@ const SELECT_ERRORS = {
     'next-disabled': 'Кнопка «Далі» на кроці 3 неактивна.',
     'step-stuck': 'Сайт не перейшов до календаря.',
     'unavailable': 'Сайт пише, що запис зараз недоступний.',
+    'api-no-document': 'У задачі немає documentId (бронювання по API).',
+    'api-not-saved': 'Сайт не зберіг вибраний слот у документі (бронювання по API).',
     'no-time': 'Сайт показує, що вільного часу немає.',
     'calendar-not-loaded': 'Календар не завантажився.',
     'not-found': 'Нових слотів у календарі вже немає.',
@@ -130,6 +132,8 @@ const DRAFT_ERRORS = {
     'service-not-found-missing': 'Поле «Послуга» не знайдено на кроці 3.',
     'check-timeout': 'Сайт довго перевіряє послугу.',
     'unavailable': 'Сайт пише, що запис зараз недоступний.',
+    'api-no-document': 'У задачі немає documentId (бронювання по API).',
+    'api-not-saved': 'Сайт не зберіг вибраний слот у документі (бронювання по API).',
     'self-not-set': 'Не вдалося вибрати «Для себе».',
     'next-disabled': 'Кнопка «Далі» неактивна.',
     'step-stuck': 'Сайт не перейшов на наступний крок.',
@@ -644,7 +648,7 @@ async function selectOnCalendar(selection, fresh, candidates) {
     const { autoBook, aggressive, confirmTries, limitUntil } = await bookingPlan(settings, false);
     await setSelection({ ...selection, slots, autoBook, aggressive, limitUntil, at: Date.now() });
     const { jobId, taskId } = selection;
-    return { next: { jobId, taskId, slots, autoBook, confirmTries, reconApi: !!settings.directApiBook, note: limitUntil ? limitText(limitUntil) : null } };
+    return { next: { jobId, taskId, slots, autoBook, confirmTries, apiBook: !!settings.directApiBook, note: limitUntil ? limitText(limitUntil) : null } };
 }
 
 // A creation without a result for too long has failed (the tab was closed, the page froze)
@@ -1360,7 +1364,7 @@ async function runSelection(starting, attempt, release) {
     if (!reply) return selectionFailed({ ...current, tabId: tab.id }, 'tab-not-ready');
     Telemetry.event('selection.stage', { stage: 'tab-ready', taskId: draft.taskId, durationMs: Date.now() - now }, { jobId, test });
     const note = limitUntil ? limitText(limitUntil) : null; // the banner says why the person presses
-    await chrome.tabs.sendMessage(tab.id, { type: 'select-slot', jobId, taskId: draft.taskId, slots, autoBook, confirmTries, reconApi: !!settings.directApiBook, note }).catch(() => null);
+    await chrome.tabs.sendMessage(tab.id, { type: 'select-slot', jobId, taskId: draft.taskId, slots, autoBook, confirmTries, apiBook: !!settings.directApiBook, note }).catch(() => null);
 }
 
 // Opens the draft on step 3 in its tab (or a new one) and brings it to the front. Step 3 is
@@ -1504,7 +1508,7 @@ async function onSlotResult({ jobId, ok, slot, error, tried, booking }) {
 // From econsul.js: auto-booking pressed «Підтвердити». ok: the site said «Дякуємо». A failure
 // that is the site's answer (ADVANCE_ERRORS) puts the slot in quarantine and tries the next free
 // slot of the selection; any other failure (the page left the calendar, nothing to press) stops
-async function onBookResult({ jobId, slot, ok, error, text, presses, onCalendar }) {
+async function onBookResult({ jobId, slot, ok, error, text, presses, onCalendar, via, submitted }) {
     const { selection } = await chrome.storage.session.get('selection');
     if (!selection || selection.jobId !== jobId) return;
     const date = slot.date.split('-').reverse().join('.');
@@ -1512,6 +1516,7 @@ async function onBookResult({ jobId, slot, ok, error, text, presses, onCalendar 
     const aggressive = !!selection.aggressive;
     Telemetry.event(ok ? 'booking.booked' : 'booking.failed', {
         taskId: selection.taskId, date: slot.date, time: slot.time, aggressive,
+        ...(via ? { via, submitted: !!submitted } : {}),
         ...(ok ? {} : { error: code }),
         // what the site said when it answered with a message (not the page text: that has the applicant's data)
         ...(!ok && (error === 'alert' || error === 'unavailable') && text ? { message: String(text).slice(0, 300) } : {})
@@ -1558,7 +1563,9 @@ async function onBookResult({ jobId, slot, ok, error, text, presses, onCalendar 
         iconUrl: 'icons/icon128.png',
         title: ok ? `Заброньовано ${date} о ${slot.time}` : `Не вдалося забронювати ${date} о ${slot.time}`,
         message: ok
-            ? 'Сайт прийняв заявку. Підтвердження прийде на email.'
+            ? (via === 'api' && !submitted
+                ? 'Слот зайнято запитом по API, але заявку не надіслано. Не натискайте «Підтвердити»: воно забронює вдруге й зламає заявку.'
+                : 'Сайт прийняв заявку. Підтвердження прийде на email.')
             : `${reason} Слот лишився вибраним, можна натиснути «Підтвердити» самому.${quarantine ? ` Автоматично цей слот пропускаю до ${new Date(quarantine.until).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}.` : ''}`,
         requireInteraction: true,
         priority: 2
@@ -1764,9 +1771,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         else if (message.type === 'econsul:scan-result') handler = () => onScanResult(message);
         else if (message.type === 'econsul:request') handler = () => onSiteRequest(message);
         else if (message.type === 'econsul:api-recon') handler = async () => {
-            // Read-only reconnaissance for the direct-API-booking test (directApiBook): the content
-            // script read GET /tasks/{id} and GET /documents/{id} and reports their real shapes so the
-            // booking payload can be built. No PUT, no booking. No token, no applicant personal data here.
+            // Direct-API-booking test (directApiBook): how the booking request went — status, time,
+            // response field names, the site's message. No token, no applicant personal data here.
             const { jobId, slot, type, ...shape } = message;
             Telemetry.event('api-recon', { slot: slot ? `${slot.date} ${slot.time}` : null, ...shape }, { jobId });
             return {};
