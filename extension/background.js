@@ -172,6 +172,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     ensureAlarms();
     const { settings } = await chrome.storage.local.get('settings');
     await chrome.storage.local.set({ settings: { ...DEFAULT_SETTINGS, ...settings } });
+    await turnBookingOff('reload');
     renderBadge();
     scheduleReleaseAlarm();
     // Tabs opened before the install or reload have no content scripts (or orphaned ones)
@@ -181,7 +182,21 @@ chrome.runtime.onInstalled.addListener(async () => {
         }
     }
 });
-chrome.runtime.onStartup.addListener(() => { ensureAlarms(); renderBadge(); scheduleReleaseAlarm(); });
+chrome.runtime.onStartup.addListener(async () => { await turnBookingOff('startup'); ensureAlarms(); renderBadge(); scheduleReleaseAlarm(); });
+
+// The booking toggles never stay on by accident (the owner's decision, 2026-10-24): «Бронювати
+// автоматично», «Агресивне бронювання» and «Бронювати напряму через API» turn off after a booking, when
+// the session ends, after ⟳ of the extension and when Chrome starts. Each time they are turned on by hand.
+async function turnBookingOff(from) {
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    const on = { autoBook: 'user.auto-book', aggressiveBook: 'user.aggressive-book', directApiBook: 'user.direct-api-book' };
+    const patch = {};
+    for (const [key, type] of Object.entries(on)) if (settings[key]) {
+        Telemetry.event(type, { enabled: false, from });
+        patch[key] = false;
+    }
+    if (Object.keys(patch).length) await saveSettings(patch);
+}
 ensureAlarms();
 
 chrome.alarms.onAlarm.addListener(alarm => {
@@ -239,12 +254,8 @@ function authMessage(auth, extra = {}) {
 // broken-glass sound, played by the app when it can, otherwise by the offscreen document
 async function onLoggedOut(auth, opts) {
     Telemetry.event('session.logged-out', { reason: auth.reason || null });
-    // Aggressive booking lasts one session: after a new login it is turned on again by hand
-    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
-    if (settings.aggressiveBook) {
-        Telemetry.event('user.aggressive-book', { enabled: false, from: 'session' });
-        await saveSettings({ aggressiveBook: false });
-    }
+    // Booking lasts one session: after a new login it is turned on again by hand
+    await turnBookingOff('session');
     chrome.notifications.create('login', {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
@@ -1527,6 +1538,7 @@ async function onBookResult({ jobId, slot, ok, error, text, presses, onCalendar,
     if (ok) {
         await clearSlotHistory(slot);
         await chrome.storage.session.remove('waitingSlots');
+        await turnBookingOff('booked'); // one booking, then nothing more until turned on by hand
     } else if (ADVANCE_ERRORS.has(code)) quarantine = await recordSlotFailure(slot, error, aggressive);
     if (quarantine) Telemetry.event('selection.stage', { stage: 'quarantine-start', fails: quarantine.fails, until: new Date(quarantine.until).toISOString(), presses: presses || 0, aggressive }, { jobId, test: selection.test });
 
