@@ -312,10 +312,10 @@
 
     // Auto-booking was turned on (or the press limit reset) while a slot waits on the banner for
     // the person: press «Підтвердити» for it now, then go on like any auto-booking
-    async function confirmSelected({ jobId, slot, confirmTries }) {
+    async function confirmSelected({ jobId, taskId, slot, confirmTries, apiBook }) {
         job = jobId;
         removeBanner();
-        const next = await book(jobId, slot, confirmTries);
+        const next = apiBook && taskId ? await bookByApi(jobId, taskId, slot) : await book(jobId, slot, confirmTries);
         if (next) selectSlot(next, true);
     }
 

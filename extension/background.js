@@ -28,7 +28,7 @@ const SELECTED_SOUND = { minMs: 30 * 1000, maxMs: 2 * 60 * 1000 };
 // alarmLeadMin: the reminder fires this many minutes before the current location opens new days
 // autoMonitor: after a login the app starts monitoring by itself (off until the person turns it on)
 // releaseStrike: at the opening of new days «Далі» on step 3 is pressed exactly at the moment (see onReleaseStrike)
-const DEFAULT_SETTINGS = { paused: false, autoBook: false, aggressiveBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5, releaseStrike: true, directApiBook: false };
+const DEFAULT_SETTINGS = { paused: false, autoBook: true, aggressiveBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5, releaseStrike: true, directApiBook: true };
 const ALARM_LEAD_MIN = 1, ALARM_LEAD_MAX = 60;
 // The draft is opened on step 3 this long before the opening, so the page is loaded (also on a
 // slow site) when «Далі» is pressed at the moment (2 min: the owner's decision, 2026-10-21; it was 30 s)
@@ -172,7 +172,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     ensureAlarms();
     const { settings } = await chrome.storage.local.get('settings');
     await chrome.storage.local.set({ settings: { ...DEFAULT_SETTINGS, ...settings } });
-    await turnBookingOff('reload');
+    await turnBookingOn('reload');
     renderBadge();
     scheduleReleaseAlarm();
     // Tabs opened before the install or reload have no content scripts (or orphaned ones)
@@ -182,19 +182,16 @@ chrome.runtime.onInstalled.addListener(async () => {
         }
     }
 });
-chrome.runtime.onStartup.addListener(async () => { await turnBookingOff('startup'); ensureAlarms(); renderBadge(); scheduleReleaseAlarm(); });
+chrome.runtime.onStartup.addListener(async () => { await turnBookingOn('startup'); ensureAlarms(); renderBadge(); scheduleReleaseAlarm(); });
 
-// The booking toggles never stay on by accident (the owner's decision, 2026-10-24): «Бронювати
-// автоматично», «Агресивне бронювання» and «Бронювати напряму через API» turn off after a booking, when
-// the session ends, after ⟳ of the extension and when Chrome starts. Each time they are turned on by hand.
-async function turnBookingOff(from) {
+// Booking stays on (the owner's decision, 2026-10-24): «Бронювати автоматично» and «Бронювати напряму через
+// API» are on by default and turned on again after ⟳ of the extension, when Chrome starts and at each login,
+// so booking by the API is never forgotten off (pressing «Підтвердити» on a loaded site did not book)
+async function turnBookingOn(from) {
     const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
-    const on = { autoBook: 'user.auto-book', aggressiveBook: 'user.aggressive-book', directApiBook: 'user.direct-api-book' };
     const patch = {};
-    for (const [key, type] of Object.entries(on)) if (settings[key]) {
-        Telemetry.event(type, { enabled: false, from });
-        patch[key] = false;
-    }
+    if (!settings.autoBook) { Telemetry.event('user.auto-book', { enabled: true, from }); patch.autoBook = true; }
+    if (!settings.directApiBook) { Telemetry.event('user.direct-api-book', { enabled: true, from }); patch.directApiBook = true; }
     if (Object.keys(patch).length) await saveSettings(patch);
 }
 ensureAlarms();
@@ -235,6 +232,7 @@ async function updateAuth(update, opts = {}) {
     } else if (next.loggedIn === true && (prev.loggedIn !== true || next.token !== prev.token)) {
         if (prev.loggedIn !== true) {
             Telemetry.event('session.logged-in');
+            await turnBookingOn('login');
             // A login: make a draft if there is no usable one, after tabs had time to report theirs
             chrome.alarms.create('draft-login', { when: Date.now() + LOGIN_DRAFT_DELAY_MS });
         }
@@ -254,8 +252,12 @@ function authMessage(auth, extra = {}) {
 // broken-glass sound, played by the app when it can, otherwise by the offscreen document
 async function onLoggedOut(auth, opts) {
     Telemetry.event('session.logged-out', { reason: auth.reason || null });
-    // Booking lasts one session: after a new login it is turned on again by hand
-    await turnBookingOff('session');
+    // Aggressive booking lasts one session: after a new login it is turned on again by hand
+    const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
+    if (settings.aggressiveBook) {
+        Telemetry.event('user.aggressive-book', { enabled: false, from: 'session' });
+        await saveSettings({ aggressiveBook: false });
+    }
     chrome.notifications.create('login', {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
@@ -1135,7 +1137,7 @@ async function bookSelectedNow(reason) {
     await stopSounds(true);
     Telemetry.event('selection.stage', { stage: 'book-selected', reason, taskId: selection.taskId, date: selection.slot.date, time: selection.slot.time, aggressive }, { jobId, test: false });
     const reply = selection.tabId != null
-        ? await chrome.tabs.sendMessage(selection.tabId, { type: 'confirm-slot', jobId, slot: selection.slot, confirmTries }).catch(() => null)
+        ? await chrome.tabs.sendMessage(selection.tabId, { type: 'confirm-slot', jobId, taskId: selection.taskId, slot: selection.slot, confirmTries, apiBook: !!settings.directApiBook }).catch(() => null)
         : null;
     if (reply && reply.ok) return;
     await setSelection({ ...booking, status: 'failed', error: 'tab-left', at: Date.now() });
@@ -1538,7 +1540,6 @@ async function onBookResult({ jobId, slot, ok, error, text, presses, onCalendar,
     if (ok) {
         await clearSlotHistory(slot);
         await chrome.storage.session.remove('waitingSlots');
-        await turnBookingOff('booked'); // one booking, then nothing more until turned on by hand
     } else if (ADVANCE_ERRORS.has(code)) quarantine = await recordSlotFailure(slot, error, aggressive);
     if (quarantine) Telemetry.event('selection.stage', { stage: 'quarantine-start', fails: quarantine.fails, until: new Date(quarantine.until).toISOString(), presses: presses || 0, aggressive }, { jobId, test: selection.test });
 
