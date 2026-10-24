@@ -16,6 +16,7 @@ export type ExtensionState = {
     auth: { loggedIn: boolean | null; exp: number | null; reason: string | null } | null;
     autoBook: boolean;
     aggressiveBook: boolean; // no press limit, the next slot right after a failure; off when the session ends
+    directApiBook: boolean; // test: book through the API instead of pressing «Підтвердити» (phase 1: read-only recon)
     autoDraft: boolean; // make a draft after a login when there is none
     autoMonitor: boolean; // start monitoring after a login when it is not running
     alarmEnabled: boolean; // make a fresh draft shortly before the location opens new days
@@ -27,7 +28,7 @@ export type ExtensionState = {
     alarm: { at: number } | null;
 };
 
-export type DraftSettingsPatch = Partial<Pick<ExtensionState, 'aggressiveBook' | 'autoDraft' | 'autoMonitor' | 'alarmEnabled' | 'alarmLeadMin'>>;
+export type DraftSettingsPatch = Partial<Pick<ExtensionState, 'aggressiveBook' | 'autoDraft' | 'autoMonitor' | 'alarmEnabled' | 'alarmLeadMin' | 'directApiBook'>>;
 
 export interface ExtensionLink {
     getState(): ExtensionState;
@@ -69,6 +70,7 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
         auth: null,
         autoBook: false,
         aggressiveBook: false,
+        directApiBook: false,
         autoDraft: true,
         autoMonitor: false,
         alarmEnabled: true,
@@ -280,6 +282,7 @@ export function createExtensionLink(deps: ExtensionLinkDeps): ExtensionLink {
                             return patch({
                                 autoBook: msg.autoBook,
                                 ...(msg.aggressiveBook !== undefined && { aggressiveBook: msg.aggressiveBook }),
+                                ...(msg.directApiBook !== undefined && { directApiBook: msg.directApiBook }),
                                 ...(msg.autoDraft !== undefined && { autoDraft: msg.autoDraft }),
                                 ...(msg.autoMonitor !== undefined && { autoMonitor: msg.autoMonitor }),
                                 ...(msg.alarmEnabled !== undefined && { alarmEnabled: msg.alarmEnabled }),

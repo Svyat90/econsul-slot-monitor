@@ -55,6 +55,9 @@ export const extMessageSchema = z.discriminatedUnion('type', [
     autoMonitor: z.boolean().optional(),
     alarmEnabled: z.boolean().optional(),
     alarmLeadMin: z.number().optional(),
+    // v0.14.9: test toggle — instead of pressing «Підтвердити», the extension books through the API
+    // (phase 1: read-only reconnaissance of the document shape; nothing booked)
+    directApiBook: z.boolean().optional(),
   }),
   ext('ext:slot-selected', { slot: slotSchema }),
   ext('ext:slot-booked', { slot: slotSchema }),
@@ -126,6 +129,7 @@ export const appMessageSchema = z.discriminatedUnion('type', [
       autoMonitor: z.boolean().optional(),
       alarmEnabled: z.boolean().optional(),
       alarmLeadMin: z.number().optional(),
+      directApiBook: z.boolean().optional(),
     }),
   }),
 ])

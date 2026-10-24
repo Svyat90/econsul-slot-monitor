@@ -13,8 +13,10 @@ export const extensionEventTypes = [
     'draft.create-started', 'draft.created', 'draft.create-failed',
     'selection.started', 'selection.stage', 'selection.selected', 'selection.failed',
     'booking.confirm-clicked', 'booking.booked', 'booking.failed',
+    // v0.14.9: direct-API-booking test — read-only reconnaissance of the document shape (phase 1)
+    'api-recon',
     'app.slots-received', 'alarm.fired',
-    'user.mute', 'user.pause', 'user.auto-book', 'user.aggressive-book', 'user.reset-presses', 'user.test-sound', 'user.new-draft',
+    'user.mute', 'user.pause', 'user.auto-book', 'user.aggressive-book', 'user.reset-presses', 'user.test-sound', 'user.new-draft', 'user.direct-api-book',
 ] as const;
 
 export const extensionEventSchema = z.object({

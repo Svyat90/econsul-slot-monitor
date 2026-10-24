@@ -74,7 +74,7 @@ const Telemetry = (() => {
             startedAt: new Date(startedAt).toISOString(),
             durationMs,
             service: kind,
-            method: kind === 'auth' ? 'GET auth/me' : 'GET tasks/:id', // never the task id
+            method: kind === 'auth' ? 'GET auth/me' : kind === 'document' ? 'GET documents/:id' : 'GET tasks/:id', // never the id
             institutionCode: null,
             filters: {},
             httpStatus: network ? null : status,

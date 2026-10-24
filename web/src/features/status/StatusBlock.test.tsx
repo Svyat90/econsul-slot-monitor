@@ -36,7 +36,7 @@ const baseState: MonitorState = {
 
 function setup(state: Partial<MonitorState> = {}, ext: Partial<ExtensionState> = {}) {
     let monitorState: MonitorState = { ...baseState, ...state };
-    const extState: ExtensionState = { connected: true, version: '1', auth: null, autoBook: false, aggressiveBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5, draft: null, draftJob: null, alarm: null, ...ext };
+    const extState: ExtensionState = { connected: true, version: '1', auth: null, autoBook: false, aggressiveBook: false, directApiBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5, draft: null, draftJob: null, alarm: null, ...ext };
     const listeners = new Set<() => void>();
     let tick: (() => void) | null = null;
     let now = NOW;

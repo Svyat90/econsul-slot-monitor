@@ -350,6 +350,15 @@ extension/
 | background ↔ `econsul.js` | `econsul:draft-result` → `{ scan }` | (v0.14.7) `econsul:draft-result` несе ще `taskId`; відповідь `{ scan: { jobId, range } }` — шукати вільні слоти нової чернетки; `econsul:scan-result` `{ jobId, error, searches, slots }` → `{ next }` або `{}` |
 | `econsul.js` → background | `econsul:strike-result` | `{ jobId, error, clickedAt, slots, lastDay }` → відповідь `{ next }` (дані `select-slot` для вибору на тому самому календарі) або `{}` |
 
+Додано у v0.14.9 (тест прямого бронювання по API, 2026-10-24):
+
+| Напрям | `type` | Дані |
+|---|---|---|
+| розширення → застосунок | `ext:settings` | ще поле `directApiBook` (необов'язкове) |
+| застосунок → розширення | `app:settings` | `patch` може містити `directApiBook` |
+| background → `econsul.js` | `select-slot` / `strike-result` → `next` | ще поле `reconApi`: коли `directApiBook` увімкнено, після вибору слота `econsul.js` не натискає «Підтвердити», а читає документ |
+| `econsul.js` → background | `econsul:api-recon` | `{ jobId, slot, stage, taskStatus, taskKeys, docId, docStatus, docKeys, hasCalendar, chosenCount, chosenSample, error? }` — форма документа для фази 2; без токена й персональних даних. Відповідь `{}` |
+
 Додано у v0.9.0 (перехід на наступний слот і агресивне бронювання, 2026-10-18):
 
 | Напрям | `type` | Дані |

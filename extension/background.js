@@ -28,7 +28,7 @@ const SELECTED_SOUND = { minMs: 30 * 1000, maxMs: 2 * 60 * 1000 };
 // alarmLeadMin: the reminder fires this many minutes before the current location opens new days
 // autoMonitor: after a login the app starts monitoring by itself (off until the person turns it on)
 // releaseStrike: at the opening of new days «Далі» on step 3 is pressed exactly at the moment (see onReleaseStrike)
-const DEFAULT_SETTINGS = { paused: false, autoBook: false, aggressiveBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5, releaseStrike: true };
+const DEFAULT_SETTINGS = { paused: false, autoBook: false, aggressiveBook: false, autoDraft: true, autoMonitor: false, alarmEnabled: true, alarmLeadMin: 5, releaseStrike: true, directApiBook: false };
 const ALARM_LEAD_MIN = 1, ALARM_LEAD_MAX = 60;
 // The draft is opened on step 3 this long before the opening, so the page is loaded (also on a
 // slow site) when «Далі» is pressed at the moment (2 min: the owner's decision, 2026-10-21; it was 30 s)
@@ -307,7 +307,7 @@ async function onAuthCheck({ token, ok, status }) {
 // From econsul.js: how an own request to e-Consul went. Only kind, time and status come in
 // (never the token or the address); the journal gets the record
 async function onSiteRequest({ kind, startedAt, durationMs, status }) {
-    if (kind !== 'auth' && kind !== 'tasks') return;
+    if (kind !== 'auth' && kind !== 'tasks' && kind !== 'document') return;
     if (!Number.isFinite(startedAt) || !Number.isInteger(durationMs) || durationMs < 0) return;
     if (!Number.isInteger(status) || (status !== 0 && (status < 100 || status > 599))) return;
     Telemetry.request({ kind, startedAt, durationMs, status });
@@ -596,11 +596,26 @@ async function onScanResult({ jobId, error, searches, slots: found }) {
     const inRange = shown.filter(s => (!range.from || s.date >= range.from) && (!range.to || s.date <= range.to));
     const { waitingSlots = { fresh: [], all: [] } } = await chrome.storage.session.get('waitingSlots');
     if (!inRange.length && !waitingSlots.fresh.length && !waitingSlots.all.length) {
-        // No free slot in the draft: nothing to report, the monitor goes on as usual
+        // No free slot in the draft: nothing to report, the monitor goes on as usual. Close the work
+        // tab of this freshly scanned draft so stale draft tabs do not pile up and confuse the next
+        // draft (owner's request 2026-10-24); the onRemoved listener clears workTabId
         await setSelection({ ...selection, status: 'skipped', error: 'no-free', at: Date.now() });
+        await closeDraftTab(selection.tabId);
         return {};
     }
     return selectOnCalendar(selection, mergeSlots(waitingSlots.fresh, inRange), mergeSlots(waitingSlots.fresh, inRange, waitingSlots.all));
+}
+
+// Closes the work tab of a scanned draft that has no free slots, so leftover draft tabs do not pile
+// up (owner's request 2026-10-24). Only the extension's own work tab is closed, never an arbitrary one
+async function closeDraftTab(tabId) {
+    if (tabId == null) return;
+    const { workTabId } = await chrome.storage.session.get('workTabId');
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (!tab || !tab.url || !tab.url.startsWith('https://e-consul.gov.ua/')) return;
+    Telemetry.event('selection.stage', { stage: 'draft-tab-closed', taskId: null });
+    await chrome.tabs.remove(tabId).catch(() => {});
+    if (workTabId === tabId) await chrome.storage.session.remove('workTabId');
 }
 
 function cleanSlots(found) {
@@ -629,7 +644,7 @@ async function selectOnCalendar(selection, fresh, candidates) {
     const { autoBook, aggressive, confirmTries, limitUntil } = await bookingPlan(settings, false);
     await setSelection({ ...selection, slots, autoBook, aggressive, limitUntil, at: Date.now() });
     const { jobId, taskId } = selection;
-    return { next: { jobId, taskId, slots, autoBook, confirmTries, note: limitUntil ? limitText(limitUntil) : null } };
+    return { next: { jobId, taskId, slots, autoBook, confirmTries, reconApi: !!settings.directApiBook, note: limitUntil ? limitText(limitUntil) : null } };
 }
 
 // A creation without a result for too long has failed (the tab was closed, the page froze)
@@ -1013,6 +1028,7 @@ async function onAppMessage(msg) {
             // What the app shows: auto-booking, auto draft and the reminder before the opening
             if (msg.patch && typeof msg.patch.autoBook === 'boolean') Telemetry.event('user.auto-book', { enabled: msg.patch.autoBook, from: 'app' });
             if (msg.patch && typeof msg.patch.aggressiveBook === 'boolean') Telemetry.event('user.aggressive-book', { enabled: msg.patch.aggressiveBook, from: 'app' });
+            if (msg.patch && typeof msg.patch.directApiBook === 'boolean') Telemetry.event('user.direct-api-book', { enabled: msg.patch.directApiBook, from: 'app' });
             if (msg.patch) await saveSettings(msg.patch);
             return [];
         case 'app:login':
@@ -1344,7 +1360,7 @@ async function runSelection(starting, attempt, release) {
     if (!reply) return selectionFailed({ ...current, tabId: tab.id }, 'tab-not-ready');
     Telemetry.event('selection.stage', { stage: 'tab-ready', taskId: draft.taskId, durationMs: Date.now() - now }, { jobId, test });
     const note = limitUntil ? limitText(limitUntil) : null; // the banner says why the person presses
-    await chrome.tabs.sendMessage(tab.id, { type: 'select-slot', jobId, taskId: draft.taskId, slots, autoBook, confirmTries, note }).catch(() => null);
+    await chrome.tabs.sendMessage(tab.id, { type: 'select-slot', jobId, taskId: draft.taskId, slots, autoBook, confirmTries, reconApi: !!settings.directApiBook, note }).catch(() => null);
 }
 
 // Opens the draft on step 3 in its tab (or a new one) and brings it to the front. Step 3 is
@@ -1657,7 +1673,7 @@ async function stopSounds(force) {
 // Only known settings of the right type get in; the alarm lead is a whole number of minutes
 function cleanSettingsPatch(patch = {}) {
     const clean = {};
-    for (const key of ['paused', 'autoBook', 'aggressiveBook', 'autoDraft', 'autoMonitor', 'alarmEnabled', 'releaseStrike']) if (typeof patch[key] === 'boolean') clean[key] = patch[key];
+    for (const key of ['paused', 'autoBook', 'aggressiveBook', 'autoDraft', 'autoMonitor', 'alarmEnabled', 'releaseStrike', 'directApiBook']) if (typeof patch[key] === 'boolean') clean[key] = patch[key];
     const lead = Math.round(Number(patch.alarmLeadMin));
     if (patch.alarmLeadMin != null && Number.isFinite(lead)) clean.alarmLeadMin = Math.min(ALARM_LEAD_MAX, Math.max(ALARM_LEAD_MIN, lead));
     return clean;
@@ -1677,7 +1693,7 @@ async function saveSettings(patch) {
 async function settingsMessage() {
     const { settings = DEFAULT_SETTINGS } = await chrome.storage.local.get('settings');
     const all = { ...DEFAULT_SETTINGS, ...settings };
-    return { type: 'ext:settings', autoBook: !!all.autoBook, aggressiveBook: !!all.aggressiveBook, paused: !!all.paused, autoDraft: all.autoDraft !== false, autoMonitor: !!all.autoMonitor, alarmEnabled: all.alarmEnabled !== false, alarmLeadMin: all.alarmLeadMin, releaseStrike: all.releaseStrike !== false };
+    return { type: 'ext:settings', autoBook: !!all.autoBook, aggressiveBook: !!all.aggressiveBook, paused: !!all.paused, autoDraft: all.autoDraft !== false, autoMonitor: !!all.autoMonitor, alarmEnabled: all.alarmEnabled !== false, alarmLeadMin: all.alarmLeadMin, releaseStrike: all.releaseStrike !== false, directApiBook: !!all.directApiBook };
 }
 
 // ---- Popup ----
@@ -1747,6 +1763,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         else if (message.type === 'econsul:draft-result') handler = () => onDraftResult(message);
         else if (message.type === 'econsul:scan-result') handler = () => onScanResult(message);
         else if (message.type === 'econsul:request') handler = () => onSiteRequest(message);
+        else if (message.type === 'econsul:api-recon') handler = async () => {
+            // Read-only reconnaissance for the direct-API-booking test (directApiBook): the content
+            // script read GET /tasks/{id} and GET /documents/{id} and reports their real shapes so the
+            // booking payload can be built. No PUT, no booking. No token, no applicant personal data here.
+            const { jobId, slot, type, ...shape } = message;
+            Telemetry.event('api-recon', { slot: slot ? `${slot.date} ${slot.time}` : null, ...shape }, { jobId });
+            return {};
+        };
         else if (message.type === 'econsul:confirm-clicked') handler = async () => {
             const { selection } = await chrome.storage.session.get('selection');
             Telemetry.event('booking.confirm-clicked', { taskId: selection ? selection.taskId : null }, { jobId: selection && selection.jobId, test: !!(selection && selection.test) });

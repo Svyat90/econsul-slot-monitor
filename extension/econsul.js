@@ -161,7 +161,7 @@
         }
     }
 
-    async function selectOne({ jobId, taskId, slots, autoBook, confirmTries, note }, onCalendar) {
+    async function selectOne({ jobId, taskId, slots, autoBook, confirmTries, reconApi, note }, onCalendar) {
         job = jobId;
         log(`select-slot: ${slots.length} slot(s), first ${slots[0].date} ${slots[0].time}${autoBook ? ', auto-booking' : ''}${onCalendar ? ', on this calendar' : ''}`);
         removeBanner();
@@ -174,6 +174,16 @@
         }
         log(result.slot ? `selected ${result.slot.date} ${result.slot.time}` : `not selected: ${result.error}`);
         if (result.tried && result.tried.length) log('tried: ' + result.tried.join('; '));
+        if (result.slot && reconApi) {
+            // Direct-API-booking test, phase 1: the slot is selected (the site saved chosenSlots in the
+            // document), so read the document shape instead of pressing «Підтвердити». Nothing is booked.
+            // The selection is reported WITHOUT `booking`, so the background finalizes it as «selected»
+            // (not stuck in «booking»), which lets monitoring run the recon again after the hold.
+            await apiRecon(jobId, taskId, result.slot);
+            send({ type: 'econsul:slot-result', jobId, ok: true, slot: result.slot, tried: result.tried });
+            job = null;
+            return null;
+        }
         if (result.slot && autoBook) {
             send({ type: 'econsul:slot-result', jobId, ok: true, slot: result.slot, tried: result.tried, booking: true });
             return book(jobId, result.slot, confirmTries);
@@ -186,6 +196,54 @@
             send({ type: 'econsul:slot-result', jobId, ok: false, error: result.error, tried: result.tried || [] });
         }
         return null;
+    }
+
+    // Direct-API-booking test, phase 1 (read-only reconnaissance). The slot is already selected, so the
+    // site has saved it in the document (PUT /documents with chosenSlots). This reads GET /tasks/{id} and
+    // GET /documents/{id} and reports their REAL shapes — documentId, the path to chosenSlots and the real
+    // format of one chosen slot (times + consulIpnHash) — so phase 2 can build the booking request from
+    // verified fields instead of the reconstructed §14 ones. No PUT, no external-reader/check, nothing
+    // booked. Reports field names and the slot shape only — never the token or applicant personal data.
+    async function apiRecon(jobId, taskId, slot) {
+        const token = readToken();
+        const out = { stage: 'recon' };
+        const firstString = (...v) => v.find(x => typeof x === 'string' && x) || null;
+        try {
+            const startedAt = Date.now(), perfStart = performance.now();
+            const tr = await fetch(`${API}/tasks/${encodeURIComponent(taskId)}`, { headers: { token }, cache: 'no-store' });
+            reportRequest('tasks', startedAt, perfStart, tr.status);
+            out.taskStatus = tr.status;
+            const tj = tr.ok ? await tr.json() : null;
+            const task = (tj && tj.data && !Array.isArray(tj.data) ? tj.data : tj) || {};
+            out.taskKeys = Object.keys(task).slice(0, 25).join(',') || null;
+            const docId = firstString(
+                task.documentId, task.documentID,
+                task.document && (task.document.id || task.document.documentId),
+                Array.isArray(task.documents) && task.documents[0] && (task.documents[0].id || task.documents[0].documentId),
+            );
+            out.docId = docId ? String(docId).slice(0, 48) : null;
+            if (docId) {
+                const s2 = Date.now(), p2 = performance.now();
+                const dr = await fetch(`${API}/documents/${encodeURIComponent(docId)}`, { headers: { token }, cache: 'no-store' });
+                reportRequest('document', s2, p2, dr.status);
+                out.docStatus = dr.status;
+                const dj = dr.ok ? await dr.json() : null;
+                const doc = (dj && dj.data ? dj.data : dj) || {};
+                const data = doc.data || doc;
+                out.docKeys = Object.keys(doc).slice(0, 25).join(',') || null;
+                const cal = data.dateAndTimeVisitInfo && data.dateAndTimeVisitInfo.calendar;
+                out.hasVisitInfo = !!data.dateAndTimeVisitInfo;
+                out.hasCalendar = !!cal;
+                const chosen = cal && cal.chosenSlots;
+                out.chosenCount = Array.isArray(chosen) ? chosen.length : null;
+                // One chosen slot: times + consuls[{consulIpnHash}]. No applicant personal data in here.
+                out.chosenSample = chosen && chosen[0] ? JSON.stringify(chosen[0]).slice(0, 400) : null;
+            }
+        } catch (e) {
+            out.error = ((e && e.message) || 'error').slice(0, 140);
+        }
+        log('api-recon: ' + JSON.stringify(out));
+        await send({ type: 'econsul:api-recon', jobId, slot, ...out });
     }
 
     // Auto-booking presses «Підтвердити» for the selected slot. Returns the next step of the chain

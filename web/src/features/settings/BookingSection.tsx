@@ -58,6 +58,20 @@ export function BookingSection() {
             <label className={styles.check}>
                 <input
                     type="checkbox"
+                    checked={extension.directApiBook}
+                    disabled={!extension.connected || !extension.autoBook}
+                    onChange={(event) => extensionLink.setDraftSettings({ directApiBook: event.target.checked })}
+                />
+                <span>
+                    <strong>Бронювати напряму через API (тест).</strong> Замість «Підтвердити» розширення звертається до API бронювання e-Consul.
+                    Поки — <strong>фаза 1, лише розвідка</strong>: вибравши слот, воно читає документ заявки (`GET /tasks`, `GET /documents`) і
+                    записує справжню форму запиту в журнал. Нічого не бронює. На цей час звичайне бронювання «Підтвердити» не спрацьовує.
+                    {!extension.connected ? ' Потрібне розширення.' : !extension.autoBook && ' Потрібне автоматичне бронювання.'}
+                </span>
+            </label>
+            <label className={styles.check}>
+                <input
+                    type="checkbox"
                     checked={extension.autoDraft}
                     disabled={!extension.connected}
                     onChange={(event) => extensionLink.setDraftSettings({ autoDraft: event.target.checked })}
