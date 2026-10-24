@@ -357,7 +357,7 @@ extension/
 | розширення → застосунок | `ext:settings` | ще поле `directApiBook` (необов'язкове) |
 | застосунок → розширення | `app:settings` | `patch` може містити `directApiBook` |
 | background → `econsul.js` | `select-slot` / `strike-result` → `next` | ще поле `reconApi`: коли `directApiBook` увімкнено, після вибору слота `econsul.js` не натискає «Підтвердити», а читає документ |
-| `econsul.js` → background | `econsul:api-recon` | `{ jobId, slot, stage, taskStatus, taskKeys, docId, docStatus, docKeys, hasCalendar, chosenCount, chosenSample, error? }` — форма документа для фази 2; без токена й персональних даних. Відповідь `{}` |
+| `econsul.js` → background | `econsul:api-recon` | `{ jobId, slot, stage, taskStatus, taskKeys, docId, docStatus, docKeys, hasCalendar, chosenCount, chosenSample, error? }` (v0.14.13: ще `docReads, dataKeys, visitKeys, chosenPath, hasVisitInfo`) — форма документа для фази 2; без токена й персональних даних. Відповідь `{}` |
 
 Додано у v0.9.0 (перехід на наступний слот і агресивне бронювання, 2026-10-18):
 

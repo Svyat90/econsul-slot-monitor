@@ -222,28 +222,48 @@
                 Array.isArray(task.documents) && task.documents[0] && (task.documents[0].id || task.documents[0].documentId),
             );
             out.docId = docId ? String(docId).slice(0, 48) : null;
-            if (docId) {
+            // The site may save the chosen slot a moment after the click: read the document up to 3 times
+            for (let read = 1; docId && read <= 3; read++) {
+                if (read > 1) await new Promise(r => setTimeout(r, 2500));
                 const s2 = Date.now(), p2 = performance.now();
                 const dr = await fetch(`${API}/documents/${encodeURIComponent(docId)}`, { headers: { token }, cache: 'no-store' });
                 reportRequest('document', s2, p2, dr.status);
                 out.docStatus = dr.status;
+                out.docReads = read;
                 const dj = dr.ok ? await dr.json() : null;
                 const doc = (dj && dj.data ? dj.data : dj) || {};
                 const data = doc.data || doc;
                 out.docKeys = Object.keys(doc).slice(0, 25).join(',') || null;
-                const cal = data.dateAndTimeVisitInfo && data.dateAndTimeVisitInfo.calendar;
-                out.hasVisitInfo = !!data.dateAndTimeVisitInfo;
-                out.hasCalendar = !!cal;
-                const chosen = cal && cal.chosenSlots;
+                // Field names only (no values): where the steps of the form live in the document
+                out.dataKeys = Object.keys(data).slice(0, 40).join(',').slice(0, 480) || null;
+                const visit = data.dateAndTimeVisitInfo;
+                out.visitKeys = visit && typeof visit === 'object' ? Object.keys(visit).slice(0, 25).join(',') : null;
+                const found = findKey(data, 'chosenSlots', 'data', 6);
+                out.chosenPath = found ? found.path : null;
+                out.hasVisitInfo = !!visit;
+                out.hasCalendar = !!(visit && visit.calendar);
+                const chosen = found && found.value;
                 out.chosenCount = Array.isArray(chosen) ? chosen.length : null;
                 // One chosen slot: times + consuls[{consulIpnHash}]. No applicant personal data in here.
-                out.chosenSample = chosen && chosen[0] ? JSON.stringify(chosen[0]).slice(0, 400) : null;
+                out.chosenSample = Array.isArray(chosen) && chosen[0] ? JSON.stringify(chosen[0]).slice(0, 400) : null;
+                if (out.chosenCount) break;
             }
         } catch (e) {
             out.error = ((e && e.message) || 'error').slice(0, 140);
         }
         log('api-recon: ' + JSON.stringify(out));
         await send({ type: 'econsul:api-recon', jobId, slot, ...out });
+    }
+
+    // Depth-first search for a key; returns its dotted path and value, or null
+    function findKey(obj, key, path, depth) {
+        if (!obj || typeof obj !== 'object' || depth < 0) return null;
+        if (Object.prototype.hasOwnProperty.call(obj, key)) return { path: `${path}.${key}`, value: obj[key] };
+        for (const [k, v] of Object.entries(obj)) {
+            const found = findKey(v, key, Array.isArray(obj) ? `${path}[${k}]` : `${path}.${k}`, depth - 1);
+            if (found) return found;
+        }
+        return null;
     }
 
     // Auto-booking presses «Підтвердити» for the selected slot. Returns the next step of the chain
